@@ -46,6 +46,7 @@ import {
 import {
   createInitialSessionState,
   findHistoryEntry,
+  findHistoryIndex,
   type HistoryEntry,
   type SessionState,
 } from "./state";
@@ -184,6 +185,7 @@ function resolveTarget(
 function applyValidEnvelope(
   state: SessionState,
   event: SessionEvent,
+  writeInPlace: boolean,
 ): ApplyEventResult {
   const targetSeq = compensationTargetSeq(event);
   let target: HistoryEntry | null = null;
@@ -198,7 +200,7 @@ function applyValidEnvelope(
     };
   }
 
-  const draft = new StateDraft(state);
+  const draft = new StateDraft(state, writeInPlace);
   // The handler map pairs each type with its handler, which TS can't see through the union.
   const handler = HANDLERS[event.type] as EventHandler<SessionEventType>;
   if (target === null && isPureCompensation(event.type)) {
@@ -216,14 +218,17 @@ function applyValidEnvelope(
   const next = draft.next;
   next.lastSeq = event.seq;
   next.lastAt = event.at;
-  next.history = [
-    ...state.history,
-    { event, compensatedBySeq: null, before: draft.before },
-  ];
+  const entry: HistoryEntry = {
+    event,
+    compensatedBySeq: null,
+    before: draft.before,
+  };
+  next.history = writeInPlace ? state.history : [...state.history];
   if (target) {
-    const targetIndex = next.history.indexOf(target);
+    const targetIndex = findHistoryIndex(next, target.event.seq);
     next.history[targetIndex] = { ...target, compensatedBySeq: event.seq };
   }
+  next.history.push(entry);
   return { ok: true, state: next };
 }
 
@@ -245,10 +250,23 @@ export function applyEvent(
   state: SessionState,
   event: SessionEvent,
 ): ApplyEventResult {
+  return applyEventWithMode(state, event, false);
+}
+
+/**
+ * `writeInPlace` (replay only) may modify `state`'s collections and history,
+ * even when the event is then rejected, so the caller must own `state` and
+ * throw it away afterwards.
+ */
+function applyEventWithMode(
+  state: SessionState,
+  event: SessionEvent,
+  writeInPlace: boolean,
+): ApplyEventResult {
   const envelopeError = validateEnvelope(state, event);
   if (envelopeError) return { ok: false, error: envelopeError };
   try {
-    return applyValidEnvelope(state, event);
+    return applyValidEnvelope(state, event, writeInPlace);
   } catch (unexpected) {
     // Only structurally broken payloads (e.g. a missing field in a DB row) reach here.
     return {
@@ -272,8 +290,26 @@ export type ReplayResult =
       state: SessionState;
     };
 
-/** Folds a log from the initial state; stops at and reports the first rejected event. */
+/**
+ * Folds a log from the initial state; stops at and reports the first rejected
+ * event. Same result as calling `applyEvent` event by event, but it writes into
+ * one private state so a 1,000-action log replays in a few milliseconds.
+ */
 export function replay(events: readonly SessionEvent[]): ReplayResult {
+  let state = createInitialSessionState();
+  for (const event of events) {
+    const result = applyEventWithMode(state, event, true);
+    if (!result.ok) {
+      // A rejected handler may have half-written the private state, so rebuild
+      // the exact state before the rejected event the safe way (rare path).
+      return replayCopyOnWrite(events);
+    }
+    state = result.state;
+  }
+  return { ok: true, state };
+}
+
+function replayCopyOnWrite(events: readonly SessionEvent[]): ReplayResult {
   let state = createInitialSessionState();
   for (const event of events) {
     const result = applyEvent(state, event);

@@ -18,6 +18,7 @@ import {
   sessionClock,
 } from "./metrics";
 import {
+  createInitialSessionState,
   currentLineup,
   isPresent,
   isSkipped,
@@ -32,6 +33,7 @@ import {
   makeConfig,
   makeCourt,
   makeParticipants,
+  createSeededRandom,
 } from "./testing/fixtures";
 
 /**
@@ -1612,6 +1614,76 @@ function undoableSeqs(state: SessionState): number[] {
     )
     .map((entry) => entry.event.seq);
 }
+
+describe("replay on a large generated log", () => {
+  const LARGE_LOG_STEPS = 4_000;
+
+  let cachedLargeSession: TestSession | null = null;
+  /** Built once (about 850 accepted events, invariants checked at every step); tests only read it. */
+  function largeRandomSession(): TestSession {
+    if (cachedLargeSession) return cachedLargeSession;
+    const random = createSeededRandom(PROPERTY_SEED);
+    const nextNat = () => Math.floor(random() * 2 ** 31);
+    cachedLargeSession = runRandomSession(
+      Array.from({ length: LARGE_LOG_STEPS }, () => ({
+        actionChoice: nextNat(),
+        argumentChoice: nextNat(),
+        advanceMinutes: Math.floor(random() * 4),
+      })),
+    );
+    return cachedLargeSession;
+  }
+
+  it("equals applying every event one by one with applyEvent", () => {
+    const session = largeRandomSession();
+    expect(session.events.length).toBeGreaterThan(800);
+    const replayed = replay(session.events);
+    expect(replayed.ok).toBe(true);
+    if (replayed.ok) expect(replayed.state).toEqual(session.state);
+  });
+
+  it("reports a rejected event with the exact state before it, like applyEvent", () => {
+    const session = largeRandomSession();
+    const cut = Math.floor(session.events.length / 2);
+    const invalid: SessionEvent = {
+      ...session.events[cut],
+      type: "PlayerLeft",
+      payload: { participantId: "no-such-participant" },
+    };
+    const log = [...session.events.slice(0, cut), invalid];
+    const expectedBefore = session.events
+      .slice(0, cut)
+      .reduce((state, event) => {
+        const result = applyEvent(state, event);
+        if (!result.ok) throw new Error(result.error.message);
+        return result.state;
+      }, createInitialSessionState());
+
+    const replayed = replay(log);
+    expect(replayed.ok).toBe(false);
+    if (!replayed.ok) {
+      expect(replayed.failedSeq).toBe(invalid.seq);
+      expect(replayed.error.code).toBe("UNKNOWN_PARTICIPANT");
+      expect(replayed.state).toEqual(expectedBefore);
+    }
+  });
+
+  it("leaves its input events untouched and returns a state applyEvent can extend without side effects", () => {
+    const session = largeRandomSession();
+    const eventsSnapshot = structuredClone(session.events);
+    const replayed = replay(session.events);
+    expect(session.events).toEqual(eventsSnapshot);
+    if (!replayed.ok) throw new Error("replay failed");
+    const historyLength = replayed.state.history.length;
+    const pause = applyEvent(replayed.state, {
+      ...session.nextMeta(),
+      type: replayed.state.pausedBySeq === null ? "Paused" : "Resumed",
+      payload: {},
+    });
+    expect(pause.ok).toBe(true);
+    expect(replayed.state.history).toHaveLength(historyLength);
+  });
+});
 
 describe("undo properties (fast-check, seeded)", () => {
   const steps = fc.array(randomStepArbitrary, { minLength: 1, maxLength: 40 });

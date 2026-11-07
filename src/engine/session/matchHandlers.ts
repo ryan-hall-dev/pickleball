@@ -94,10 +94,7 @@ export function startMatch(
     endedMidMatchBySeq: null,
     countGameForOut: false,
   }));
-  draft.next.startedMatchIds = {
-    ...draft.next.startedMatchIds,
-    [matchId]: true,
-  };
+  draft.set("startedMatchIds", matchId, true);
   draft.set("matches", matchId, {
     matchId,
     courtId,

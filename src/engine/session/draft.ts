@@ -1,5 +1,7 @@
 // Copy-on-write working copy used while applying one event, so `applyEvent`
 // never mutates its input and only copies the collections an event touches.
+// `replay` instead owns a private state and writes into it in place, so a
+// long log doesn't copy every collection once per event.
 import type { SessionError } from "./errors";
 import type {
   SessionEvent,
@@ -14,7 +16,7 @@ import {
   type SessionState,
 } from "./state";
 
-type CollectionKey = "participants" | "courts" | "matches";
+type CollectionKey = "participants" | "courts" | "matches" | "startedMatchIds";
 type CollectionValue<TKey extends CollectionKey> =
   SessionState[TKey][keyof SessionState[TKey]];
 
@@ -22,10 +24,22 @@ export class StateDraft {
   readonly next: SessionState;
   /** What the event replaced, stored on its history entry for a later undo. */
   before: HistoryBefore = {};
-  private readonly copiedCollections = new Set<CollectionKey>();
+  private readonly copiedCollections: Set<CollectionKey> = new Set();
 
-  constructor(base: SessionState) {
+  /**
+   * `writeInPlace`: the caller owns `base` exclusively and discards it, so the
+   * collections are written directly instead of copied (replay only).
+   */
+  constructor(base: SessionState, writeInPlace = false) {
     this.next = { ...base };
+    if (writeInPlace) {
+      this.copiedCollections = new Set<CollectionKey>([
+        "participants",
+        "courts",
+        "matches",
+        "startedMatchIds",
+      ]);
+    }
   }
 
   set<TKey extends CollectionKey>(

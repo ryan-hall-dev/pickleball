@@ -172,21 +172,27 @@ export function createInitialSessionState(): SessionState {
   };
 }
 
-/** The history entry for `seq`, or undefined. Seqs are strictly increasing, so binary search. */
-export function findHistoryEntry(
-  state: SessionState,
-  seq: number,
-): HistoryEntry | undefined {
+/** Index of the history entry for `seq`, or -1. Seqs are strictly increasing, so binary search. */
+export function findHistoryIndex(state: SessionState, seq: number): number {
   let low = 0;
   let high = state.history.length - 1;
   while (low <= high) {
     const middle = (low + high) >> 1;
     const middleSeq = state.history[middle].event.seq;
-    if (middleSeq === seq) return state.history[middle];
+    if (middleSeq === seq) return middle;
     if (middleSeq < seq) low = middle + 1;
     else high = middle - 1;
   }
-  return undefined;
+  return -1;
+}
+
+/** The history entry for `seq`, or undefined. */
+export function findHistoryEntry(
+  state: SessionState,
+  seq: number,
+): HistoryEntry | undefined {
+  const index = findHistoryIndex(state, seq);
+  return index === -1 ? undefined : state.history[index];
 }
 
 export function isPresent(participantState: ParticipantState): boolean {
