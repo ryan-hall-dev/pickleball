@@ -13,6 +13,23 @@
   --color-blue: #5aa9ff;
   --color-orange: #ff9f43;
 
+  --color-bg-header: #121a21;
+  --color-nav-active: #222d37;
+  --color-text-soft: #d5dee7;
+  --color-placeholder: #7d8b99;
+  --color-outline: #3a4856;
+  --color-link: #8cc4ff;
+  --color-link-hover: #bfdfff;
+  --color-on-lime: #18200a;
+  --color-lime-surface: #1f2a14;
+  --color-lime-edge: #4c5f14;
+  --color-lime-soft: #e3fa7a;
+  --color-on-orange: #2a1606;
+  --color-orange-surface: #22201a;
+  --color-orange-edge: #5a4220;
+  --color-orange-soft: #ffb877;
+  --color-orange-text: #ffd6ae;
+
   --radius-card: 24px;
 }
 
@@ -28,4 +45,10 @@
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
+}
+
+/* Visible focus ring on every interactive element (DESIGN.md States: decision to confirm). */
+:focus-visible {
+  outline: 2px solid var(--color-lime);
+  outline-offset: 2px;
 }

@@ -34,8 +34,9 @@ Web app for pickleball clubs. Hosts run social sessions (setup, live court rotat
 
 ## Data and architecture rules
 
-- RLS on every table. Only users in the `hosts` allow-list can read; the only public surface is the `/t/<tag>` check-in page and the `submit_checkin` / `search_checkin_names` functions
-- Clients never insert into `session_events` (INSERT revoked). Flow: server action → validate with the engine (`applyEvent`) → one Postgres function (single transaction)
+- RLS on every table. Only users in the `hosts` allow-list can read (`authenticated` has SELECT only); the only public surface is the `/t/<tag>` check-in page, whose server code calls `submit_checkin` / `search_checkin_names`
+- All writes are server-only (`docs/decisions/0002-server-only-writes.md`): verify the user with `auth.getUser()` and their role, then write with the service-role client (`src/lib/supabase/admin.ts`), passing `p_actor_user_id`. Write functions are executable by `service_role` only; `anon` can execute nothing
+- Session flow: server action → validate with the engine (`applyEvent`) → one Postgres function (single transaction), via `src/server/submitSessionAction.ts`
 - Every action carries a client-generated `event_id` (idempotency, looked up before the sequence check) and `expected_seq`
 - The log is append-only. Undo appends a compensating action targeting a `target_seq`; rows are never edited or deleted. Undo actions are not undoable
 - State is derived: `state = replay(events)`; recommendations are derived, never stored

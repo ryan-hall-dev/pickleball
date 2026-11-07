@@ -88,10 +88,14 @@ jobs:
           secret_key="$(read_status_value SECRET_KEY SERVICE_ROLE_KEY)"
           echo "::add-mask::$publishable_key"
           echo "::add-mask::$secret_key"
+          # Throwaway per-run key for the check-in IP hashes.
+          checkin_ip_hmac_secret="$(openssl rand -base64 32)"
+          echo "::add-mask::$checkin_ip_hmac_secret"
           {
             echo "NEXT_PUBLIC_SUPABASE_URL=$api_url"
             echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$publishable_key"
             echo "SUPABASE_SECRET_KEY=$secret_key"
+            echo "CHECKIN_IP_HMAC_SECRET=$checkin_ip_hmac_secret"
           } >> "$GITHUB_ENV"
 
       - name: Apply migrations
@@ -109,6 +113,15 @@ jobs:
           else
             echo "No supabase/tests directory; skipping"
           fi
+
+      - name: Integration tests (local Supabase)
+        # Fails instead of skipping if the local stack isn't reachable.
+        run: pnpm exec vitest run integration
+        env:
+          REQUIRE_LOCAL_SUPABASE: "1"
+
+      - name: Seed demo data (e2e signs in as the seeded admin host@example.test)
+        run: pnpm seed --members 30 --courts 4 --attending 16
 
       - name: Playwright e2e
         run: pnpm e2e

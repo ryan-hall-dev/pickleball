@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-test("home page renders the app heading", async ({ page }) => {
-  await page.goto("/");
+test("the app serves the host sign-in page", async ({ page }) => {
+  await page.goto("/login");
   await expect(
-    page.getByRole("heading", { level: 1, name: "Pickleball Social Manager" }),
+    page.getByRole("heading", { level: 1, name: "Host sign in" }),
   ).toBeVisible();
 });
