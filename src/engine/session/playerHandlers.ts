@@ -9,7 +9,7 @@ import {
   type ParticipantState,
   type PresenceInterval,
 } from "./state";
-import type { ParticipantId } from "./types";
+import { PLAYERS_PER_MATCH, type ParticipantId } from "./types";
 
 /** Looks up a participant who must be present, not playing and not skipped. */
 export function requireAvailableParticipant(
@@ -263,11 +263,26 @@ export const handlePlayerUnskipped: EventHandler<"PlayerUnskipped"> = (
   return null;
 };
 
+/** Locks and manual reordering are only allowed when the session's rotation rules allow them. */
+export function requireManualAssignments(
+  draft: StateDraft,
+): SessionError | null {
+  if (draft.next.config?.rotation.rules.allowManualAssignments === false) {
+    return sessionError(
+      "MANUAL_ASSIGNMENTS_OFF",
+      "Manual assignments are switched off for this session.",
+    );
+  }
+  return null;
+}
+
 export const handlePlayerLocked: EventHandler<"PlayerLocked"> = (
   draft,
   event,
 ) => {
   const { participantId, courtId } = event.payload;
+  const manualAssignmentsError = requireManualAssignments(draft);
+  if (manualAssignmentsError) return manualAssignmentsError;
   const participantState = requireKnownParticipant(draft, participantId);
   if (isSessionError(participantState)) return participantState;
   const label = draft.participantLabel(participantId);
@@ -289,6 +304,16 @@ export const handlePlayerLocked: EventHandler<"PlayerLocked"> = (
       return sessionError(
         "COURT_CLOSED",
         `${draft.courtLabel(courtId)} is closed; reopen it first.`,
+      );
+    }
+    const seatCount = PLAYERS_PER_MATCH[courtState.court.format];
+    const lockedToCourt = Object.values(draft.next.participants).filter(
+      (other) => isPresent(other) && other.lock?.courtId === courtId,
+    ).length;
+    if (lockedToCourt >= seatCount) {
+      return sessionError(
+        "COURT_FULL",
+        `${draft.courtLabel(courtId)} already has ${seatCount} locked players.`,
       );
     }
   }

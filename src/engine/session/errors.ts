@@ -33,7 +33,11 @@ export type SessionErrorCode =
   | "NOT_REVERSIBLE"
   | "ALREADY_COMPENSATED"
   /** The undo is blocked by a later action; the message says which to undo first. */
-  | "UNDO_BLOCKED";
+  | "UNDO_BLOCKED"
+  /** Locks and manual reordering are switched off in this session's rotation rules. */
+  | "MANUAL_ASSIGNMENTS_OFF"
+  /** A court already has as many locked players as it has seats. */
+  | "COURT_FULL";
 
 export interface SessionError {
   code: SessionErrorCode;

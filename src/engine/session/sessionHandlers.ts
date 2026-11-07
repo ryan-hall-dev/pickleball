@@ -2,6 +2,7 @@
 import { targetEvent, type EventHandler, type StateDraft } from "./draft";
 import { sessionError, type SessionError } from "./errors";
 import { startMatch } from "./matchHandlers";
+import { requireManualAssignments } from "./playerHandlers";
 import { isCourtClosed, type HistoryEntry, type SessionState } from "./state";
 import {
   PLAYERS_PER_MATCH,
@@ -293,6 +294,8 @@ export const handleQueueReordered: EventHandler<"QueueReordered"> = (
       );
     }
   } else {
+    const manualAssignmentsError = requireManualAssignments(draft);
+    if (manualAssignmentsError) return manualAssignmentsError;
     if (new Set(participantIds).size !== participantIds.length) {
       return sessionError(
         "INVALID_QUEUE_ORDER",

@@ -10,6 +10,7 @@ import type {
 import { matchRecords } from "./metrics";
 import { createInitialSessionState } from "./state";
 import {
+  DEFAULT_ROTATION,
   MINUTE_MS,
   TestSession,
   createEventLog,
@@ -410,6 +411,53 @@ describe("PlayerSkipped / PlayerLocked", () => {
       { participantId: p(99) },
       "UNKNOWN_PARTICIPANT",
     );
+  });
+});
+
+describe("manual assignments", () => {
+  it("rejects locks and reorders when the session switched manual assignments off", () => {
+    const session = TestSession.start({
+      courts: 1,
+      rotation: {
+        ...DEFAULT_ROTATION,
+        rules: { ...DEFAULT_ROTATION.rules, allowManualAssignments: false },
+      },
+    });
+    expectRejected(
+      session,
+      "PlayerLocked",
+      { participantId: p(1) },
+      "MANUAL_ASSIGNMENTS_OFF",
+    );
+    expectRejected(
+      session,
+      "QueueReordered",
+      { participantIds: [p(2), p(1)] },
+      "MANUAL_ASSIGNMENTS_OFF",
+    );
+  });
+
+  it("caps locks to one court at the court's seats", () => {
+    const session = TestSession.start({
+      participantCount: 6,
+      courts: ["singles"],
+    });
+    session.apply("PlayerLocked", {
+      participantId: p(1),
+      courtId: fixtureCourtId(1),
+    });
+    session.apply("PlayerLocked", {
+      participantId: p(2),
+      courtId: fixtureCourtId(1),
+    });
+    expectRejected(
+      session,
+      "PlayerLocked",
+      { participantId: p(3), courtId: fixtureCourtId(1) },
+      "COURT_FULL",
+    );
+    // Locks to any court are not capped by one court's seats.
+    session.apply("PlayerLocked", { participantId: p(3) });
   });
 });
 
