@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Host setup — new session</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1419}
+a{color:#8CC4FF}a:hover{color:#BFDFFF}
+button,input,select{font-family:inherit}
+button{cursor:pointer}
+input::placeholder{color:#7D8B99}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#0F1419;color:#F1F5F9;font-family:Outfit, system-ui, sans-serif;font-size:15px;line-height:1.4">
+
+<header style="border-bottom:1px solid #24303B;background:#121A21">
+<div style="max-width:1440px;margin:0 auto;padding:12px 28px;display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px">
+<div style="display:flex;align-items:center;gap:12px">
+<svg width="40" height="40" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24" fill="#D4F23A"></circle><circle cx="18" cy="18" r="3" fill="#0F1419"></circle><circle cx="30" cy="15" r="3" fill="#0F1419"></circle><circle cx="36" cy="27" r="3" fill="#0F1419"></circle><circle cx="25" cy="34" r="3" fill="#0F1419"></circle><circle cx="15" cy="29" r="3" fill="#0F1419"></circle><circle cx="26" cy="24" r="3" fill="#0F1419"></circle></svg>
+<span style="font-size:19px;font-weight:700">Riverside Pickleball</span>
+</div>
+<nav aria-label="Main" style="display:flex;flex-wrap:wrap;gap:4px">
+<a href="#" aria-current="page" style="padding:10px 16px;border-radius:12px;background:#222D37;color:#F1F5F9;text-decoration:none;font-weight:600">Session setup</a>
+<a href="Volley.dc.html" style="padding:10px 16px;border-radius:12px;color:#9AA8B6;text-decoration:none;font-weight:500">Live courts</a>
+<a href="#" style="padding:10px 16px;border-radius:12px;color:#9AA8B6;text-decoration:none;font-weight:500">Members</a>
+<a href="#" style="padding:10px 16px;border-radius:12px;color:#9AA8B6;text-decoration:none;font-weight:500">History</a>
+</nav>
+<div style="flex:1"></div>
+<div style="display:flex;align-items:center;gap:10px">
+<span style="width:36px;height:36px;border-radius:50%;background:#2A3642;color:#D5DEE7;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">RH</span>
+<span style="font-size:14px;color:#9AA8B6">Host · Ryan H.</span>
+</div>
+</div>
+</header>
+
+<main style="max-width:1440px;margin:0 auto;padding:24px 28px 56px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px">
+
+<div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px">
+<div>
+<h1 style="margin:0;font-size:32px;font-weight:800;letter-spacing:-0.01em">Set up a session</h1>
+<p style="margin:4px 0 0;color:#9AA8B6;font-size:15px">Defaults are filled in from your last Saturday. Check the players, then start.</p>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+<button style="height:44px;padding:0 16px;border-radius:14px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600;display:flex;align-items:center;gap:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>Saved setups</button>
+<button style="height:44px;padding:0 16px;border-radius:14px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600;display:flex;align-items:center;gap:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"></path><path d="M8 4v5h7V4M8 20v-6h8v6"></path></svg>Save this setup</button>
+</div>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;background:#13263C;border:1px solid #2F5E8F;border-radius:20px;padding:12px 16px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8CC4FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5M12 7v5l3 2"></path></svg>
+<span style="flex:1 1 300px;font-size:14px"><b>Reusing “Saturday Social”</b> <span style="color:#9AA8B6">· last run 31 Oct · 4 courts · 28 players · equal-games rotation</span></span>
+<div style="display:flex;gap:6px;flex-wrap:wrap">
+<button style="height:36px;padding:0 12px;border-radius:10px;border:1px solid #2F5E8F;background:transparent;color:#CFE6FF;font-weight:600;font-size:14px">Thursday Ladder</button>
+<button style="height:36px;padding:0 12px;border-radius:10px;border:1px solid #2F5E8F;background:transparent;color:#CFE6FF;font-weight:600;font-size:14px">Start blank</button>
+</div>
+</div>
+
+<ol aria-label="Setup steps" style="list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px">
+<li style="display:flex;align-items:center;gap:8px;padding:8px 14px 8px 8px;border-radius:999px;background:#1C2630;font-size:14px;font-weight:600"><span style="width:24px;height:24px;border-radius:50%;background:#D4F23A;color:#18200A;display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></span>Details</li>
+<li style="display:flex;align-items:center;gap:8px;padding:8px 14px 8px 8px;border-radius:999px;background:#1C2630;font-size:14px;font-weight:600"><span style="width:24px;height:24px;border-radius:50%;background:#D4F23A;color:#18200A;display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></span>Courts</li>
+<li style="display:flex;align-items:center;gap:8px;padding:8px 14px 8px 8px;border-radius:999px;background:#2B2114;border:1px solid #5A4220;font-size:14px;font-weight:600;color:#FFD6AE"><span style="width:24px;height:24px;border-radius:50%;background:#FF9F43;color:#2A1606;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800">!</span>Players · 1 to fix</li>
+<li style="display:flex;align-items:center;gap:8px;padding:8px 14px 8px 8px;border-radius:999px;background:#1C2630;font-size:14px;font-weight:600"><span style="width:24px;height:24px;border-radius:50%;background:#D4F23A;color:#18200A;display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></span>Rotation</li>
+<li style="display:flex;align-items:center;gap:8px;padding:8px 14px 8px 8px;border-radius:999px;background:#1C2630;font-size:14px;font-weight:600;color:#9AA8B6"><span style="width:24px;height:24px;border-radius:50%;border:2px solid #3A4856;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:12px">5</span>Review &amp; start</li>
+</ol>
+
+<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start">
+
+<div style="flex:999 1 640px;min-width:0;display:flex;flex-direction:column;gap:18px">
+
+<section aria-labelledby="sd-h" style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:22px">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+<span style="width:32px;height:32px;border-radius:10px;background:#2A3642;font-weight:800;display:flex;align-items:center;justify-content:center">1</span>
+<h2 id="sd-h" style="margin:0;font-size:20px;font-weight:700">Session details</h2>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:14px">
+<div style="display:flex;flex-direction:column;gap:6px;grid-column:1 / -1">
+<label for="s-name" style="font-size:13px;color:#9AA8B6;font-weight:500">Session name</label>
+<input id="s-name" value="Saturday Social Pickleball" style="height:48px;border-radius:14px;border:1px solid #2A3642;background:#1C2630;color:#F1F5F9;padding:0 14px;font-size:16px;font-weight:600">
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<label for="s-date" style="font-size:13px;color:#9AA8B6;font-weight:500">Date</label>
+<input id="s-date" value="Sat 7 Nov 2026" style="height:48px;border-radius:14px;border:1px solid #2A3642;background:#1C2630;color:#F1F5F9;padding:0 14px;font-size:15px">
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<label for="s-start" style="font-size:13px;color:#9AA8B6;font-weight:500">Start time</label>
+<input id="s-start" value="18:00" style="height:48px;border-radius:14px;border:1px solid #2A3642;background:#1C2630;color:#F1F5F9;padding:0 14px;font-size:15px;font-variant-numeric:tabular-nums">
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<label for="s-end" style="font-size:13px;color:#9AA8B6;font-weight:500">End time</label>
+<input id="s-end" value="20:00" style="height:48px;border-radius:14px;border:1px solid #2A3642;background:#1C2630;color:#F1F5F9;padding:0 14px;font-size:15px;font-variant-numeric:tabular-nums">
+</div>
+<div style="display:flex;flex-direction:column;gap:6px;grid-column:1 / -1">
+<span id="dur-l" style="font-size:13px;color:#9AA8B6;font-weight:500">Duration <span style="color:#D4F23A;font-weight:600">· 120 minutes, calculated from start and end</span></span>
+<div role="group" aria-labelledby="dur-l" style="display:flex;flex-wrap:wrap;gap:8px">
+<button aria-pressed="false" style="height:44px;padding:0 18px;border-radius:12px;border:1px solid #2A3642;background:#1C2630;color:#F1F5F9;font-weight:600">60 min</button>
+<button aria-pressed="false" style="height:44px;padding:0 18px;border-radius:12px;border:1px solid #2A3642;background:#1C2630;color:#F1F5F9;font-weight:600">90 min</button>
+<button aria-pressed="true" style="height:44px;padding:0 18px;border-radius:12px;border:0;background:#D4F23A;color:#18200A;font-weight:700">120 min</button>
+<button aria-pressed="false" style="height:44px;padding:0 18px;border-radius:12px;border:1px solid #2A3642;background:#1C2630;color:#F1F5F9;font-weight:600">150 min</button>
+<button aria-pressed="false" style="height:44px;padding:0 18px;border-radius:12px;border:1px dashed #3A4856;background:transparent;color:#9AA8B6;font-weight:600">Custom…</button>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<label for="s-loc" style="font-size:13px;color:#9AA8B6;font-weight:500">Location</label>
+<input id="s-loc" value="Riverside Pickleball Club" style="height:48px;border-radius:14px;border:1px solid #2A3642;background:#1C2630;color:#F1F5F9;padding:0 14px;font-size:15px">
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<label for="s-host" style="font-size:13px;color:#9AA8B6;font-weight:500">Host</label>
+<input id="s-host" value="Ryan H." style="height:48px;border-radius:14px;border:1px solid #2A3642;background:#1C2630;color:#F1F5F9;padding:0 14px;font-size:15px">
+</div>
+</div>
+</section>
+
+<section aria-labelledby="cs-h" style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:22px">
+<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:32px;height:32px;border-radius:10px;background:#2A3642;font-weight:800;display:flex;align-items:center;justify-content:center">2</span>
+<h2 id="cs-h" style="margin:0;font-size:20px;font-weight:700">Courts</h2>
+</div>
+<div style="display:flex;align-items:center;gap:8px">
+<button aria-label="Remove a court" style="width:44px;height:44px;border-radius:12px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-size:22px;font-weight:600">−</button>
+<span style="min-width:96px;text-align:center;font-size:18px;font-weight:700">4 courts</span>
+<button aria-label="Add a court" style="width:44px;height:44px;border-radius:12px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-size:22px;font-weight:600">+</button>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));gap:12px">
+<sc-for list="{{courts}}" as="c" hint-placeholder-count="4">
+<button aria-pressed="true" style="position:relative;height:118px;border-radius:18px;border:2px solid #D4F23A;background:#1F2A14;color:#F1F5F9;text-align:left;padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between">
+<span style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-size:17px;font-weight:700">{{c.name}}</span><span style="width:22px;height:22px;border-radius:50%;background:#D4F23A;color:#18200A;display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></span></span>
+<span style="display:flex;gap:6px" aria-hidden="true"><span style="width:20px;height:20px;border-radius:50%;background:#D4F23A"></span><span style="width:20px;height:20px;border-radius:50%;background:#D4F23A"></span><span style="width:4px;height:20px;background:#4C5F14;border-radius:2px;margin:0 2px"></span><span style="width:20px;height:20px;border-radius:50%;background:#D4F23A"></span><span style="width:20px;height:20px;border-radius:50%;background:#D4F23A"></span></span>
+<span style="font-size:13px;color:#C9D6A0">{{c.note}}</span>
+</button>
+</sc-for>
+<button style="height:118px;border-radius:18px;border:2px dashed #3A4856;background:transparent;color:#9AA8B6;font-weight:600;font-size:15px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><span style="font-size:26px;line-height:1">+</span>Add court</button>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:16px">
+<div style="flex:1 1 200px;background:#1C2630;border-radius:16px;padding:12px 14px">
+<div style="font-size:13px;color:#9AA8B6">Match format</div>
+<div style="display:flex;gap:6px;margin-top:6px" role="group" aria-label="Match format">
+<button aria-pressed="true" style="height:40px;padding:0 14px;border-radius:10px;border:0;background:#D4F23A;color:#18200A;font-weight:700">Doubles · 2 v 2</button>
+<button aria-pressed="false" disabled style="height:40px;padding:0 14px;border-radius:10px;border:1px solid #2A3642;background:transparent;color:#7D8B99;font-weight:600">Singles</button>
+</div>
+</div>
+<div style="flex:2 1 360px;background:#1C2630;border-radius:16px;padding:12px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px">
+<div style="font-size:22px;font-weight:700;font-variant-numeric:tabular-nums">4 <span style="color:#9AA8B6;font-weight:500">courts ×</span> 4 <span style="color:#9AA8B6;font-weight:500">players =</span> <span style="color:#D4F23A">16 on court</span></div>
+<div style="font-size:15px;color:#9AA8B6">30 players → <b style="color:#F1F5F9">14 waiting</b> at the start · each player sits out roughly every other round</div>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="pl-h" style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:22px">
+<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:32px;height:32px;border-radius:10px;background:#2A3642;font-weight:800;display:flex;align-items:center;justify-content:center">3</span>
+<h2 id="pl-h" style="margin:0;font-size:20px;font-weight:700">Who's playing?</h2>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+<div style="padding:8px 14px;border-radius:14px;background:#1C2630;font-size:14px"><b style="font-size:18px">30</b> <span style="color:#9AA8B6">registered</span></div>
+<div style="padding:8px 14px;border-radius:14px;background:#1F2A14;font-size:14px;color:#E3FA7A"><b style="font-size:18px">28</b> attending</div>
+<div style="padding:8px 14px;border-radius:14px;background:#1C2630;font-size:14px"><b style="font-size:18px">2</b> <span style="color:#9AA8B6">not attending</span></div>
+<div style="padding:8px 14px;border-radius:14px;background:#13263C;font-size:14px;color:#CFE6FF"><b style="font-size:18px">+2</b> guests</div>
+</div>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px">
+<div style="flex:1 1 260px;position:relative">
+<label for="m-search" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Search members</label>
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9AA8B6" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="position:absolute;left:14px;top:15px"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+<input id="m-search" placeholder="Search by name" style="width:100%;box-sizing:border-box;height:48px;border-radius:14px;border:1px solid #2A3642;background:#1C2630;color:#F1F5F9;padding:0 14px 0 42px;font-size:15px">
+</div>
+<div role="group" aria-label="Filter by skill" style="display:flex;flex-wrap:wrap;gap:6px">
+<button aria-pressed="true" style="height:40px;padding:0 14px;border-radius:999px;border:0;background:#F1F5F9;color:#0F1419;font-weight:700;font-size:14px">All</button>
+<button aria-pressed="false" style="height:40px;padding:0 14px;border-radius:999px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600;font-size:14px">Beginner</button>
+<button aria-pressed="false" style="height:40px;padding:0 14px;border-radius:999px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600;font-size:14px">Intermediate</button>
+<button aria-pressed="false" style="height:40px;padding:0 14px;border-radius:999px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600;font-size:14px">Advanced</button>
+</div>
+<div style="display:flex;gap:6px">
+<button style="height:40px;padding:0 14px;border-radius:12px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600;font-size:14px">Select all</button>
+<button style="height:40px;padding:0 14px;border-radius:12px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600;font-size:14px">Clear</button>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(250px, 1fr));gap:8px">
+<sc-for list="{{members}}" as="m" hint-placeholder-count="30">
+<button aria-pressed="{{m.on}}" style="display:flex;align-items:center;gap:10px;min-height:60px;padding:8px 12px;border-radius:16px;text-align:left;color:#F1F5F9;{{m.row}}">
+<span style="width:22px;height:22px;flex:none;border-radius:7px;display:flex;align-items:center;justify-content:center;{{m.box}}"><sc-if value="{{m.on}}" hint-placeholder-val="{{ true }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#18200A" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></sc-if></span>
+<span style="width:36px;height:36px;flex:none;border-radius:50%;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;{{m.avatar}}">{{m.ini}}</span>
+<span style="flex:1;min-width:0;display:flex;flex-direction:column">
+<span style="font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{m.name}}</span>
+<span style="font-size:12px;color:{{m.statusColor}}">{{m.status}}</span>
+</span>
+<span style="font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px;background:#2A3642;color:#D5DEE7">{{m.skill}}</span>
+</button>
+</sc-for>
+</div>
+
+<div style="margin-top:18px;background:#1C2630;border:1px solid #2A3642;border-radius:20px;padding:16px">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:12px">
+<h3 style="margin:0;font-size:16px;font-weight:700">Quick add a guest</h3>
+<span style="font-size:13px;color:#9AA8B6">Plays today only; no club membership needed</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">
+<div style="flex:1 1 160px;display:flex;flex-direction:column;gap:6px">
+<label for="g-first" style="font-size:13px;color:#9AA8B6">First name</label>
+<input id="g-first" value="Kai" style="height:46px;border-radius:12px;border:1px solid #2A3642;background:#182028;color:#F1F5F9;padding:0 12px;font-size:15px">
+</div>
+<div style="flex:1 1 160px;display:flex;flex-direction:column;gap:6px">
+<label for="g-last" style="font-size:13px;color:#9AA8B6">Last name</label>
+<input id="g-last" aria-invalid="true" aria-describedby="g-last-err" placeholder="Required" style="height:46px;border-radius:12px;border:2px solid #FF9F43;background:#182028;color:#F1F5F9;padding:0 12px;font-size:15px">
+<span id="g-last-err" style="font-size:12px;color:#FFB877">Add a last name so Kai isn't confused with another player.</span>
+</div>
+<div style="flex:1 1 150px;display:flex;flex-direction:column;gap:6px">
+<label for="g-skill" style="font-size:13px;color:#9AA8B6">Skill (optional)</label>
+<select id="g-skill" style="height:46px;border-radius:12px;border:1px solid #2A3642;background:#182028;color:#F1F5F9;padding:0 10px;font-size:15px"><option>Not set</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select>
+</div>
+<button style="margin-top:25px;height:46px;padding:0 18px;border-radius:12px;border:0;background:#5AA9FF;color:#06182B;font-weight:700">Add guest</button>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">
+<sc-for list="{{guests}}" as="g" hint-placeholder-count="2">
+<span style="display:flex;align-items:center;gap:8px;padding:4px 4px 4px 4px;border-radius:999px;background:#13263C;border:1px solid #2F5E8F">
+<span style="width:30px;height:30px;border-radius:50%;background:#1D3550;color:#CFE6FF;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">{{g.ini}}</span>
+<span style="font-weight:600;font-size:14px">{{g.name}}</span>
+<span style="font-size:11px;font-weight:700;color:#8CC4FF;letter-spacing:0.08em">GUEST · {{g.skill}}</span>
+<button aria-label="Remove guest {{g.name}}" style="width:30px;height:30px;border-radius:50%;border:0;background:transparent;color:#9AA8B6;font-size:16px">×</button>
+</span>
+</sc-for>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="ro-h" style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:22px">
+<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:32px;height:32px;border-radius:10px;background:#2A3642;font-weight:800;display:flex;align-items:center;justify-content:center">4</span>
+<h2 id="ro-h" style="margin:0;font-size:20px;font-weight:700">Rotation</h2>
+</div>
+<button style="height:40px;padding:0 14px;border-radius:12px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600;font-size:14px">Reset to recommended</button>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:18px">
+<div style="flex:1 1 300px;min-width:0">
+<h3 style="margin:0 0 4px;font-size:15px;font-weight:700">What matters most</h3>
+<p style="margin:0 0 10px;font-size:13px;color:#9AA8B6">Drag to reorder. The scheduler breaks ties in this order.</p>
+<ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{priorities}}" as="p" hint-placeholder-count="4">
+<li style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;cursor:grab;{{p.row}}">
+<svg width="12" height="20" viewBox="0 0 12 20" aria-hidden="true" style="flex:none;color:#5B6B7A"><circle cx="3" cy="4" r="1.5" fill="currentColor"></circle><circle cx="9" cy="4" r="1.5" fill="currentColor"></circle><circle cx="3" cy="10" r="1.5" fill="currentColor"></circle><circle cx="9" cy="10" r="1.5" fill="currentColor"></circle><circle cx="3" cy="16" r="1.5" fill="currentColor"></circle><circle cx="9" cy="16" r="1.5" fill="currentColor"></circle></svg>
+<span style="width:28px;height:28px;flex:none;border-radius:9px;font-weight:800;display:flex;align-items:center;justify-content:center;{{p.num}}">{{p.n}}</span>
+<span style="flex:1;min-width:0"><span style="display:block;font-weight:600">{{p.label}}</span><span style="display:block;font-size:12px;color:#9AA8B6">{{p.hint}}</span></span>
+<sc-if value="{{p.top}}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:#D4F23A;color:#18200A">DEFAULT</span></sc-if>
+</li>
+</sc-for>
+</ol>
+</div>
+<div style="flex:1 1 300px;min-width:0">
+<h3 style="margin:0 0 4px;font-size:15px;font-weight:700">Rules</h3>
+<p style="margin:0 0 10px;font-size:13px;color:#9AA8B6">Recommended settings are on.</p>
+<div style="display:flex;flex-direction:column">
+<sc-for list="{{rules}}" as="r" hint-placeholder-count="5">
+<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #24303B">
+<span style="flex:1;min-width:0"><span id="{{r.id}}" style="display:block;font-weight:600">{{r.label}}</span><span style="display:block;font-size:12px;color:#9AA8B6">{{r.hint}}</span></span>
+<button role="switch" aria-checked="{{r.on}}" aria-labelledby="{{r.id}}" style="width:52px;height:30px;flex:none;border-radius:999px;border:0;padding:3px;display:flex;{{r.track}}"><span style="width:24px;height:24px;border-radius:50%;background:#FFFFFF;display:block"></span></button>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</section>
+</div>
+
+<aside aria-labelledby="sum-h" style="flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:18px">
+<section style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:22px">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+<span style="width:32px;height:32px;border-radius:10px;background:#2A3642;font-weight:800;display:flex;align-items:center;justify-content:center">5</span>
+<h2 id="sum-h" style="margin:0;font-size:20px;font-weight:700">Session summary</h2>
+</div>
+<dl style="margin:0;display:grid;grid-template-columns:auto 1fr;gap:10px 16px;font-size:15px">
+<dt style="color:#9AA8B6">Session</dt><dd style="margin:0;text-align:right;font-weight:600">Saturday Social Pickleball</dd>
+<dt style="color:#9AA8B6">When</dt><dd style="margin:0;text-align:right;font-weight:600">Sat 7 Nov · 18:00 – 20:00</dd>
+<dt style="color:#9AA8B6">Duration</dt><dd style="margin:0;text-align:right;font-weight:600">120 min</dd>
+<dt style="color:#9AA8B6">Players</dt><dd style="margin:0;text-align:right;font-weight:600">30 <span style="color:#9AA8B6;font-weight:500">(28 members + 2 guests)</span></dd>
+<dt style="color:#9AA8B6">Courts</dt><dd style="margin:0;text-align:right;font-weight:600">4 · doubles</dd>
+<dt style="color:#9AA8B6">On court at once</dt><dd style="margin:0;text-align:right;font-weight:700;color:#D4F23A">16</dd>
+<dt style="color:#9AA8B6">Waiting at start</dt><dd style="margin:0;text-align:right;font-weight:700">14</dd>
+<dt style="color:#9AA8B6">Rotation</dt><dd style="margin:0;text-align:right;font-weight:600">Equal games first</dd>
+</dl>
+
+<div style="margin-top:18px;background:#1C2630;border-radius:18px;padding:14px" role="img" aria-label="Capacity: 4 courts of 4 players, 16 on court, 14 waiting">
+<div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:8px">
+<sc-for list="{{courts}}" as="c" hint-placeholder-count="4">
+<div style="border:2px solid #4C5F14;border-radius:10px;padding:8px 4px 6px;display:flex;flex-direction:column;align-items:center;gap:6px">
+<div style="display:grid;grid-template-columns:repeat(2, 14px);gap:4px"><span style="width:14px;height:14px;border-radius:50%;background:#D4F23A"></span><span style="width:14px;height:14px;border-radius:50%;background:#D4F23A"></span><span style="width:14px;height:14px;border-radius:50%;background:#D4F23A"></span><span style="width:14px;height:14px;border-radius:50%;background:#D4F23A"></span></div>
+<span style="font-size:11px;color:#C9D6A0;font-weight:600">C{{c.n}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:12px">
+<sc-for list="{{waitDots}}" as="w" hint-placeholder-count="14"><span style="width:14px;height:14px;border-radius:50%;background:{{w.c}}"></span></sc-for>
+</div>
+<div style="display:flex;justify-content:space-between;font-size:12px;color:#9AA8B6;margin-top:8px"><span>16 playing</span><span>14 waiting · 2 are guests</span></div>
+</div>
+
+<div style="margin-top:14px;background:#1F2A14;border:1px solid #4C5F14;border-radius:16px;padding:12px 14px;font-size:14px;color:#E3FA7A">About 9 rounds fit in 120 min, so expect <b>4–5 games per player</b>.</div>
+
+<ul style="list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:14px">
+<li style="display:flex;gap:10px;align-items:center"><span style="width:20px;height:20px;border-radius:50%;background:#D4F23A;color:#18200A;display:flex;align-items:center;justify-content:center;flex:none"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></span>Session details complete</li>
+<li style="display:flex;gap:10px;align-items:center"><span style="width:20px;height:20px;border-radius:50%;background:#D4F23A;color:#18200A;display:flex;align-items:center;justify-content:center;flex:none"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></span>Enough players for all 4 courts</li>
+<li style="display:flex;gap:10px;align-items:center;color:#FFD6AE"><span style="width:20px;height:20px;border-radius:50%;background:#FF9F43;color:#2A1606;display:flex;align-items:center;justify-content:center;flex:none;font-size:12px;font-weight:800">!</span>Guest form has an unfinished entry: add Kai's last name or clear it</li>
+</ul>
+</section>
+
+<section aria-label="Start session" style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:18px;display:flex;flex-direction:column;gap:10px">
+<a href="SetupConfirm.dc.html" style="height:64px;border-radius:18px;background:#D4F23A;color:#18200A;text-decoration:none;font-size:19px;font-weight:800;letter-spacing:0.03em;display:flex;align-items:center;justify-content:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"></path></svg>START PICKLEBALL SESSION</a>
+<p style="margin:0;text-align:center;font-size:13px;color:#9AA8B6">You'll confirm on the next step. First matches are generated and courts assigned automatically.</p>
+</section>
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2700}}'>
+var MEMBERS=[
+['Sarah Chen','Advanced',1],['Marcus Reid','Intermediate',1],['Priya Nair','Advanced',1],['Tom Becker','Intermediate',1],
+['Linh Tran','Intermediate',1],['Daniel Okafor','Advanced',1],['Hana Sato','Beginner',1],['Leo Martins','Intermediate',1],
+['John Park','Advanced',1],['Mia Novak','Intermediate',1],['Carlos Ruiz','Advanced',1],['Aisha Rahman','Intermediate',1],
+['Fatima Zahra','Beginner',1],['Lucas Moreau','Intermediate',1],['Isabel Costa','Intermediate',1],['Kenji Watanabe','Advanced',1],
+['Grace Kim','Beginner',1],['Nguyen Minh','Intermediate',1],['Zoe Laurent','Intermediate',1],['Kofi Mensah','Advanced',1],
+['Elena Rossi','Beginner',1],['Ivan Petrov','Intermediate',1],['Ethan Brooks','Advanced',1],['Noah Fischer','Intermediate',1],
+['Arjun Mehta','Intermediate',1],['James Whitfield','Advanced',1],['Sofia Alvarez','Beginner',1],['Chloe Dubois','Intermediate',1],
+['Peter Lindqvist','Advanced',0],['Yuki Tanaka','Beginner',0]
+];
+function ini(n){return n.split(' ').map(function(w){return w[0];}).join('');}
+class Component extends DCLogic {
+renderVals() {
+var members=MEMBERS.map(function(m){var on=m[2]===1;return {name:m[0],ini:ini(m[0]),skill:m[1],on:on,
+status:on?'Attending':'Not attending',statusColor:on?'#C9E86A':'#9AA8B6',
+row:on?'background:#1F2A14;border:1px solid #4C5F14':'background:#1C2630;border:1px solid #2A3642',
+box:on?'background:#D4F23A':'border:2px solid #4A5866;box-sizing:border-box',
+avatar:on?'background:#2B3A12;color:#E3FA7A':'background:#2A3642;color:#9AA8B6'};});
+var courts=[1,2,3,4].map(function(n){return {n:n,name:'Court '+n,note:n===4?'Near the café · 4 players':'4 players'};});
+var guests=[{name:'Ben Adeyemi',ini:'BA',skill:'INTERMEDIATE'},{name:'Olivia Brandt',ini:'OB',skill:'BEGINNER'}];
+var P=[['Equal games for everyone','Nobody falls more than 1 game behind'],['Shortest waits','Keep sit-outs as short as possible'],['Full courts','Never leave a court empty if players are free'],['No back-to-back games','Rest between matches where possible']];
+var priorities=P.map(function(p,i){return {n:i+1,label:p[0],hint:p[1],top:i===0,
+row:i===0?'background:#1F2A14;border:1px solid #4C5F14':'background:#1C2630;border:1px solid #2A3642',
+num:i===0?'background:#D4F23A;color:#18200A':'background:#2A3642;color:#F1F5F9'};});
+var R=[['Prevent consecutive matches','Where possible',1],['Fewer games plays first','Players behind get priority',1],['Longest wait plays first','Breaks ties between equal games',1],['Mix up partners','Avoid the same pairs repeating',1],['Allow manual assignments','Lock or swap players on the live screen',0]];
+var rules=R.map(function(r,i){var on=r[2]===1;return {id:'rule-'+i,label:r[0],hint:r[1],on:on,track:on?'background:#D4F23A;justify-content:flex-end':'background:#3A4856;justify-content:flex-start'};});
+var waitDots=[];for(var i=0;i<14;i++){waitDots.push({c:i>=12?'#5AA9FF':'#5B6B7A'});}
+return {members:members,courts:courts,guests:guests,priorities:priorities,rules:rules,waitDots:waitDots};
+}
+}
+</script>
+</body>
+</html>

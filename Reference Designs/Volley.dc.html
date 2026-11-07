@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Volley — live session</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1419}
+a{color:#8CC4FF}a:hover{color:#BFDFFF}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#0F1419;color:#F1F5F9;font-family:Outfit, system-ui, sans-serif;font-size:15px;line-height:1.4">
+<main style="max-width:1440px;margin:0 auto;padding:24px 28px 48px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px">
+
+<div style="display:flex;flex-wrap:wrap;gap:16px">
+<section aria-label="Session" style="flex:2 1 520px;min-width:0;background:#182028;border:1px solid #24303B;border-radius:24px;padding:20px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:20px">
+<div style="display:flex;align-items:center;gap:14px;flex:1 1 240px">
+<svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24" fill="#D4F23A"></circle><circle cx="18" cy="18" r="3" fill="#0F1419"></circle><circle cx="30" cy="15" r="3" fill="#0F1419"></circle><circle cx="36" cy="27" r="3" fill="#0F1419"></circle><circle cx="25" cy="34" r="3" fill="#0F1419"></circle><circle cx="15" cy="29" r="3" fill="#0F1419"></circle><circle cx="26" cy="24" r="3" fill="#0F1419"></circle></svg>
+<div>
+<div style="font-size:22px;font-weight:700;letter-spacing:-0.01em">Riverside Pickleball</div>
+<div style="color:#9AA8B6;font-size:14px">Sat 7 Nov · 18:00 – 20:00 · Social</div>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:16px">
+<div style="width:76px;height:76px;border-radius:50%;background:conic-gradient(#D4F23A 0 73%, #2A3642 73% 100%);display:flex;align-items:center;justify-content:center" role="img" aria-label="73% of session elapsed"><div style="width:60px;height:60px;border-radius:50%;background:#182028;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;color:#9AA8B6;line-height:1.1"><span style="font-size:16px;font-weight:700;color:#F1F5F9">31:46</span>left</div></div>
+<div>
+<div style="font-size:12px;color:#9AA8B6;text-transform:uppercase;letter-spacing:0.12em">Elapsed</div>
+<div style="font-size:40px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1">1:28:14</div>
+</div>
+</div>
+<div style="display:flex;gap:8px">
+<button style="height:52px;padding:0 20px;border-radius:16px;border:0;background:#F1F5F9;color:#0F1419;font-weight:700;font-size:15px">Pause</button>
+<button style="height:52px;padding:0 20px;border-radius:16px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600;font-size:15px">End</button>
+</div>
+</section>
+<div style="flex:1 1 360px;display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:16px">
+<div style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:16px 18px"><div style="color:#9AA8B6;font-size:13px">Players</div><div style="font-size:34px;font-weight:700;line-height:1.1">30</div><div style="color:#9AA8B6;font-size:13px">16 on · 14 off</div></div>
+<div style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:16px 18px"><div style="color:#9AA8B6;font-size:13px">Courts</div><div style="font-size:34px;font-weight:700;line-height:1.1;color:#D4F23A">4/4</div><div style="color:#9AA8B6;font-size:13px">all in play</div></div>
+<div style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:16px 18px"><div style="color:#9AA8B6;font-size:13px">Games done</div><div style="font-size:34px;font-weight:700;line-height:1.1">24</div><div style="color:#9AA8B6;font-size:13px">avg 13:10 each</div></div>
+<div style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:16px 18px"><div style="color:#9AA8B6;font-size:13px">Avg wait now</div><div style="font-size:34px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums">{{avgWaitNow}}</div><div style="color:#FFB877;font-size:13px">max 22:40</div></div>
+</div>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:stretch">
+<section aria-labelledby="c5-h" style="flex:2 1 640px;min-width:0;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:0 4px">
+<h2 id="c5-h" style="margin:0;font-size:20px;font-weight:700">Courts</h2>
+<div style="display:flex;gap:12px;font-size:13px;color:#9AA8B6;flex-wrap:wrap">
+<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:#D4F23A"></span>Playing</span>
+<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:#5AA9FF"></span>Next</span>
+<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:#64748B"></span>Waiting</span>
+<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:#FF9F43"></span>Attention</span>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));gap:16px;flex:1">
+<sc-for list="{{courts}}" as="c" hint-placeholder-count="4">
+<article style="background:#182028;border:1px solid {{c.edge}};border-radius:24px;padding:18px;display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<h3 style="margin:0;font-size:18px;font-weight:700">Court {{c.id}}</h3>
+<span style="font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;padding:6px 12px;border-radius:999px;{{c.chip}}">{{c.elapsed}}</span>
+</div>
+<div style="display:grid;grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr);gap:10px;align-items:center">
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{c.a}}" as="p" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:10px;min-width:0"><span style="width:40px;height:40px;flex:none;border-radius:50%;background:#2B3A12;color:#E3FA7A;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #D4F23A">{{p.ini}}</span><div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{p.name}}</div><div style="font-size:12px;color:#9AA8B6">{{p.games}} games</div></div></div>
+</sc-for>
+</div>
+<span style="font-size:13px;font-weight:700;color:#9AA8B6">vs</span>
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{c.b}}" as="p" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:10px;min-width:0"><span style="width:40px;height:40px;flex:none;border-radius:50%;background:#2B3A12;color:#E3FA7A;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #D4F23A">{{p.ini}}</span><div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{p.name}}</div><div style="font-size:12px;color:#9AA8B6">{{p.games}} games</div></div></div>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:auto">
+<div style="flex:1"><div style="height:8px;border-radius:4px;background:#2A3642;overflow:hidden"><div style="height:8px;border-radius:4px;width:{{c.pct}}%;background:{{c.bar}}"></div></div><div style="font-size:12px;color:#9AA8B6;margin-top:4px">Since {{c.start}} · {{c.note}}</div></div>
+<button style="height:44px;padding:0 16px;border-radius:14px;font-weight:700;{{c.btn}}">Done</button>
+</div>
+</article>
+</sc-for>
+</div>
+</section>
+</div>
+
+<section aria-labelledby="n5-h" style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:20px 22px">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px">
+<h2 id="n5-h" style="margin:0;font-size:20px;font-weight:700">Up next</h2>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<button style="height:40px;padding:0 16px;border-radius:12px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600">Undo</button>
+<button style="height:40px;padding:0 16px;border-radius:12px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600">Shuffle suggestions</button>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:12px">
+<sc-for list="{{next}}" as="m" hint-placeholder-count="4">
+<article style="background:{{m.bg}};border:1px solid {{m.edge}};border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0;font-size:16px;font-weight:700">Court {{m.court}}</h3><span style="font-size:13px;font-weight:600;color:#8CC4FF">{{m.eta}}</span></div>
+<div style="display:flex;align-items:center">
+<sc-for list="{{m.all}}" as="p" hint-placeholder-count="4">
+<span style="width:38px;height:38px;margin-right:-8px;border-radius:50%;background:#1D3550;color:#CFE6FF;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid {{m.bg}}">{{p.ini}}</span>
+</sc-for>
+</div>
+<div style="font-size:14px;line-height:1.5">{{m.teamA}} <span style="color:#9AA8B6">vs</span> {{m.teamB}}</div>
+<p style="margin:0;font-size:13px;color:#9AA8B6">{{m.why}}</p>
+<div style="display:flex;gap:6px;margin-top:auto">
+<button style="flex:1;height:44px;border-radius:14px;border:0;background:#5AA9FF;color:#06182B;font-weight:700">Accept</button>
+<button style="height:44px;padding:0 14px;border-radius:14px;border:1px solid #2F4A68;background:transparent;color:#F1F5F9;font-weight:600">Swap</button>
+<button aria-label="Lock players for Court {{m.court}}" style="width:44px;height:44px;border-radius:14px;border:1px solid #2F4A68;background:transparent;color:#F1F5F9;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></button>
+</div>
+</article>
+</sc-for>
+</div>
+</section>
+
+<section aria-labelledby="w5-h" style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:20px 22px">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px">
+<div><h2 id="w5-h" style="margin:0;font-size:20px;font-weight:700">Players waiting · 14</h2><p style="margin:2px 0 0;font-size:13px;color:#9AA8B6">In priority order. Drag to reorder, or onto a court.</p></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<button style="height:40px;padding:0 16px;border-radius:12px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600">Skip</button>
+<button style="height:40px;padding:0 16px;border-radius:12px;border:1px solid #3A4856;background:transparent;color:#F1F5F9;font-weight:600">Add member</button>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(190px, 1fr));gap:10px">
+<sc-for list="{{queue}}" as="q" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:18px;background:{{q.bg}};border:1px solid {{q.edge}};cursor:grab">
+<span style="width:36px;height:36px;flex:none;border-radius:50%;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;{{q.avatar}}">{{q.ini}}</span>
+<div style="min-width:0;flex:1"><div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{q.rank}}. {{q.name}}</div><div style="font-size:12px;color:#9AA8B6">{{q.games}} games · {{q.total}}</div></div>
+<span style="font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;color:{{q.waitColor}}">{{q.wait}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section aria-labelledby="s5-h" style="background:#182028;border:1px solid #24303B;border-radius:24px;padding:20px 22px">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:12px">
+<h2 id="s5-h" style="margin:0;font-size:20px;font-weight:700">Members</h2>
+<span style="font-size:13px;color:#9AA8B6">Fewest games first · group average 3.2</span>
+</div>
+<div style="overflow-x:auto">
+<table style="width:100%;min-width:940px;border-collapse:separate;border-spacing:0 4px;font-variant-numeric:tabular-nums">
+<thead>
+<tr style="text-align:left;font-size:13px;color:#9AA8B6">
+<th style="padding:6px 12px;font-weight:500">Player</th>
+<th style="padding:6px 12px;font-weight:500">Games</th>
+<th style="padding:6px 12px;font-weight:500">vs avg</th>
+<th style="padding:6px 12px;font-weight:500">Playing</th>
+<th style="padding:6px 12px;font-weight:500">Total wait</th>
+<th style="padding:6px 12px;font-weight:500">Avg wait</th>
+<th style="padding:6px 12px;font-weight:500">Last game</th>
+<th style="padding:6px 12px;font-weight:500">Status</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{stats}}" as="s" hint-placeholder-count="30">
+<tr style="background:{{s.rowBg}}">
+<td style="padding:8px 12px;border-radius:12px 0 0 12px"><div style="display:flex;align-items:center;gap:10px"><span style="width:28px;height:28px;flex:none;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;{{s.avatar}}">{{s.ini}}</span><span style="font-weight:600">{{s.name}}</span></div></td>
+<td style="padding:8px 12px;font-weight:700">{{s.games}}</td>
+<td style="padding:8px 12px;font-weight:700;color:{{s.diffColor}}">{{s.diff}}</td>
+<td style="padding:8px 12px">{{s.play}}</td>
+<td style="padding:8px 12px">{{s.total}}</td>
+<td style="padding:8px 12px">{{s.avgWait}}</td>
+<td style="padding:8px 12px;color:#C3CDD8">{{s.last}}</td>
+<td style="padding:8px 12px;border-radius:0 12px 12px 0"><span style="font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;{{s.chip}}">{{s.statusLabel}}</span></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2500}}'>
+var RAW=[
+['Ben Adeyemi',2,'W',0,1360,27,'19:05',98],
+['Grace Kim',2,'W',0,920,24,'19:13',94],
+['Nguyen Minh',2,'W',0,920,23,'19:13',93],
+['Olivia Brandt',2,'W',0,724,18,'19:16',88],
+['Zoe Laurent',3,'W',0,920,24,'19:13',78],
+['Kofi Mensah',3,'W',0,724,28,'19:16',74],
+['Elena Rossi',3,'W',0,724,26,'19:16',72],
+['Ivan Petrov',3,'W',0,724,25,'19:16',71],
+['Ethan Brooks',4,'W',0,482,19,'19:20',48],
+['Noah Fischer',4,'W',0,482,18,'19:20',47],
+['Arjun Mehta',4,'W',0,482,15,'19:20',44],
+['James Whitfield',4,'W',0,250,17,'19:24',41],
+['Sofia Alvarez',4,'W',0,250,16,'19:24',40],
+['Chloe Dubois',4,'W',0,250,14,'19:24',38],
+['Sarah Chen',3,'P',1,0,22,'19:02',0],
+['Marcus Reid',3,'P',1,0,21,'19:02',0],
+['Priya Nair',3,'P',1,0,23,'18:58',0],
+['Tom Becker',3,'P',1,0,20,'18:58',0],
+['Linh Tran',3,'P',2,0,24,'19:11',0],
+['Daniel Okafor',3,'P',2,0,25,'19:11',0],
+['Hana Sato',3,'P',2,0,23,'19:08',0],
+['Leo Martins',3,'P',2,0,22,'19:08',0],
+['John Park',4,'P',3,0,12,'19:00',0],
+['Mia Novak',4,'P',3,0,13,'19:00',0],
+['Carlos Ruiz',4,'P',3,0,11,'19:00',0],
+['Aisha Rahman',4,'P',3,0,14,'19:00',0],
+['Fatima Zahra',3,'P',4,0,21,'19:05',0],
+['Lucas Moreau',3,'P',4,0,20,'19:05',0],
+['Isabel Costa',3,'P',4,0,22,'19:05',0],
+['Kenji Watanabe',3,'P',4,0,19,'19:05',0]
+];
+var COURTS=[
+{id:1,start:'19:16',el:724,a:['Sarah Chen','Marcus Reid'],b:['Priya Nair','Tom Becker']},
+{id:2,start:'19:24',el:250,a:['Linh Tran','Daniel Okafor'],b:['Hana Sato','Leo Martins']},
+{id:3,start:'19:13',el:920,a:['John Park','Mia Novak'],b:['Carlos Ruiz','Aisha Rahman']},
+{id:4,start:'19:20',el:482,a:['Fatima Zahra','Lucas Moreau'],b:['Isabel Costa','Kenji Watanabe']}
+];
+var NEXT=[
+{court:3,eta:'Ready now',a:['Ben Adeyemi','Grace Kim'],b:['Nguyen Minh','Olivia Brandt'],why:'All four on 2 games, 1.2 below average.'},
+{court:1,eta:'In ~3 min',a:['Zoe Laurent','Kofi Mensah'],b:['Elena Rossi','Ivan Petrov'],why:'On 3 games and waiting 12–15 min.'},
+{court:4,eta:'In ~7 min',a:['Ethan Brooks','Noah Fischer'],b:['Arjun Mehta','James Whitfield'],why:'Rested 4–8 min, no back-to-back games.'},
+{court:2,eta:'In ~11 min',a:['Sofia Alvarez','Chloe Dubois'],b:['Sarah Chen','Marcus Reid'],why:'Court 1 finishers (4 games) picked over Court 3 (5).'}
+];
+function mmss(s){var m=Math.floor(s/60),x=s%60;return m+':'+(x<10?'0':'')+x;}
+function buildData(){
+var avg=3.2,byName={};
+var players=RAW.map(function(r){
+var n=r[0],g=r[1],playing=r[2]==='P',diff=g-avg;
+var isNext=!playing&&NEXT[0].a.concat(NEXT[0].b).indexOf(n)>=0;
+var p={name:n,ini:n.split(' ').map(function(w){return w[0];}).join(''),games:g,playing:playing,court:r[3],
+wait:playing?'On court':mmss(r[4]),waitSec:r[4],total:r[5]+'m',totalMin:r[5],last:r[6],priority:r[7],
+play:(g*13+(n.length%5)-2)+'m',avgWait:(r[5]/(g+(playing?0:1))).toFixed(1)+'m',
+diff:(diff>0?'+':'−')+Math.abs(diff).toFixed(1),behind:diff<=-1,ahead:diff>=0.5,longWait:!playing&&r[4]>=900,
+status:playing?'Playing':(isNext?'Next':'Waiting')};
+p.statusLabel=playing?('Court '+r[3]):p.status;
+byName[n]=p;return p;});
+var pick=function(list){return list.map(function(n){return byName[n];});};
+var courts=COURTS.map(function(c){return {id:c.id,start:c.start,el:c.el,elapsed:mmss(c.el),over:c.el>=900,pct:Math.min(100,Math.round(c.el/900*100)),a:pick(c.a),b:pick(c.b)};});
+var next=NEXT.map(function(m){return {court:m.court,eta:m.eta,why:m.why,a:pick(m.a),b:pick(m.b),all:pick(m.a.concat(m.b))};});
+var queue=players.filter(function(p){return !p.playing;}).sort(function(a,b){return b.priority-a.priority;});
+queue.forEach(function(q,i){q.rank=i+1;});
+var stats=players.slice().sort(function(a,b){return a.games-b.games||b.totalMin-a.totalMin;});
+var w=queue.reduce(function(s,q){return s+q.waitSec;},0)/queue.length;
+return {players:players,courts:courts,next:next,queue:queue,stats:stats,avgWaitNow:mmss(Math.round(w))};
+}
+class Component extends DCLogic {
+renderVals() {
+var d=buildData();
+var AV={Playing:'background:#2B3A12;color:#E3FA7A',Next:'background:#1D3550;color:#CFE6FF',Waiting:'background:#2A3642;color:#D5DEE7',Attn:'background:#3A2612;color:#FFC48F'};
+var CHIP={Playing:'background:#D4F23A;color:#18200A',Next:'background:#5AA9FF;color:#06182B',Waiting:'background:#2A3642;color:#D5DEE7'};
+function av(p){return p.status==='Playing'?AV.Playing:(p.status==='Next'?AV.Next:(p.longWait||p.behind?AV.Attn:AV.Waiting));}
+d.buckets=[2,3,4].map(function(g){var ps=d.players.filter(function(p){return p.games===g;});return {label:g+' games',count:ps.length,players:ps.map(function(p){return {name:p.name,ini:p.ini,dot:g===2?'background:#FF9F43;color:#2A1606':(p.playing?'background:#D4F23A;color:#18200A':'background:#2A3642;color:#D5DEE7')};})};});
+d.courts.forEach(function(c){
+c.chip=c.over?'background:#FF9F43;color:#2A1606':'background:#D4F23A;color:#18200A';
+c.edge=c.over?'#6A4520':'#24303B';
+c.bar=c.over?'#FF9F43':'#D4F23A';
+c.note=c.over?'past 15 min · wrap up':'15 min target';
+c.btn=c.over?'background:#D4F23A;color:#18200A;border:0':'background:transparent;color:#F1F5F9;border:1px solid #3A4856';
+});
+d.next.forEach(function(m,i){m.teamA=m.a[0].name.split(' ')[0]+' & '+m.a[1].name.split(' ')[0];m.teamB=m.b[0].name.split(' ')[0]+' & '+m.b[1].name.split(' ')[0];m.bg=i===0?'#13263C':'#1C2630';m.edge=i===0?'#2F5E8F':'#2A3642';});
+d.queue.forEach(function(q){
+q.avatar=av(q);
+q.bg=q.status==='Next'?'#13263C':(q.longWait?'#251C12':'#1C2630');
+q.edge=q.status==='Next'?'#2F5E8F':(q.longWait?'#5A4220':'#2A3642');
+q.waitColor=q.longWait?'#FFB877':'#F1F5F9';
+});
+d.stats.forEach(function(s){
+s.avatar=av(s);
+s.chip=CHIP[s.status];
+s.diffColor=s.behind?'#FFB877':(s.ahead?'#9AA8B6':'#F1F5F9');
+s.rowBg=s.behind?'#251C12':'#1C2630';
+});
+return d;
+}
+}
+</script>
+</body>
+</html>

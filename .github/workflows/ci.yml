@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # New advisories must not block unrelated PRs.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod --audit-level=high
+
+  e2e:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start local Supabase
+        run: pnpm exec supabase start -x studio,imgproxy,edge-runtime,logflare,vector
+
+      - name: Export local Supabase env
+        shell: bash
+        run: |
+          set -euo pipefail
+          status_env="$(pnpm exec supabase status -o env)"
+          # Read a value for the first variable name that is present.
+          read_status_value() {
+            local variable_name
+            for variable_name in "$@"; do
+              local line
+              line="$(printf '%s\n' "$status_env" | grep -E "^${variable_name}=" | head -n1 || true)"
+              if [ -n "$line" ]; then
+                local value="${line#*=}"
+                value="${value%\"}"
+                value="${value#\"}"
+                printf '%s' "$value"
+                return 0
+              fi
+            done
+            echo "None of these variables found in supabase status: $*" >&2
+            return 1
+          }
+          api_url="$(read_status_value API_URL)"
+          publishable_key="$(read_status_value PUBLISHABLE_KEY ANON_KEY)"
+          secret_key="$(read_status_value SECRET_KEY SERVICE_ROLE_KEY)"
+          echo "::add-mask::$publishable_key"
+          echo "::add-mask::$secret_key"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$api_url"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$publishable_key"
+            echo "SUPABASE_SECRET_KEY=$secret_key"
+          } >> "$GITHUB_ENV"
+
+      - name: Apply migrations
+        run: |
+          if compgen -G "supabase/migrations/*.sql" > /dev/null; then
+            pnpm exec supabase db reset
+          else
+            echo "No migrations found; skipping db reset"
+          fi
+
+      - name: Database tests
+        run: |
+          if [ -d supabase/tests ]; then
+            pnpm exec supabase test db
+          else
+            echo "No supabase/tests directory; skipping"
+          fi
+
+      - name: Playwright e2e
+        run: pnpm e2e
+        env:
+          CI: "true"
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Stop local Supabase
+        if: always()
+        run: pnpm exec supabase stop

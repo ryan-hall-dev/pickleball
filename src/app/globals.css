@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+/* Design tokens (dark only). Utilities: bg-bg, bg-card, border-card-border, text-muted, rounded-card, etc. */
+@theme {
+  --color-bg: #0f1419;
+  --color-card: #182028;
+  --color-card-border: #24303b;
+  --color-inner: #1c2630;
+  --color-inner-border: #2a3642;
+  --color-text: #f1f5f9;
+  --color-muted: #9aa8b6;
+  --color-lime: #d4f23a;
+  --color-blue: #5aa9ff;
+  --color-orange: #ff9f43;
+
+  --radius-card: 24px;
+}
+
+/* `inline` so the utility resolves the next/font variable set on <html> at runtime. */
+@theme inline {
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
