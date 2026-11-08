@@ -1,6 +1,7 @@
 // Undo: build the compensating event for one earlier action.
 import { applyEvent } from "./applyEvent";
 import { restorableQueueOrder } from "./sessionHandlers";
+import type { MatchId } from "./types";
 import { sessionError, type SessionError } from "./errors";
 import {
   COMPENSATING_EVENT_TYPE,
@@ -29,8 +30,28 @@ function buildCompensatingEvent(
   state: SessionState,
   target: HistoryEntry,
   meta: EventMeta,
+  targetMatchId: MatchId | undefined,
 ): SessionEvent | SessionError {
   const targetEvent = target.event;
+  if (targetEvent.type === "SessionStarted" && targetMatchId !== undefined) {
+    return {
+      ...meta,
+      type: "MatchStartReverted",
+      payload: { targetSeq: targetEvent.seq, matchId: targetMatchId },
+    };
+  }
+  if (targetMatchId !== undefined && targetEvent.type !== "MatchStarted") {
+    return sessionError(
+      "TARGET_MISMATCH",
+      "A match id only applies to undoing a match start.",
+    );
+  }
+  if (targetEvent.type === "SessionStarted") {
+    return sessionError(
+      "NOT_REVERSIBLE",
+      "Starting the session can't be undone; to undo one of its first matches, choose that match.",
+    );
+  }
   if (!isReversibleEventType(targetEvent.type)) {
     return sessionError(
       "NOT_REVERSIBLE",
@@ -63,6 +84,15 @@ function buildCompensatingEvent(
         type: "SuggestionsShuffled",
         payload: { seed: target.before.suggestionSeed ?? 0, targetSeq },
       };
+    case "MatchStarted":
+      return {
+        ...meta,
+        type: "MatchStartReverted",
+        payload:
+          targetMatchId === undefined
+            ? { targetSeq }
+            : { targetSeq, matchId: targetMatchId },
+      };
     default:
       return {
         ...meta,
@@ -77,11 +107,16 @@ function buildCompensatingEvent(
  * `applyEvent` against the current state. Any earlier action can be undone,
  * not only the newest, as long as it is reversible, not already undone, and
  * nothing later depends on it (the error says what to undo first).
+ *
+ * `targetMatchId` undoes one match started with the session: pass the
+ * SessionStarted seq as `targetSeq` and that match's id. SessionStarted itself
+ * can't be undone.
  */
 export function compensate(
   state: SessionState,
   targetSeq: number,
   meta: EventMeta,
+  targetMatchId?: MatchId,
 ): CompensateResult {
   const target = findHistoryEntry(state, targetSeq);
   if (!target) {
@@ -90,7 +125,7 @@ export function compensate(
       error: sessionError("UNKNOWN_TARGET", `There is no action ${targetSeq}.`),
     };
   }
-  const built = buildCompensatingEvent(state, target, meta);
+  const built = buildCompensatingEvent(state, target, meta, targetMatchId);
   if ("code" in built) return { ok: false, error: built };
   const result = applyEvent(state, built);
   if (!result.ok) return result;

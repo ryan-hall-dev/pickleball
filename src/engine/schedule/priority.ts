@@ -23,7 +23,6 @@ export interface PlayerSnapshot {
   gamesCompleted: number;
   presentSlots: number;
   playSlots: number;
-  waitSlots: number;
   currentWaitSlots: number;
   /** Null if they have not played yet. */
   restSlots: number | null;
@@ -52,7 +51,6 @@ export function snapshotAtNow(
     gamesCompleted: player.gamesCompleted,
     presentSlots: player.presentMs / slotMs,
     playSlots: player.playMs / slotMs,
-    waitSlots: player.totalWaitMs / slotMs,
     currentWaitSlots: player.currentWaitMs / slotMs,
     restSlots: player.restMs === null ? null : player.restMs / slotMs,
     recentGames,
@@ -84,7 +82,6 @@ export function projectSnapshot(
     return {
       ...snapshot,
       presentSlots: snapshot.presentSlots + offsetSlots,
-      waitSlots: snapshot.waitSlots + offsetSlots,
       currentWaitSlots: snapshot.currentWaitSlots + offsetSlots,
       restSlots:
         snapshot.restSlots === null ? null : snapshot.restSlots + offsetSlots,
@@ -107,7 +104,6 @@ export function projectSnapshot(
     gamesCompleted: snapshot.gamesCompleted + credit,
     presentSlots: snapshot.presentSlots + offsetSlots,
     playSlots: snapshot.playSlots + courtFreesAtSlots,
-    waitSlots: snapshot.waitSlots + restedSlots,
     currentWaitSlots: restedSlots,
     restSlots: restedSlots,
     recentGames: decayedRecentGames + credit * decayFactor(restedSlots),
@@ -118,10 +114,8 @@ export function projectSnapshot(
 export interface SessionRates {
   /** Σg / Σp: games per slot present. */
   gameRate: number;
-  /** Σplay / Σp. */
+  /** Σplay / Σp: court minutes per minute present. */
   playRate: number;
-  /** ΣW / Σp. */
-  waitRate: number;
   /** Σg / n. */
   meanGames: number;
 }
@@ -132,19 +126,16 @@ export function sessionRates(
   let totalGames = 0;
   let totalPresent = 0;
   let totalPlay = 0;
-  let totalWait = 0;
   for (const snapshot of snapshots) {
     totalGames += snapshot.gamesCompleted;
     totalPresent += snapshot.presentSlots;
     totalPlay += snapshot.playSlots;
-    totalWait += snapshot.waitSlots;
   }
   const perPresent = (total: number) =>
     totalPresent === 0 ? 0 : total / totalPresent;
   return {
     gameRate: perPresent(totalGames),
     playRate: perPresent(totalPlay),
-    waitRate: perPresent(totalWait),
     meanGames: snapshots.length === 0 ? 0 : totalGames / snapshots.length,
   };
 }
@@ -162,24 +153,20 @@ export function projectedSessionRates(
   let totalGames = 0;
   let totalPresent = 0;
   let totalPlay = 0;
-  let totalWait = 0;
   for (let index = 0; index < snapshots.length; index += 1) {
     const snapshot = snapshots[index];
     const freesAt = courtFreesAtSlots[index];
     totalGames += snapshot.gamesCompleted;
     totalPresent += snapshot.presentSlots;
     totalPlay += snapshot.playSlots;
-    totalWait += snapshot.waitSlots;
     if (snapshot.player.status === "skipped") continue;
     totalPresent += offsetSlots;
-    if (freesAt === null) {
-      totalWait += offsetSlots;
-    } else if (freesAt > offsetSlots) {
+    if (freesAt === null) continue;
+    if (freesAt > offsetSlots) {
       totalPlay += offsetSlots;
     } else {
       totalGames += snapshot.player.pendingGameCredit;
       totalPlay += freesAt;
-      totalWait += offsetSlots - freesAt;
     }
   }
   const perPresent = (total: number) =>
@@ -187,7 +174,6 @@ export function projectedSessionRates(
   return {
     gameRate: perPresent(totalGames),
     playRate: perPresent(totalPlay),
-    waitRate: perPresent(totalWait),
     meanGames: snapshots.length === 0 ? 0 : totalGames / snapshots.length,
   };
 }
@@ -198,10 +184,8 @@ export interface PlayerMeasurements {
   gameDeficit: number;
   /** m1: session mean games minus games played. */
   gamesBehindMean: number;
-  /** m4: fair-share playing time minus playing time, in slots. */
+  /** m4: fair-share court minutes minus court minutes, in slots (positive = behind). */
   playDeficit: number;
-  /** m5: waiting beyond fair share, in slots. */
-  waitExcess: number;
   /** m6, in slots. */
   currentWaitSlots: number;
   /** m7, capped at `REST_CAP_SLOTS` (the cap for someone who has not played). */
@@ -217,7 +201,6 @@ export interface PriorityTerms {
   rawGames: number;
   playingTime: number;
   currentWait: number;
-  accumulatedWait: number;
   rest: number;
   recentGames: number;
   consecutive: number;
@@ -244,7 +227,6 @@ export function measurePlayer(
       rates.gameRate * snapshot.presentSlots - snapshot.gamesCompleted,
     gamesBehindMean: rates.meanGames - snapshot.gamesCompleted,
     playDeficit: rates.playRate * snapshot.presentSlots - snapshot.playSlots,
-    waitExcess: snapshot.waitSlots - rates.waitRate * snapshot.presentSlots,
     currentWaitSlots: snapshot.currentWaitSlots,
     restSlots:
       snapshot.restSlots === null
@@ -294,9 +276,6 @@ export function scoreSnapshot(
       saturate(measurements.playDeficit, weights.playingTimeCap),
     currentWait:
       weights.currentWait * saturate(urgentWait, weights.currentWaitCap),
-    accumulatedWait:
-      weights.accumulatedWait *
-      saturate(measurements.waitExcess, weights.accumulatedWaitCap),
     rest: weights.rest * measurements.restSlots,
     recentGames:
       -weights.recentGames *
@@ -313,7 +292,6 @@ export function scoreSnapshot(
     terms.rawGames +
     terms.playingTime +
     terms.currentWait +
-    terms.accumulatedWait +
     terms.rest +
     terms.recentGames +
     terms.consecutive +
@@ -348,10 +326,6 @@ export function sharedPriorityDrift(
     weights.fairShare * rateDrift(ratesNow.gameRate, ratesThen.gameRate) +
     weights.rawGames * Math.abs(ratesThen.meanGames - ratesNow.meanGames) +
     weights.playingTime * rateDrift(ratesNow.playRate, ratesThen.playRate) +
-    weights.accumulatedWait *
-      (offsetSlots * Math.abs(1 - ratesThen.waitRate) +
-        Math.abs(ratesThen.waitRate - ratesNow.waitRate) *
-          maximumPresentSlots) +
     weights.rest * offsetSlots
   );
 }

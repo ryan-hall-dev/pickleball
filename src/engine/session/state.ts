@@ -75,8 +75,12 @@ export interface MatchState {
   segments: PlaySegment[];
   /** Locks used up by this match start, restored if the start is undone. */
   consumedLocks: Record<ParticipantId, PlayerLock>;
-  /** Manual queue positions cleared by this match start, restored if the start is undone. */
-  previousQueueIndexes: Record<ParticipantId, number>;
+  /**
+   * The manual order just before this start, kept only when it cleared a
+   * starter's rank (else empty), so an undo can put each rank back after the
+   * same neighbour rather than at a stale position.
+   */
+  queueOrderAtStart: ParticipantId[];
 }
 
 export interface ClosureInterval extends TimeInterval {

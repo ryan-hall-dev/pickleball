@@ -150,6 +150,17 @@ function validateEnvelope(
   return null;
 }
 
+/** An undo of one match started with the session; the SessionStarted itself stays in force. */
+function isInitialMatchUndo(
+  event: SessionEvent,
+  target: HistoryEntry,
+): boolean {
+  return (
+    event.type === "MatchStartReverted" &&
+    target.event.type === "SessionStarted"
+  );
+}
+
 /** Finds and checks the action a compensating event undoes. */
 function resolveTarget(
   state: SessionState,
@@ -165,8 +176,9 @@ function resolveTarget(
   }
   const targetType = target.event.type;
   if (
-    !isReversibleEventType(targetType) ||
-    COMPENSATING_EVENT_TYPE[targetType] !== event.type
+    !isInitialMatchUndo(event, target) &&
+    (!isReversibleEventType(targetType) ||
+      COMPENSATING_EVENT_TYPE[targetType] !== event.type)
   ) {
     return sessionError(
       "TARGET_MISMATCH",
@@ -224,7 +236,7 @@ function applyValidEnvelope(
     before: draft.before,
   };
   next.history = writeInPlace ? state.history : [...state.history];
-  if (target) {
+  if (target && !isInitialMatchUndo(event, target)) {
     const targetIndex = findHistoryIndex(next, target.event.seq);
     next.history[targetIndex] = { ...target, compensatedBySeq: event.seq };
   }

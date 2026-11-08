@@ -420,7 +420,9 @@ export interface ActionHistoryItem {
   at: EpochMs;
   /** For an undo: the action it undid. */
   targetSeq: number | null;
-  /** The undo that reversed this action, if any. */
+  /** For a match-start undo that names its match: which one. Always set when undoing a match started with the session (whose target is the SessionStarted). */
+  targetMatchId: MatchId | null;
+  /** The undo that reversed this action, if any. Never set on SessionStarted: its first matches are undone one by one. */
   compensatedBySeq: number | null;
 }
 
@@ -433,6 +435,10 @@ export function actionHistory(state: SessionState): ActionHistoryItem[] {
     actorId: event.actorId,
     at: event.at,
     targetSeq: compensationTargetSeq(event),
+    targetMatchId:
+      event.type === "MatchStartReverted"
+        ? (event.payload.matchId ?? null)
+        : null,
     compensatedBySeq,
   }));
 }

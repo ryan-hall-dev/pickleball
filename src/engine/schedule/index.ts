@@ -6,5 +6,6 @@ export { scheduleInputFromSession } from "./scheduleInputFromSession";
 export { estimateGames, fillableSeats } from "./estimateGames";
 export type { EstimateGamesInput, GamesEstimate } from "./estimateGames";
 export { createSeededRandom } from "./seededRandom";
+export { FAIR_ALTERNATIVE_TOLERANCE_POINTS } from "./groupSearch";
 export { DEFAULT_SCORING_WEIGHTS, resolveScoringWeights } from "./weights";
 export type { ScoringWeights } from "./weights";

@@ -81,7 +81,6 @@ export function scheduleInputFromSession(
       pendingGameCredit: metrics.committedGames - metrics.gamesCompleted,
       presentMs: metrics.presentMs,
       playMs: metrics.playMs,
-      totalWaitMs: metrics.totalWaitMs,
       currentWaitMs: metrics.currentWaitMs ?? 0,
       restMs:
         metrics.lastMatchEndAt === null

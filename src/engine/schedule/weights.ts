@@ -13,16 +13,17 @@ export interface ScoringWeights {
   /** wRaw, cR: games behind the session mean (m1), the count players can see. */
   rawGames: number;
   rawGamesCap: number;
-  /** wPlay, cP: playing time behind fair share (m4). */
+  /**
+   * wPlay, cP: court minutes behind fair share (m4). Fair share = the session's
+   * court minutes per minute present × this player's time present, so long and
+   * short matches count (game counts don't see that).
+   */
   playingTime: number;
   playingTimeCap: number;
   /** wWait, cW, β: current wait (m6), with urgency rising after one slot. */
   currentWait: number;
   currentWaitCap: number;
   waitUrgency: number;
-  /** wAcc, cA: accumulated waiting beyond fair share (m5). */
-  accumulatedWait: number;
-  accumulatedWaitCap: number;
   /** wRest: time since last match (m7), capped at `REST_CAP_SLOTS`. */
   rest: number;
   /** wRec, cRec: recent participation (m8), subtracted. */
@@ -43,13 +44,11 @@ export const DEFAULT_SCORING_WEIGHTS: Readonly<ScoringWeights> = {
   fairShareCap: 1.5,
   rawGames: 0.25,
   rawGamesCap: 1.0,
-  playingTime: 0.3,
+  playingTime: 0.6,
   playingTimeCap: 1.0,
   currentWait: 0.8,
   currentWaitCap: 2.0,
   waitUrgency: 1.0,
-  accumulatedWait: 0.3,
-  accumulatedWaitCap: 1.0,
   rest: 0.25,
   recentGames: 0.4,
   recentGamesCap: 1.5,
@@ -112,7 +111,6 @@ export function resolveScoringWeights(
     fairShare: baseWeights.fairShare * equalGames,
     rawGames: baseWeights.rawGames * equalGames,
     currentWait: baseWeights.currentWait * shortestWaits,
-    accumulatedWait: baseWeights.accumulatedWait * shortestWaits,
     playingTime: baseWeights.playingTime * playingTime,
     rest: baseWeights.rest * noBackToBack,
     recentGames: baseWeights.recentGames * noBackToBack,

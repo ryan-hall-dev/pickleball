@@ -630,6 +630,7 @@ describe("actionHistory", () => {
         actorId: FIXTURE_ACTOR_ID,
         at: at(0),
         targetSeq: null,
+        targetMatchId: null,
         compensatedBySeq: null,
       },
       {
@@ -639,6 +640,7 @@ describe("actionHistory", () => {
         actorId: FIXTURE_ACTOR_ID,
         at: at(1),
         targetSeq: null,
+        targetMatchId: null,
         compensatedBySeq: unskip.seq,
       },
       {
@@ -648,6 +650,7 @@ describe("actionHistory", () => {
         actorId: FIXTURE_ACTOR_ID,
         at: at(2),
         targetSeq: skip.seq,
+        targetMatchId: null,
         compensatedBySeq: null,
       },
       {
@@ -657,6 +660,7 @@ describe("actionHistory", () => {
         actorId: FIXTURE_ACTOR_ID,
         at: at(2),
         targetSeq: null,
+        targetMatchId: null,
         compensatedBySeq: null,
       },
     ]);

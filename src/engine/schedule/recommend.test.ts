@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
+import type { RotationObjective } from "../session";
 import { scoreWaitingPlayers } from "./priority";
 import { recommend } from "./recommend";
 import { DEFAULT_SIMULATION_PREFERENCES } from "./simulation/simulateSession";
@@ -14,7 +15,11 @@ import {
   testCourtId,
   testPlayerId as id,
 } from "./testing/scheduleFixtures";
-import type { Recommendation, SchedulePlayer } from "./types";
+import {
+  NO_FAIR_ALTERNATIVE_MESSAGE,
+  type Recommendation,
+  type SchedulePlayer,
+} from "./types";
 
 function players(count: number, overrides: Partial<SchedulePlayer> = {}) {
   return Array.from({ length: count }, (_, index) =>
@@ -162,7 +167,6 @@ describe("balancing, not rules", () => {
         gamesCompleted: 2,
         presentMs: 4 * TEST_SLOT_MS,
         playMs: 2 * TEST_SLOT_MS,
-        totalWaitMs: 2 * TEST_SLOT_MS,
         currentWaitMs: 0.6 * TEST_SLOT_MS,
         restMs: 0.6 * TEST_SLOT_MS,
         completedGameAgesMs: [0.6 * TEST_SLOT_MS, 2 * TEST_SLOT_MS],
@@ -196,7 +200,6 @@ describe("balancing, not rules", () => {
       gamesCompleted: games,
       presentMs: 4 * TEST_SLOT_MS,
       playMs: Math.min(games, 3.9 - waitSlots) * TEST_SLOT_MS,
-      totalWaitMs: (4 - Math.min(games, 3.9 - waitSlots)) * TEST_SLOT_MS,
       currentWaitMs: waitSlots * TEST_SLOT_MS,
       restMs: waitSlots * TEST_SLOT_MS,
       completedGameAgesMs: [
@@ -212,7 +215,6 @@ describe("balancing, not rules", () => {
       gamesCompleted: 1,
       presentMs: presentSlots * TEST_SLOT_MS,
       playMs: TEST_SLOT_MS,
-      totalWaitMs: (presentSlots - 1) * TEST_SLOT_MS,
       currentWaitMs: restSlots * TEST_SLOT_MS,
       restMs: restSlots * TEST_SLOT_MS,
       completedGameAgesMs: [restSlots * TEST_SLOT_MS],
@@ -271,13 +273,78 @@ describe("balancing, not rules", () => {
     expect(waitsFirst.picked).toBe(true);
   });
 
+  it("treats equal games and equal court minutes as different objectives", () => {
+    // Same raw games (2 each). X has been here longer and played two long
+    // games (~47 min on court): behind on games for his time, ahead on
+    // minutes. Y played two short games (~20 min) in less time: ahead on
+    // games for her time, behind on minutes. One seat is left for one of them.
+    const settled = (number: number) =>
+      makePlayer(number, {
+        gamesCompleted: 2,
+        presentMs: 4 * TEST_SLOT_MS,
+        playMs: 1.8 * TEST_SLOT_MS,
+        currentWaitMs: 0.5 * TEST_SLOT_MS,
+        restMs: 0.5 * TEST_SLOT_MS,
+        completedGameAgesMs: [0.5 * TEST_SLOT_MS, 2 * TEST_SLOT_MS],
+      });
+    const twoGames = (
+      number: number,
+      presentSlots: number,
+      playSlots: number,
+    ) =>
+      makePlayer(number, {
+        gamesCompleted: 2,
+        presentMs: presentSlots * TEST_SLOT_MS,
+        playMs: playSlots * TEST_SLOT_MS,
+        currentWaitMs: 0.5 * TEST_SLOT_MS,
+        restMs: 0.5 * TEST_SLOT_MS,
+        completedGameAgesMs: [0.5 * TEST_SLOT_MS, 2 * TEST_SLOT_MS],
+      });
+    const longGamesX = twoGames(4, 4.5, 2.8);
+    const shortGamesY = twoGames(5, 3.5, 1.2);
+    const roster = [
+      settled(1),
+      settled(2),
+      settled(3),
+      longGamesX,
+      shortGamesY,
+    ];
+    const seated = (objectiveOrder: RotationObjective[]) =>
+      readyNowIds(
+        recommend(
+          makeInput(roster, [makeCourt(1)], {
+            preferences: { ...DEFAULT_SIMULATION_PREFERENCES, objectiveOrder },
+          }),
+        ),
+      );
+    const playingTimeFirst = seated([
+      "playingTime",
+      "shortestWaits",
+      "fullCourts",
+      "noBackToBack",
+      "mixPartners",
+      "equalGames",
+    ]);
+    expect(playingTimeFirst).toContain(id(5));
+    expect(playingTimeFirst).not.toContain(id(4));
+    const equalGamesFirst = seated([
+      "equalGames",
+      "shortestWaits",
+      "fullCourts",
+      "noBackToBack",
+      "mixPartners",
+      "playingTime",
+    ]);
+    expect(equalGamesFirst).toContain(id(4));
+    expect(equalGamesFirst).not.toContain(id(5));
+  });
+
   it("picks a player who came off when they are far behind (weighed, not blocked)", () => {
     const farBehind = decide(
       makePlayer(9, {
         gamesCompleted: 0,
         presentMs: 4 * TEST_SLOT_MS,
         playMs: 0.3 * TEST_SLOT_MS,
-        totalWaitMs: 3.7 * TEST_SLOT_MS,
         currentWaitMs: 0,
         restMs: 0,
       }),
@@ -291,7 +358,6 @@ describe("balancing, not rules", () => {
       gamesCompleted: 1,
       presentMs: 2 * TEST_SLOT_MS,
       playMs: TEST_SLOT_MS,
-      totalWaitMs: TEST_SLOT_MS,
       currentWaitMs: 0.8 * TEST_SLOT_MS,
       restMs: 0.8 * TEST_SLOT_MS,
       completedGameAgesMs: [0.8 * TEST_SLOT_MS],
@@ -301,7 +367,6 @@ describe("balancing, not rules", () => {
         gamesCompleted: 1,
         presentMs: 2 * TEST_SLOT_MS,
         playMs: TEST_SLOT_MS,
-        totalWaitMs: TEST_SLOT_MS,
         currentWaitMs: 0,
         restMs: 0,
         completedGameAgesMs: [0],
@@ -528,7 +593,6 @@ describe("up next forecasts", () => {
           pendingGameCredit: 1,
           presentMs: 4 * TEST_SLOT_MS,
           playMs: 0.5 * TEST_SLOT_MS,
-          totalWaitMs: 3.5 * TEST_SLOT_MS,
         }),
       ),
     ];
@@ -644,6 +708,12 @@ describe("up next forecasts", () => {
 });
 
 describe("shuffle", () => {
+  it("exports the exact copy the UI shows when there is no fair alternative", () => {
+    expect(NO_FAIR_ALTERNATIVE_MESSAGE).toBe(
+      "No alternative lineup available without compromising fairness.",
+    );
+  });
+
   it("picks among equally fair groups by seed and says how many there are", () => {
     const input = makeInput(players(10), [makeCourt(1)]);
     const first = recommend(input).readyNow[0];
@@ -658,12 +728,11 @@ describe("shuffle", () => {
     expect(groups.size).toBeGreaterThan(1);
   });
 
-  it("reports no other fair option when one group is clearly best", () => {
+  it("reports no other fair option when one group is clearly best, so the UI shows the message", () => {
     const clearlyBest = [
       ...players(4, {
         gamesCompleted: 0,
         presentMs: 3 * TEST_SLOT_MS,
-        totalWaitMs: 3 * TEST_SLOT_MS,
         currentWaitMs: 1.5 * TEST_SLOT_MS,
       }),
       ...[5, 6, 7, 8].map((number) =>

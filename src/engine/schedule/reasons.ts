@@ -68,6 +68,22 @@ function waitReason(
   return `Waiting ${rangeText(waits, "min", isForecast)}`;
 }
 
+function courtTimeReason(
+  members: readonly ScoredPlayer[],
+  slotMs: number,
+  isForecast: boolean,
+): string {
+  const meanBehindMinutes = minutes(
+    sumOfTerms(members, (member) => member.measurements.playDeficit) /
+      members.length,
+    slotMs,
+  );
+  const prefix = isForecast ? "~" : "";
+  return meanBehindMinutes > 0
+    ? `${prefix}${meanBehindMinutes} min less court time than fair share`
+    : "Court time at fair share";
+}
+
 function restReason(
   members: readonly ScoredPlayer[],
   slotMs: number,
@@ -125,14 +141,12 @@ export function explainGroup(
       text: gamesReason(members, isForecast),
     },
     {
-      strength: sumOfTerms(
-        members,
-        (member) =>
-          member.terms.currentWait +
-          member.terms.accumulatedWait +
-          member.terms.playingTime,
-      ),
+      strength: sumOfTerms(members, (member) => member.terms.currentWait),
       text: waitReason(members, slotMs, isForecast),
+    },
+    {
+      strength: sumOfTerms(members, (member) => member.terms.playingTime),
+      text: courtTimeReason(members, slotMs, isForecast),
     },
     {
       strength: sumOfTerms(

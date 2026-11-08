@@ -54,18 +54,18 @@ Browser (host)                                   Supabase Postgres (RLS: hosts o
 
 - **Fully reversible through compensating actions.** Rows are never edited or deleted. Each reversible action type has a defined compensating action, and Undo _appends_ it:
 
-  | Action                                                               | Compensating action                                                                                                                                   |
-  | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | `MatchStarted`                                                       | `MatchStartReverted` (players back to waiting, wait clocks continue from the original wait start; the false start's play and court time is discarded) |
-  | `MatchCompleted`                                                     | `MatchCompletionReverted` (match live again, games and times restored, `matches` row marked `reverted`)                                               |
-  | `MatchAbandoned`                                                     | `MatchAbandonReverted` (match live again; `matches` row marked `reverted`)                                                                            |
-  | `CourtAdded`                                                         | `CourtAddReverted` (only while no match has used the court and nobody is locked to it)                                                                |
-  | `PlayerReplaced` / `PlayerRemovedMidMatch` (incl. "count this game") | `PlayerReplacementReverted` / `PlayerRemovalReverted`                                                                                                 |
-  | `PlayerJoined`                                                       | `PlayerJoinReverted` (as if they never joined; their presence interval is removed)                                                                    |
-  | `PlayerLeft` (accidental remove is likely)                           | `PlayerLeaveReverted` (back in, with the time away still not counted as presence)                                                                     |
-  | `PlayerSkipped`, `PlayerLocked`, `CourtClosed`                       | `PlayerUnskipped`, `PlayerUnlocked`, `CourtReopened`                                                                                                  |
-  | `QueueReordered`, `SuggestionsShuffled`                              | the same action carrying the previous order or seed                                                                                                   |
-  | `Paused` / `Resumed`                                                 | each reverses the other (time that passed while paused stays paused)                                                                                  |
+  | Action                                                               | Compensating action                                                                                                                                                                                                                                                                                             |
+  | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `MatchStarted`                                                       | `MatchStartReverted` (players back to waiting, wait clocks continue from the original wait start; the false start's play and court time is discarded). Also applies to matches started with `SessionStarted` (Ryan, 2026-11-08); when later actions depend on the match, the host is told to abandon it instead |
+  | `MatchCompleted`                                                     | `MatchCompletionReverted` (match live again, games and times restored, `matches` row marked `reverted`)                                                                                                                                                                                                         |
+  | `MatchAbandoned`                                                     | `MatchAbandonReverted` (match live again; `matches` row marked `reverted`)                                                                                                                                                                                                                                      |
+  | `CourtAdded`                                                         | `CourtAddReverted` (only while no match has used the court and nobody is locked to it)                                                                                                                                                                                                                          |
+  | `PlayerReplaced` / `PlayerRemovedMidMatch` (incl. "count this game") | `PlayerReplacementReverted` / `PlayerRemovalReverted`                                                                                                                                                                                                                                                           |
+  | `PlayerJoined`                                                       | `PlayerJoinReverted` (as if they never joined; their presence interval is removed)                                                                                                                                                                                                                              |
+  | `PlayerLeft` (accidental remove is likely)                           | `PlayerLeaveReverted` (back in, with the time away still not counted as presence)                                                                                                                                                                                                                               |
+  | `PlayerSkipped`, `PlayerLocked`, `CourtClosed`                       | `PlayerUnskipped`, `PlayerUnlocked`, `CourtReopened`                                                                                                                                                                                                                                                            |
+  | `QueueReordered`, `SuggestionsShuffled`                              | the same action carrying the previous order or seed                                                                                                                                                                                                                                                             |
+  | `Paused` / `Resumed`                                                 | each reverses the other (time that passed while paused stays paused)                                                                                                                                                                                                                                            |
 
   An Undo targets one specific action (`target_seq`). It is accepted when that action hasn't already been compensated **and its compensating action is still valid against the current state**, checked by the same `applyEvent` validation. So the host can fix a Court 1 completion from three actions ago without first undoing other courts' actions. When something later depends on it (e.g. a replacement within that match), the UI says to undo that first. Undo actions themselves are not undoable (no redo in v1). The action history shows who did what.
 
@@ -73,7 +73,7 @@ Browser (host)                                   Supabase Postgres (RLS: hosts o
 - **Duplicate-action protection.** Each action carries a client-generated `event_id` (UNIQUE). The function looks it up **before** the sequence check, so a double click or a retry of an action that already landed returns the original result instead of a false conflict. A genuinely stale action (`expected_seq ≠ last_seq + 1`) is rejected, the screen refreshes, and the host sees "Updated by another host". The UI shows pending and failed states with a retry.
 - **Refresh and reconnect:** reload the log and replay. Timers are derived from timestamps (`now − start − paused time`), using server time plus a measured client clock offset.
 - **Pause** stops session time, match clocks, play time, waiting time and presence from accruing.
-- **Recommendations are derived, not stored.** They are recomputed from state + settings + a seed after every change. That covers every recalculation trigger in the brief. "Shuffle" records a new seed as an action, so all hosts see the same suggestions.
+- **Recommendations are derived, not stored.** They are recomputed from state + settings + a seed after every change. That covers every recalculation trigger in the brief. "Shuffle" records a new seed as an action, so all hosts see the same suggestions. Shuffle only offers lineups whose score is comparable to the best (within a small tolerance); it never offers a worse lineup just to be different. When no comparable alternative exists, the UI shows exactly: "No alternative lineup available without compromising fairness." (Ryan, 2026-11-08)
 
 ## 4. Data model
 
@@ -110,8 +110,8 @@ Multi-step writes (start, end, approve check-in, add mid-session guest + its eve
 
 Safety without extra infrastructure:
 
-- Only two database functions are callable without login: `submit_checkin` and `search_checkin_names`. The search needs an open session and 2+ letters, returns at most 5 names and is rate-limited. Both validate every field and reveal nothing beyond names, the host's display name, and the session name, time and headline counts.
-- It allows one pending request per phone per session, and rate-limits by phone and IP, using a count on `checkin_requests` inside the function.
+- Two database functions serve the public page: `submit_checkin` and `search_checkin_names`. Only the server can call them (service role, see `docs/decisions/0002-server-only-writes.md`). The `/t/<tag>` server code passes a SHA-256 hash of the phone's device token and an HMAC of the client IP keyed with a server secret, so raw tokens and IPs never reach the database. The search needs an open session and 2+ letters and returns at most 5 names. Both validate every field and reveal nothing beyond names, the host's display name, and the session name, time and headline counts.
+- It allows one pending request per phone per session. Every search and submit is recorded and rate-limited per phone, per IP and per session (a count of recent attempts inside the function), including attempts that return early.
 - Host approval is the final gate.
 - A player can be in only one live session at a time. Approving someone who is live in another social asks the host to move them.
 
@@ -132,22 +132,24 @@ Pure functions in `src/engine/`: `applyEvent`, `recommend(state, settings, now, 
 5. No consecutive matches where possible
 6. Few repeated partners and opponents
 
+**Playing time and Shortest waits are separate objectives** (Ryan, 2026-11-08). Shortest waits reduces individual waiting, especially excessive waits. Playing time distributes actual court minutes fairly relative to time present. Equal games and equal playing time are not the same thing (match lengths vary), and the two terms must not reduce to the same maths.
+
 There are **no hard fairness rules.** Every objective contributes to one score, so no single measurement guarantees or blocks selection. The only hard constraints are validity: a player is on at most one court, every match has exactly _k_ distinct present players (_k_ = 4 doubles, 2 singles), and host locks are honoured.
 
 ### 5.2 Measurements per eligible player _i_
 
 Eligible = present, not playing, not skipped. All times exclude paused time. `slot` = target match minutes + changeover. **Every measurement is expressed in games or slots** (times are divided by `slot`), so the terms are comparable and the weights mean the same at any session length. Session-wide sums (Σg, Σp, Σplay, ΣW) are taken over **all present players**, playing or not. A rate whose denominator is 0 (the very first instant) is taken as 0.
 
-| #   | Measurement                     | Definition (games or slots)                                                         |
-| --- | ------------------------------- | ----------------------------------------------------------------------------------- |
-| m1  | Games played                    | completed games `g_i` vs the session mean                                           |
-| m2  | Time present                    | `p_i` in slots (excludes skipped and away time); used to scale m3–m5                |
-| m3  | Games relative to time present  | `gameDeficit_i = rate·p_i − g_i`, where `rate = Σg / Σp`                            |
-| m4  | Total playing time              | `playDeficit_i = playRate·p_i − play_i`, where `playRate = Σplay / Σp`              |
-| m5  | Total accumulated waiting       | `waitExcess_i = W_i − waitRate·p_i`, where `waitRate = ΣW / Σp`                     |
-| m6  | Current wait                    | `w_i` since they last became available                                              |
-| m7  | Time since last completed match | `s_i`. For someone who hasn't played yet, the cap (fully rested)                    |
-| m8  | Recent participation            | games with exponential decay (half-life 2 slots), so the last few rounds count most |
+| #   | Measurement                        | Definition (games or slots)                                                                                                                                           |
+| --- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| m1  | Games played                       | completed games `g_i` vs the session mean                                                                                                                             |
+| m2  | Time present                       | `p_i` in slots (excludes skipped and away time); used to scale m3–m5                                                                                                  |
+| m3  | Games relative to time present     | `gameDeficit_i = rate·p_i − g_i`, where `rate = Σg / Σp`                                                                                                              |
+| m4  | Total playing time (court minutes) | `playDeficit_i = playRate·p_i − play_i`, where `playRate = Σplay / Σp`; partial games count, so long and short matches differ                                         |
+| m5  | Total accumulated waiting          | `waitExcess_i = W_i − waitRate·p_i`. Reported only, **not scored**: since `p = play + W` it is exactly `−m4`, so scoring it would duplicate Playing time (2026-11-08) |
+| m6  | Current wait                       | `w_i` since they last became available                                                                                                                                |
+| m7  | Time since last completed match    | `s_i`. For someone who hasn't played yet, the cap (fully rested)                                                                                                      |
+| m8  | Recent participation               | games with exponential decay (half-life 2 slots), so the last few rounds count most                                                                                   |
 
 m3 is how late arrivals are treated fairly: someone who arrived 30 minutes ago has a small fair-share expectation. They're neither unfairly behind nor given excessive priority.
 
@@ -160,7 +162,6 @@ P_i =  wFair · sat(m3, cF)              (games vs fair share)
      + wRaw  · sat(mean_g − g_i, cR)    (small: raw game counts players can see)
      + wPlay · sat(m4, cP)              (playing-time share)
      + wWait · sat(m6 + β·max(0, m6 − 1)², cW)  (current wait; urgency rises after one slot, then levels off)
-     + wAcc  · sat(m5, cA)              (accumulated waiting beyond fair share)
      + wRest · min(m7, 2)               (rested players preferred, capped)
      − wRec  · sat(m8, cRec)            (recent participation)
      − wCons · [just came off]          (consecutive-match penalty, if the rule is on)
@@ -172,14 +173,14 @@ ties → seeded shuffle (never ID or join order, so nobody is favoured week afte
 - Some measures overlap (time present = play + wait + skipped, so m4 and m5 move together; m7 and m8 too). Calibration sets their weights so the overlap doesn't double-count.
 - **Host priority order scales the weights.** Each objective's terms are multiplied by its rank factor (1st ×2.0, 2nd ×1.5, 3rd ×1.2, rest ×1.0):
 
-  | Objective       | Terms it scales      |
-  | --------------- | -------------------- |
-  | Equal games     | wFair, wRaw          |
-  | Shortest waits  | wWait, wAcc          |
-  | Playing time    | wPlay                |
-  | Full courts     | court filling (§5.5) |
-  | No back-to-back | wCons, wRest, wRec   |
-  | Mix partners    | wPartner, wOpp       |
+  | Objective       | Terms it scales                             |
+  | --------------- | ------------------------------------------- |
+  | Equal games     | wFair, wRaw                                 |
+  | Shortest waits  | wWait (current wait, steeper past one slot) |
+  | Playing time    | wPlay                                       |
+  | Full courts     | court filling (§5.5)                        |
+  | No back-to-back | wCons, wRest, wRec                          |
+  | Mix partners    | wPartner, wOpp                              |
 
   The rule toggles switch terms on or off. Tests prove that reordering priorities measurably changes outcomes.
 
@@ -225,7 +226,7 @@ Each group's reason names its strongest contributing terms, e.g. "All four on 2 
 
 ### 5.8 Estimated games per player
 
-`rounds = floor(duration / slot)`. `seats` = sum of _k_ over the courts that can actually be filled, largest first, until players run out. `estimate = rounds × seats / players`, shown as a range ("About 9 rounds fit, so expect 4–5 games each"). Edge cases: fewer players than the smallest court needs → "Not enough players"; duration shorter than one slot → "Fewer than one full round".
+`rounds = floor(duration / slot)`. `seats` = sum of _k_ over the courts that can actually be filled, largest first, until players run out. `estimate = rounds × seats / players`, computed from the actual session duration, match minutes and changeover, and shown as a range (e.g. 120 min with 15 + 2 min slots: "About 7 rounds fit in 120 min, so expect N–M games each", where the games range depends on seats and players). Edge cases: fewer players than the smallest court needs → "Not enough players"; duration shorter than one slot → "Fewer than one full round".
 
 ### 5.9 When equal participation is impossible
 
@@ -306,6 +307,11 @@ Results are recorded in `docs/engine.md`.
 | M9  | Responsive, accessibility (AA, 44 px targets, status never by colour alone), README incl. how to write a host's NFC sticker                     | `/quality-check` green; ready for your OK to deploy                                       |
 
 Engine and action log (M1–M2) are proven before any UI is connected.
+
+Carried into M5/M8 from M3:
+
+- M5: "a player can be in only one live session at a time" is checked when approving (it needs a replay of the other live session, so it isn't a database constraint). M5 also needs a server-side read for the check-in page header, phone recognition and request status.
+- M8: `end_session` takes `p_final_stats` (jsonb) for the final report; M3 passes nothing yet.
 
 ## 8. Interpretations of the brief (no decision needed unless you disagree)
 

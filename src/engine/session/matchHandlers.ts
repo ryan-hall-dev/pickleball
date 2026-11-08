@@ -75,12 +75,10 @@ export function startMatch(
   }
 
   // A manual queue rank lasts until the player next goes on court.
-  const previousQueueIndexes: Record<ParticipantId, number> = {};
-  draft.next.queueOrder.forEach((participantId, index) => {
-    if (playerIds.includes(participantId)) {
-      previousQueueIndexes[participantId] = index;
-    }
-  });
+  const clearsARank = draft.next.queueOrder.some((participantId) =>
+    playerIds.includes(participantId),
+  );
+  const queueOrderAtStart = clearsARank ? draft.next.queueOrder : [];
   draft.next.queueOrder = draft.next.queueOrder.filter(
     (participantId) => !playerIds.includes(participantId),
   );
@@ -105,7 +103,7 @@ export function startMatch(
     endedBySeq: null,
     segments,
     consumedLocks,
-    previousQueueIndexes,
+    queueOrderAtStart,
   });
   draft.set("courts", courtId, {
     ...courtState,
@@ -139,14 +137,50 @@ function requireMatch(
   );
 }
 
+/** The match a `MatchStartReverted` undoes, from its target and optional `matchId`. */
+function startRevertMatchId(
+  event: SessionEventOf<"MatchStartReverted">,
+  target: HistoryEntry,
+): SessionError | MatchId {
+  const requestedMatchId = event.payload.matchId;
+  if (target.event.type === "SessionStarted") {
+    const initialMatches = target.event.payload.initialMatches ?? [];
+    const isInitialMatch = initialMatches.some(
+      (assignment) => assignment.matchId === requestedMatchId,
+    );
+    if (typeof requestedMatchId !== "string" || !isInitialMatch) {
+      return sessionError(
+        "TARGET_MISMATCH",
+        "Name one of the matches started with the session to undo it; starting the session itself can't be undone.",
+      );
+    }
+    return requestedMatchId;
+  }
+  const startedMatchId = targetEvent(target, "MatchStarted").payload.matchId;
+  if (requestedMatchId !== undefined && requestedMatchId !== startedMatchId) {
+    return sessionError(
+      "TARGET_MISMATCH",
+      `Action ${target.event.seq} started a different match.`,
+    );
+  }
+  return startedMatchId;
+}
+
 export const handleMatchStartReverted: EventHandler<"MatchStartReverted"> = (
   draft,
   event,
   target,
 ) => {
-  const { matchId } = targetEvent(target, "MatchStarted").payload;
-  const match = requireMatch(draft, matchId);
-  if (isSessionError(match)) return match;
+  const matchId = startRevertMatchId(event, target);
+  if (typeof matchId !== "string") return matchId;
+  const match = draft.next.matches[matchId];
+  if (!match) {
+    // Only reachable for a first match: a MatchStarted undo is caught by compensatedBySeq.
+    return sessionError(
+      "ALREADY_COMPENSATED",
+      "That match's start has already been undone.",
+    );
+  }
   if (match.status !== "active") {
     return sessionError(
       "UNDO_BLOCKED",
@@ -162,7 +196,7 @@ export const handleMatchStartReverted: EventHandler<"MatchStartReverted"> = (
   ) {
     return sessionError(
       "UNDO_BLOCKED",
-      "A player was replaced or removed in that match; undo that first.",
+      "A player was replaced or removed in that match; undo that first, or abandon the match instead.",
     );
   }
 
@@ -183,18 +217,44 @@ export const handleMatchStartReverted: EventHandler<"MatchStartReverted"> = (
       lock: participantState.lock ?? consumedLock ?? null,
     });
   }
-  // Put cleared ranks back at their old positions (ascending, so earlier inserts don't shift later ones).
-  const queueOrder = [...draft.next.queueOrder];
-  Object.entries(match.previousQueueIndexes)
-    .sort((left, right) => left[1] - right[1])
-    .forEach(([participantId, index]) => {
-      if (!queueOrder.includes(participantId)) {
-        queueOrder.splice(Math.min(index, queueOrder.length), 0, participantId);
-      }
-    });
-  draft.next.queueOrder = queueOrder;
+  draft.next.queueOrder = reinsertClearedRanks(
+    draft.next.queueOrder,
+    match.queueOrderAtStart,
+    new Set(match.segments.map((segment) => segment.participantId)),
+  );
   return null;
 };
+
+/**
+ * Puts the ranks a match start cleared back into `currentOrder`, each right
+ * after its nearest predecessor in `orderAtStart` that is still queued (or at
+ * the front). While the order has only lost entries since the start (later
+ * starts), it is a subsequence of `orderAtStart`, so this is exactly the order
+ * the log would give without the start. After a newer reorder the ranks are
+ * placed relative to their old neighbours, as the host last ordered them.
+ */
+function reinsertClearedRanks(
+  currentOrder: readonly ParticipantId[],
+  orderAtStart: readonly ParticipantId[],
+  starterIds: ReadonlySet<ParticipantId>,
+): ParticipantId[] {
+  const queueOrder = [...currentOrder];
+  orderAtStart.forEach((participantId, startIndex) => {
+    if (!starterIds.has(participantId) || queueOrder.includes(participantId)) {
+      return;
+    }
+    let insertAt = 0;
+    for (let index = startIndex - 1; index >= 0; index -= 1) {
+      const predecessorIndex = queueOrder.indexOf(orderAtStart[index]);
+      if (predecessorIndex !== -1) {
+        insertAt = predecessorIndex + 1;
+        break;
+      }
+    }
+    queueOrder.splice(insertAt, 0, participantId);
+  });
+  return queueOrder;
+}
 
 function finishMatch(
   draft: StateDraft,

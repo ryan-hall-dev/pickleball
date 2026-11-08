@@ -6,9 +6,9 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import type { SessionConfig } from "@/engine/session";
+import { replay, type SessionConfig } from "@/engine/session";
 import type { Database } from "@/lib/database.types";
-import type { DatabaseClient } from "./sessionLog";
+import { loadSessionLog, type DatabaseClient } from "./sessionLog";
 import {
   submitSessionAction,
   type SubmitSessionActionInput,
@@ -101,12 +101,126 @@ async function signedInClient(
   return { client, userId };
 }
 
-const PLAYER_NAMES: Array<[string, string]> = [
-  ["Ines", "Tester"],
-  ["Otto", "Tester"],
-  ["Uma", "Tester"],
-  ["Elio", "Tester"],
+const PLAYER_FIRST_NAMES = [
+  "Ines",
+  "Otto",
+  "Uma",
+  "Elio",
+  "Ada",
+  "Ivo",
+  "Ula",
+  "Emil",
 ];
+
+const ROTATION: SessionConfig["rotation"] = {
+  objectiveOrder: [
+    "equalGames",
+    "shortestWaits",
+    "playingTime",
+    "fullCourts",
+    "noBackToBack",
+    "mixPartners",
+  ],
+  rules: {
+    preventConsecutive: true,
+    fewerGamesFirst: true,
+    longestWaitFirst: true,
+    mixPartners: true,
+    minimiseRepeatOpponents: true,
+    allowManualAssignments: true,
+  },
+};
+
+interface HostedDraftSession {
+  host: DatabaseClient;
+  sessionId: string;
+  config: SessionConfig;
+}
+
+/** A new host with a draft session of `playerCount` attending members on `courtCount` doubles courts. */
+async function createHostedDraftSession(
+  stack: LocalStack,
+  admin: DatabaseClient,
+  playerCount: number,
+  courtCount: number,
+): Promise<HostedDraftSession> {
+  const hostUser = await signedInClient(stack, admin);
+  requireData(
+    await admin
+      .from("hosts")
+      .insert({ user_id: hostUser.userId, display_name: "Integration Host" })
+      .select()
+      .single(),
+    "Adding the host",
+  );
+  const sessionId = requireData(
+    await admin
+      .from("sessions")
+      .insert({
+        host_id: hostUser.userId,
+        name: "Integration social",
+        host_name: "Integration Host",
+        planned_start: new Date().toISOString(),
+        planned_end: new Date(Date.now() + 2 * 3_600_000).toISOString(),
+      })
+      .select("id")
+      .single(),
+    "Creating the draft session",
+  ).id;
+  const members = requireData(
+    await admin
+      .from("members")
+      .insert(
+        PLAYER_FIRST_NAMES.slice(0, playerCount).map((firstName) => ({
+          first_name: firstName,
+          last_name: "Tester",
+          skill_level: "intermediate" as const,
+        })),
+      )
+      .select("id, first_name, last_name"),
+    "Creating members",
+  );
+  const participants = requireData(
+    await admin
+      .from("session_participants")
+      .insert(
+        members.map((member) => ({
+          session_id: sessionId,
+          member_id: member.id,
+          first_name: member.first_name,
+          last_name: member.last_name,
+          skill_level: "intermediate" as const,
+        })),
+      )
+      .select("id, first_name, last_name"),
+    "Adding participants",
+  );
+  const config: SessionConfig = {
+    courts: Array.from({ length: courtCount }, (_, index) => ({
+      courtId: randomUUID(),
+      name: `Court ${index + 1}`,
+      format: "doubles" as const,
+    })),
+    targetMatchMinutes: 15,
+    changeoverMinutes: 2,
+    plannedDurationMinutes: 120,
+    rotation: ROTATION,
+    participants: participants.map((participant) => ({
+      participantId: participant.id,
+      firstName: participant.first_name,
+      lastName: participant.last_name,
+      skill: "intermediate",
+      isGuest: false,
+    })),
+  };
+  return { host: hostUser.client, sessionId, config };
+}
+
+function createAdminClient(stack: LocalStack): DatabaseClient {
+  return createClient<Database>(stack.apiUrl, stack.secretKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 describe.skipIf(!localStack)("submitSessionAction (local Supabase)", () => {
   let admin: DatabaseClient;
@@ -114,7 +228,7 @@ describe.skipIf(!localStack)("submitSessionAction (local Supabase)", () => {
   let outsider: DatabaseClient;
   let sessionId: string;
   let config: SessionConfig;
-  const courtId = randomUUID();
+  let courtId: string;
   const matchId = randomUUID();
 
   /** Submits as `client`, writing through the secret-key client like production code. */
@@ -123,95 +237,15 @@ describe.skipIf(!localStack)("submitSessionAction (local Supabase)", () => {
 
   beforeAll(async () => {
     const stack = localStack!;
-    admin = createClient<Database>(stack.apiUrl, stack.secretKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const hostUser = await signedInClient(stack, admin);
-    host = hostUser.client;
+    admin = createAdminClient(stack);
+    ({ host, sessionId, config } = await createHostedDraftSession(
+      stack,
+      admin,
+      4,
+      1,
+    ));
+    courtId = config.courts[0].courtId;
     outsider = (await signedInClient(stack, admin)).client;
-
-    requireData(
-      await admin
-        .from("hosts")
-        .insert({ user_id: hostUser.userId, display_name: "Integration Host" })
-        .select()
-        .single(),
-      "Adding the host",
-    );
-    sessionId = requireData(
-      await admin
-        .from("sessions")
-        .insert({
-          host_id: hostUser.userId,
-          name: "Integration social",
-          host_name: "Integration Host",
-          planned_start: new Date().toISOString(),
-          planned_end: new Date(Date.now() + 2 * 3_600_000).toISOString(),
-        })
-        .select("id")
-        .single(),
-      "Creating the draft session",
-    ).id;
-    const members = requireData(
-      await admin
-        .from("members")
-        .insert(
-          PLAYER_NAMES.map(([firstName, lastName]) => ({
-            first_name: firstName,
-            last_name: lastName,
-            skill_level: "intermediate" as const,
-          })),
-        )
-        .select("id, first_name, last_name"),
-      "Creating members",
-    );
-    const participants = requireData(
-      await admin
-        .from("session_participants")
-        .insert(
-          members.map((member) => ({
-            session_id: sessionId,
-            member_id: member.id,
-            first_name: member.first_name,
-            last_name: member.last_name,
-            skill_level: "intermediate" as const,
-          })),
-        )
-        .select("id, first_name, last_name"),
-      "Adding participants",
-    );
-
-    config = {
-      courts: [{ courtId, name: "Court 1", format: "doubles" }],
-      targetMatchMinutes: 15,
-      changeoverMinutes: 2,
-      plannedDurationMinutes: 120,
-      rotation: {
-        objectiveOrder: [
-          "equalGames",
-          "shortestWaits",
-          "playingTime",
-          "fullCourts",
-          "noBackToBack",
-          "mixPartners",
-        ],
-        rules: {
-          preventConsecutive: true,
-          fewerGamesFirst: true,
-          longestWaitFirst: true,
-          mixPartners: true,
-          minimiseRepeatOpponents: true,
-          allowManualAssignments: true,
-        },
-      },
-      participants: participants.map((participant) => ({
-        participantId: participant.id,
-        firstName: participant.first_name,
-        lastName: participant.last_name,
-        skill: "intermediate",
-        isGuest: false,
-      })),
-    };
   });
 
   it("starts the session with its initial match atomically", async () => {
@@ -477,3 +511,166 @@ describe.skipIf(!localStack)("submitSessionAction (local Supabase)", () => {
     expect(match.status).toBe("abandoned");
   });
 });
+
+describe.skipIf(!localStack)(
+  "submitSessionAction undoing a match started with the session (local Supabase)",
+  () => {
+    let admin: DatabaseClient;
+    let host: DatabaseClient;
+    let sessionId: string;
+    let playerIds: string[];
+    const firstMatchId = randomUUID();
+    const secondMatchId = randomUUID();
+    const undoEventId = randomUUID();
+
+    const submit = (input: SubmitSessionActionInput) =>
+      submitSessionAction(host, input, { serviceRoleClient: admin });
+
+    async function replayedState() {
+      const log = await loadSessionLog(host, sessionId);
+      const replayed = replay(log!.events);
+      if (!replayed.ok) throw new Error(replayed.error.message);
+      return replayed.state;
+    }
+
+    beforeAll(async () => {
+      const stack = localStack!;
+      admin = createAdminClient(stack);
+      const draft = await createHostedDraftSession(stack, admin, 8, 2);
+      host = draft.host;
+      sessionId = draft.sessionId;
+      playerIds = draft.config.participants.map(
+        (participant) => participant.participantId,
+      );
+      const [firstCourt, secondCourt] = draft.config.courts;
+      const started = await submit({
+        sessionId,
+        eventId: randomUUID(),
+        expectedLastSeq: 0,
+        request: {
+          kind: "action",
+          action: {
+            type: "SessionStarted",
+            payload: {
+              config: draft.config,
+              initialAttendeeIds: playerIds,
+              initialMatches: [
+                {
+                  matchId: firstMatchId,
+                  courtId: firstCourt.courtId,
+                  teamA: playerIds.slice(0, 2),
+                  teamB: playerIds.slice(2, 4),
+                },
+                {
+                  matchId: secondMatchId,
+                  courtId: secondCourt.courtId,
+                  teamA: playerIds.slice(4, 6),
+                  teamB: playerIds.slice(6, 8),
+                },
+              ],
+            },
+          },
+        },
+      });
+      expect(started).toMatchObject({ ok: true, seq: 1 });
+    });
+
+    it("refuses to undo a first match after a player was removed from it, pointing to abandon", async () => {
+      const removal = await submit({
+        sessionId,
+        eventId: randomUUID(),
+        expectedLastSeq: 1,
+        request: {
+          kind: "action",
+          action: {
+            type: "PlayerRemovedMidMatch",
+            payload: {
+              matchId: firstMatchId,
+              participantId: playerIds[0],
+              countGameForOut: false,
+            },
+          },
+        },
+      });
+      expect(removal).toMatchObject({ ok: true, seq: 2 });
+
+      const blocked = await submit({
+        sessionId,
+        eventId: randomUUID(),
+        expectedLastSeq: 2,
+        request: { kind: "undo", targetSeq: 1, matchId: firstMatchId },
+      });
+      expect(blocked).toMatchObject({
+        ok: false,
+        reason: "INVALID_ACTION",
+        error: {
+          code: "UNDO_BLOCKED",
+          message: expect.stringMatching(/abandon/),
+        },
+      });
+    });
+
+    it("undoes one first match: it leaves the state and its players wait again", async () => {
+      const undone = await submit({
+        sessionId,
+        eventId: undoEventId,
+        expectedLastSeq: 2,
+        request: { kind: "undo", targetSeq: 1, matchId: secondMatchId },
+      });
+      expect(undone).toMatchObject({ ok: true, seq: 3, wasDuplicate: false });
+
+      const state = await replayedState();
+      expect(state.matches[secondMatchId]).toBeUndefined();
+      expect(state.matches[firstMatchId]).toBeDefined();
+      for (const participantId of playerIds.slice(4, 8)) {
+        expect(state.participants[participantId].activeMatchId).toBeNull();
+        expect(
+          state.participants[participantId].presence.at(-1)?.to,
+        ).toBeNull();
+      }
+      const { data: matchRows } = await host
+        .from("matches")
+        .select("id")
+        .eq("id", secondMatchId);
+      expect(matchRows).toEqual([]);
+    });
+
+    it("recognises a retry of that undo as a duplicate", async () => {
+      const retry = await submit({
+        sessionId,
+        eventId: undoEventId,
+        expectedLastSeq: 2,
+        request: { kind: "undo", targetSeq: 1, matchId: secondMatchId },
+      });
+      expect(retry).toMatchObject({ ok: true, seq: 3, wasDuplicate: true });
+    });
+
+    it("refuses the same event id for a different match", async () => {
+      const reused = await submit({
+        sessionId,
+        eventId: undoEventId,
+        expectedLastSeq: 3,
+        request: { kind: "undo", targetSeq: 1, matchId: firstMatchId },
+      });
+      expect(reused).toMatchObject({
+        ok: false,
+        reason: "INVALID_ACTION",
+        error: { code: "DUPLICATE_ID" },
+      });
+    });
+
+    it("rejects undoing the same first match twice", async () => {
+      const again = await submit({
+        sessionId,
+        eventId: randomUUID(),
+        expectedLastSeq: 3,
+        request: { kind: "undo", targetSeq: 1, matchId: secondMatchId },
+      });
+      expect(again).toMatchObject({
+        ok: false,
+        reason: "INVALID_ACTION",
+        error: { code: "ALREADY_COMPENSATED" },
+      });
+    });
+  },
+);

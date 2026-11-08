@@ -38,8 +38,12 @@ export interface SubmitSessionActionInput {
   expectedLastSeq: number;
   request:
     | { kind: "action"; action: NewSessionAction }
-    /** Undo appends the compensating action for `targetSeq`. */
-    | { kind: "undo"; targetSeq: number };
+    /**
+     * Undo appends the compensating action for `targetSeq`. To undo one of the
+     * matches started with the session, pass the SessionStarted seq and that
+     * match's `matchId`.
+     */
+    | { kind: "undo"; targetSeq: number; matchId?: string };
 }
 
 export type SubmitSessionActionResult =
@@ -78,7 +82,11 @@ const submitInputSchema = z.object({
         payload: z.record(z.string(), z.unknown()),
       }),
     }),
-    z.object({ kind: z.literal("undo"), targetSeq: z.int().positive() }),
+    z.object({
+      kind: z.literal("undo"),
+      targetSeq: z.int().positive(),
+      matchId: z.uuid().optional(),
+    }),
   ]),
 });
 
@@ -101,7 +109,7 @@ function runEngine(
   meta: EventMeta,
 ): EngineOutcome {
   if (request.kind === "undo") {
-    return compensate(state, request.targetSeq, meta);
+    return compensate(state, request.targetSeq, meta, request.matchId);
   }
   // The engine validates the payload of every event type.
   const event = { ...meta, ...request.action } as SessionEvent;
@@ -217,7 +225,12 @@ function requestedEventType(
 ): SessionEventType | null {
   if (request.kind === "action") return request.action.type;
   const target = findHistoryEntry(state, request.targetSeq);
-  return target && isReversibleEventType(target.event.type)
+  if (!target) return null;
+  // One of the session's first matches is undone against the SessionStarted seq.
+  if (target.event.type === "SessionStarted" && request.matchId !== undefined) {
+    return "MatchStartReverted";
+  }
+  return isReversibleEventType(target.event.type)
     ? COMPENSATING_EVENT_TYPE[target.event.type]
     : null;
 }
@@ -229,9 +242,11 @@ function isSameRequest(
   request: SubmitSessionActionInput["request"],
 ): boolean {
   if (landed.type !== requestedEventType(state, request)) return false;
+  if (request.kind === "action") return true;
+  const landedMatchId = (landed.payload as { matchId?: string }).matchId;
   return (
-    request.kind === "action" ||
-    compensationTargetSeq(landed) === request.targetSeq
+    compensationTargetSeq(landed) === request.targetSeq &&
+    landedMatchId === request.matchId
   );
 }
 

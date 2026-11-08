@@ -5,6 +5,8 @@ import {
   bestTeamSplit,
   chooseGroup,
   evaluateGroup,
+  FAIR_ALTERNATIVE_TOLERANCE_POINTS,
+  fairAlternatives,
   topByPriority,
 } from "./groupSearch";
 import { snapshotAtNow, type ScoredPlayer } from "./priority";
@@ -29,6 +31,9 @@ function scored(
     priority,
   };
 }
+
+/** Fixed so property failures reproduce. */
+const PROPERTY_SEED = 20261108;
 
 const idsOf = (players: ScoredPlayer[]) =>
   players.map((player) => player.snapshot.player.participantId);
@@ -162,6 +167,87 @@ describe("chooseGroup", () => {
           }
         },
       ),
+    );
+  });
+});
+
+describe("fairAlternatives", () => {
+  it("offers exactly the single swaps within tolerance, never a lower-scoring group outside it", () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            priority: fc.double({ min: -1, max: 1, noNaN: true }),
+            partners: fc.array(fc.integer({ min: 0, max: 2 }), {
+              minLength: 10,
+              maxLength: 10,
+            }),
+            skill: fc.constantFrom(
+              "beginner",
+              "intermediate",
+              "advanced",
+              null,
+            ),
+          }),
+          { minLength: 4, maxLength: 10 },
+        ),
+        fc.integer({ min: 0, max: 2 }),
+        (rows, forcedCount) => {
+          const players = rows
+            .map((row, index) =>
+              scored(index + 1, row.priority, {
+                skill: row.skill,
+                partnerCounts: Object.fromEntries(
+                  row.partners.map((count, other) => [id(other + 1), count]),
+                ),
+              }),
+            )
+            .sort((left, right) => right.priority - left.priority);
+          const forced = players.slice(0, forcedCount);
+          const shortlist = players.slice(forcedCount);
+          const best = chooseGroup(
+            4,
+            forced,
+            shortlist,
+            DEFAULT_SCORING_WEIGHTS,
+          );
+          if (best === null) return;
+          // chooseGroup puts the locked players first in best.members, which fairAlternatives relies on.
+          const alternatives = fairAlternatives(
+            best,
+            forcedCount,
+            shortlist,
+            DEFAULT_SCORING_WEIGHTS,
+          );
+          const floor = best.groupValue - FAIR_ALTERNATIVE_TOLERANCE_POINTS;
+          for (const alternative of alternatives) {
+            expect(alternative.groupValue).toBeGreaterThanOrEqual(floor);
+            // Locked players are never swapped out.
+            for (const lockedPlayer of forced) {
+              expect(alternative.members).toContain(lockedPlayer);
+            }
+          }
+          // Every within-tolerance single swap is offered (none is missed by pruning).
+          let expectedCount = 0;
+          const outsiders = shortlist.filter(
+            (player) => !best.members.includes(player),
+          );
+          for (let index = forcedCount; index < 4; index += 1) {
+            for (const outsider of outsiders) {
+              const swapped = [...best.members];
+              swapped[index] = outsider;
+              if (
+                evaluateGroup(swapped, DEFAULT_SCORING_WEIGHTS).groupValue >=
+                floor
+              ) {
+                expectedCount += 1;
+              }
+            }
+          }
+          expect(alternatives).toHaveLength(expectedCount);
+        },
+      ),
+      { seed: PROPERTY_SEED },
     );
   });
 });

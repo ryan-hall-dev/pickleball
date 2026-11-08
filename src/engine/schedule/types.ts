@@ -25,12 +25,10 @@ export interface SchedulePlayer {
   gamesCompleted: number;
   /** Games they will be credited with when their current match completes (0 or 1). */
   pendingGameCredit: number;
-  /** Time present, excluding skipped and away time (`p_i`). Always `playMs + totalWaitMs`. */
+  /** Time present, excluding skipped and away time (`p_i`). */
   presentMs: number;
-  /** Time on court (`play_i`). */
+  /** Court time, including partial games (`play_i`): Playing time compares it with a fair share of court time. */
   playMs: number;
-  /** Accumulated waiting (`W_i`). */
-  totalWaitMs: number;
   /** Current wait since they last became available (`w_i`); 0 unless waiting. */
   currentWaitMs: number;
   /** Time since they last came off court; null if they have not played yet. */
@@ -72,6 +70,13 @@ export interface ScheduleInput {
   courts: ScheduleCourt[];
 }
 
+/**
+ * What the UI shows when "Shuffle" has nothing to offer (a suggestion's
+ * `otherFairGroupCount` is 0). Exported so the copy lives in one place.
+ */
+export const NO_FAIR_ALTERNATIVE_MESSAGE =
+  "No alternative lineup available without compromising fairness.";
+
 /** One suggested match for a court. */
 export interface CourtSuggestion {
   courtId: CourtId;
@@ -86,8 +91,9 @@ export interface CourtSuggestion {
   /** Strongest reasons first, host-readable (plan §5.6). Forecast figures are marked "~". */
   reasons: string[];
   /**
-   * How many other groups are as fair as this one. "Shuffle" (a new seed)
-   * picks among them; 0 means there is no other fair option to show.
+   * How many other groups are as fair as this one (within
+   * `FAIR_ALTERNATIVE_TOLERANCE_POINTS`). "Shuffle" (a new seed) picks among
+   * them; 0 means show `NO_FAIR_ALTERNATIVE_MESSAGE`.
    */
   otherFairGroupCount: number;
 }

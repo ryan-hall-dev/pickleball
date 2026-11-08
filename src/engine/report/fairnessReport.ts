@@ -30,6 +30,10 @@ export interface PlayerFairness {
   gamesBehindFairShare: number;
   presentMs: number;
   playMs: number;
+  /** Fair share of court time for the time present: `(Σplay / Σp) · p_i`. */
+  fairSharePlayMs: number;
+  /** Fair share minus actual court time: positive means behind (long or short matches count). */
+  playMsBehindFairShare: number;
   totalWaitMs: number;
 }
 
@@ -120,6 +124,7 @@ export function buildFairnessReport(
 
   const players: PlayerFairness[] = metrics.map((player) => {
     const fairShareGames = gamesPerPresentMs * player.presentMs;
+    const fairSharePlayMs = playPerPresentMs * player.presentMs;
     return {
       participantId: player.participantId,
       gamesCompleted: player.gamesCompleted,
@@ -127,6 +132,8 @@ export function buildFairnessReport(
       gamesBehindFairShare: fairShareGames - player.gamesCompleted,
       presentMs: player.presentMs,
       playMs: player.playMs,
+      fairSharePlayMs,
+      playMsBehindFairShare: fairSharePlayMs - player.playMs,
       totalWaitMs: player.totalWaitMs,
     };
   });
@@ -170,9 +177,7 @@ export function buildFairnessReport(
     jainPlayTimeIndex: hasIndex
       ? jainVsFairShare(
           players.map((player) => player.playMs / slotMs),
-          players.map(
-            (player) => (playPerPresentMs * player.presentMs) / slotMs,
-          ),
+          players.map((player) => player.fairSharePlayMs / slotMs),
         )
       : null,
     players,

@@ -60,7 +60,6 @@ describe("measurements", () => {
       measurements.gameDeficit,
       measurements.gamesBehindMean,
       measurements.playDeficit,
-      measurements.waitExcess,
     ]) {
       expect(value).toBeCloseTo(0, 12);
     }
@@ -73,11 +72,9 @@ describe("measurements", () => {
       gamesCompleted: 4,
       presentMs: 6 * TEST_SLOT_MS,
       playMs: 4 * TEST_SLOT_MS,
-      totalWaitMs: 2 * TEST_SLOT_MS,
     });
     const lateArrival = makePlayer(2, {
       presentMs: 0.5 * TEST_SLOT_MS,
-      totalWaitMs: 0.5 * TEST_SLOT_MS,
       currentWaitMs: 0.5 * TEST_SLOT_MS,
     });
     const scored = scoreWaitingPlayers(
@@ -131,8 +128,6 @@ describe("priority bounds", () => {
           gamesCompleted: values.gamesCompleted,
           presentMs: values.presentSlots * TEST_SLOT_MS,
           playMs: values.presentSlots * values.playShare * TEST_SLOT_MS,
-          totalWaitMs:
-            values.presentSlots * (1 - values.playShare) * TEST_SLOT_MS,
           currentWaitMs: values.currentWaitSlots * TEST_SLOT_MS,
           restMs:
             values.restSlots === null ? null : values.restSlots * TEST_SLOT_MS,
@@ -202,8 +197,6 @@ describe("forecast projection", () => {
                 pendingGameCredit: row.status === "playing" ? 1 : 0,
                 presentMs: row.presentSlots * TEST_SLOT_MS,
                 playMs: row.presentSlots * row.playShare * TEST_SLOT_MS,
-                totalWaitMs:
-                  row.presentSlots * (1 - row.playShare) * TEST_SLOT_MS,
                 currentCourtId:
                   row.status === "playing" ? testCourtId(1) : null,
               }),
@@ -238,7 +231,6 @@ describe("forecast projection", () => {
         pendingGameCredit: 1,
         presentMs: 3 * TEST_SLOT_MS,
         playMs: 2 * TEST_SLOT_MS,
-        totalWaitMs: TEST_SLOT_MS,
       }),
       TEST_SLOT_MS,
       1,
@@ -290,7 +282,6 @@ describe("forecast pruning bound", () => {
               pendingGameCredit: row.status === "playing" ? 1 : 0,
               presentMs: row.presentMinutes * minute,
               playMs: row.presentMinutes * row.playShare * minute,
-              totalWaitMs: row.presentMinutes * (1 - row.playShare) * minute,
               currentWaitMs:
                 row.status === "waiting" ? row.waitMinutes * minute : 0,
               restMs:
@@ -384,7 +375,6 @@ describe("host priority order", () => {
       fairShare: 0,
       rawGames: 0,
       currentWait: 0,
-      accumulatedWait: 0,
       repeatPartner: 0,
       repeatOpponent: 0,
     });

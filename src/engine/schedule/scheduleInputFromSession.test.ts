@@ -128,7 +128,6 @@ describe("scheduleInputFromSession", () => {
       gamesCompleted: 1,
       presentMs: 17 * TEST_MINUTE_MS,
       playMs: 14 * TEST_MINUTE_MS,
-      totalWaitMs: 3 * TEST_MINUTE_MS,
       currentWaitMs: 3 * TEST_MINUTE_MS,
       restMs: 3 * TEST_MINUTE_MS,
       completedGameAgesMs: [3 * TEST_MINUTE_MS],

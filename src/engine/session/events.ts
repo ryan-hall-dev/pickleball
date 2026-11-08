@@ -33,7 +33,10 @@ export interface SessionEventPayloads {
     config: SessionConfig;
     /** Participants present at start; each must be in `config.participants`. */
     initialAttendeeIds: ParticipantId[];
-    /** Matches started together with the session. They can be abandoned but not undone. */
+    /**
+     * Matches started together with the session. Each can be undone on its own
+     * with a `MatchStartReverted` naming it (see there); the start itself can't.
+     */
     initialMatches?: MatchAssignment[];
   };
   /** A participant arrives (late check-in) or comes back after leaving. Starts a new wait. */
@@ -55,7 +58,14 @@ export interface SessionEventPayloads {
   CourtClosed: { courtId: CourtId };
   CourtReopened: CompensationPayload;
   MatchStarted: MatchAssignment;
-  MatchStartReverted: CompensationPayload;
+  /**
+   * Undoes a match start: `targetSeq` is the `MatchStarted`, or, for a match
+   * started with the session, the `SessionStarted` seq plus that match's
+   * `matchId`. Undoing one first match leaves the SessionStarted (and its other
+   * matches) in force, so that history entry is never marked compensated; the
+   * match's absence from state is what makes a second undo of it fail.
+   */
+  MatchStartReverted: CompensationPayload & { matchId?: MatchId };
   MatchCompleted: { matchId: MatchId };
   MatchCompletionReverted: CompensationPayload;
   /**

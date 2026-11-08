@@ -411,6 +411,28 @@ describe("behaviour: balances rather than follows rules", () => {
     expect(mean(rates)).toBeLessThanOrEqual(0.01);
   }, 60_000);
 
+  it("ranking Playing time first narrows court-time gaps by at least 5% when match lengths vary", () => {
+    const slotMs = 17 * 60_000;
+    const { first, last } = compareFirstAndLast(
+      "playingTime",
+      [
+        [10, ["doubles", "doubles"]],
+        [13, ["doubles", "doubles"]],
+        [19, ["doubles", "doubles", "doubles"]],
+        [30, Array(4).fill("doubles")],
+      ],
+      (run) =>
+        Math.max(
+          ...run.finalReport.players.map((player) =>
+            Math.abs(player.playMsBehindFairShare),
+          ),
+        ) / slotMs,
+      { matchLengthVariation: 0.5 },
+    );
+    // Measured about 10%; asserted at 5% so seed noise can't flake it.
+    expect(first).toBeLessThanOrEqual(last * 0.95);
+  }, 60_000);
+
   it("ranking Shortest waits first lowers the longest wait (small: waits are bounded by courts and players)", () => {
     const { first, last } = compareFirstAndLast(
       "shortestWaits",

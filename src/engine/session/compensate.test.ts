@@ -9,9 +9,12 @@ import type { SessionErrorCode } from "./errors";
 import {
   COMPENSATING_EVENT_TYPE,
   type ReversibleEventType,
+  type MatchAssignment,
   type SessionEvent,
+  type SessionEventPayloads,
 } from "./events";
 import {
+  actionHistory,
   courtMetrics,
   matchRecords,
   playerMetrics,
@@ -30,7 +33,6 @@ import {
   TestSession,
   fixtureCourtId,
   fixtureParticipantId as p,
-  makeConfig,
   makeCourt,
   makeParticipants,
   createSeededRandom,
@@ -597,14 +599,8 @@ describe("undo rejections", () => {
     expectUndoRejected(session, 99, "UNKNOWN_TARGET");
   });
 
-  it("rejects undoing SessionStarted (and so its initial matches)", () => {
-    const participants = makeParticipants(8);
-    const fresh = new TestSession();
-    fresh.apply("SessionStarted", {
-      config: makeConfig({ participants }),
-      initialAttendeeIds: participants.map(
-        (participant) => participant.participantId,
-      ),
+  it("rejects undoing SessionStarted itself", () => {
+    const session = TestSession.start({
       initialMatches: [
         {
           matchId: "initial-match",
@@ -614,25 +610,17 @@ describe("undo rejections", () => {
         },
       ],
     });
-    expectUndoRejected(fresh, 1, "NOT_REVERSIBLE");
-
-    // A hand-built MatchStartReverted aimed at the SessionStarted is refused too.
-    const handBuilt = applyEvent(fresh.state, {
-      ...fresh.nextMeta(),
-      type: "MatchStartReverted",
-      payload: { targetSeq: 1 },
-    });
-    expect(handBuilt.ok).toBe(false);
-    if (!handBuilt.ok) expect(handBuilt.error.code).toBe("TARGET_MISMATCH");
-
+    expectUndoRejected(session, 1, "NOT_REVERSIBLE");
     // An initial match can still be abandoned, and the abandonment undone.
-    fresh.advanceMinutes(3);
-    const abandon = fresh.apply("MatchAbandoned", { matchId: "initial-match" });
-    const beforeAbandon = replay(fresh.events.slice(0, -1));
-    fresh.undo(abandon.seq);
+    session.advanceMinutes(3);
+    const abandon = session.apply("MatchAbandoned", {
+      matchId: "initial-match",
+    });
+    const beforeAbandon = replay(session.events.slice(0, -1));
+    session.undo(abandon.seq);
     expect(beforeAbandon.ok).toBe(true);
     if (beforeAbandon.ok) {
-      expect(stateWithoutAuditTrail(fresh.state)).toEqual(
+      expect(stateWithoutAuditTrail(session.state)).toEqual(
         stateWithoutAuditTrail(beforeAbandon.state),
       );
     }
@@ -1099,6 +1087,186 @@ describe("undo rejections", () => {
   });
 });
 
+describe("undoing a match started with the session", () => {
+  const FIRST_MATCH = "first-match-court-1";
+  const SECOND_MATCH = "first-match-court-2";
+  const initialMatches = [
+    {
+      matchId: FIRST_MATCH,
+      courtId: fixtureCourtId(1),
+      teamA: [p(1), p(2)],
+      teamB: [p(3), p(4)],
+    },
+    {
+      matchId: SECOND_MATCH,
+      courtId: fixtureCourtId(2),
+      teamA: [p(5), p(6)],
+      teamB: [p(7), p(8)],
+    },
+  ];
+  const startWithFirstMatches = () =>
+    TestSession.start({ participantCount: 10, initialMatches });
+
+  it("restores the state as if that match had never started; the session and its other match stay", () => {
+    const session = startWithFirstMatches();
+    session.advanceMinutes(4);
+    session.apply("PlayerSkipped", { participantId: p(9) });
+    session.advanceMinutes(2);
+    const undo = session.undo(1, FIRST_MATCH);
+    expect(undo).toMatchObject({
+      type: "MatchStartReverted",
+      payload: { targetSeq: 1, matchId: FIRST_MATCH },
+    });
+
+    const startedWithoutIt = [
+      {
+        ...session.events[0],
+        payload: {
+          ...(session.events[0]
+            .payload as SessionEventPayloads["SessionStarted"]),
+          initialMatches: [initialMatches[1]],
+        },
+      } as SessionEvent,
+      ...session.events.slice(1, -1),
+    ];
+    const expected = replay(startedWithoutIt);
+    expect(expected.ok).toBe(true);
+    if (expected.ok) {
+      expect(stateWithoutAuditTrail(session.state)).toEqual(
+        stateWithoutAuditTrail(expected.state),
+      );
+    }
+    // Players back to waiting, wait clocks running from session start.
+    expect(session.player(p(1))).toMatchObject({
+      status: "waiting",
+      playMs: 0,
+      currentWaitStartAt: session.state.startedAt,
+      currentWaitMs: 6 * 60_000,
+      committedGames: 0,
+    });
+    expect(session.player(p(5)).status).toBe("playing");
+    // The append-only history keeps the SessionStarted in force.
+    expect(actionHistory(session.state)[0].compensatedBySeq).toBeNull();
+    expect(actionHistory(session.state).at(-1)).toMatchObject({
+      type: "MatchStartReverted",
+      targetSeq: 1,
+      targetMatchId: FIRST_MATCH,
+    });
+  });
+
+  it("undoes each first match separately, once", () => {
+    const session = startWithFirstMatches();
+    session.undo(1, FIRST_MATCH);
+    expectUndoRejected(session, 1, "NOT_REVERSIBLE");
+    const again = session.tryUndo(1, FIRST_MATCH);
+    expect(again.ok).toBe(false);
+    if (!again.ok) expect(again.error.code).toBe("ALREADY_COMPENSATED");
+    session.undo(1, SECOND_MATCH);
+    expect(
+      session.players().every((player) => player.status === "waiting"),
+    ).toBe(true);
+    // Ids are never reused, even after the undo.
+    const reuse = session.tryApply("MatchStarted", initialMatches[0]);
+    expect(reuse.ok).toBe(false);
+    if (!reuse.ok) expect(reuse.error.code).toBe("DUPLICATE_ID");
+  });
+
+  it("rejects an unknown or missing match id, and a match id on another kind of target", () => {
+    const session = startWithFirstMatches();
+    const unknown = session.tryUndo(1, "not-a-first-match");
+    expect(unknown.ok).toBe(false);
+    if (!unknown.ok) expect(unknown.error.code).toBe("TARGET_MISMATCH");
+    const handBuilt = applyEvent(session.state, {
+      ...session.nextMeta(),
+      type: "MatchStartReverted",
+      payload: { targetSeq: 1 },
+    });
+    expect(handBuilt.ok).toBe(false);
+    if (!handBuilt.ok) expect(handBuilt.error.code).toBe("TARGET_MISMATCH");
+
+    const skip = session.apply("PlayerSkipped", { participantId: p(9) });
+    const onSkip = session.tryUndo(skip.seq, FIRST_MATCH);
+    expect(onSkip.ok).toBe(false);
+    if (!onSkip.ok) expect(onSkip.error.code).toBe("TARGET_MISMATCH");
+  });
+
+  it("rejects a matchId that doesn't match the targeted MatchStarted", () => {
+    const session = TestSession.start();
+    session.startMatch(1, [p(1), p(2)], [p(3), p(4)]);
+    const startSeq = session.state.lastSeq;
+    const result = session.tryUndo(startSeq, "some-other-match");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("TARGET_MISMATCH");
+  });
+
+  it.each<{
+    name: string;
+    dependOnIt: (session: TestSession) => void;
+  }>([
+    {
+      name: "a replacement",
+      dependOnIt: (session) =>
+        session.apply("PlayerReplaced", {
+          matchId: FIRST_MATCH,
+          outId: p(1),
+          inId: p(9),
+          countGameForOut: false,
+        }),
+    },
+    {
+      name: "a removal",
+      dependOnIt: (session) =>
+        session.apply("PlayerRemovedMidMatch", {
+          matchId: FIRST_MATCH,
+          participantId: p(1),
+          countGameForOut: false,
+        }),
+    },
+  ])(
+    "after $name in it, tells the host to undo that or abandon the match instead",
+    ({ dependOnIt }) => {
+      const session = startWithFirstMatches();
+      session.advanceMinutes(3);
+      dependOnIt(session);
+      const before = session.state;
+      const result = session.tryUndo(1, FIRST_MATCH);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("UNDO_BLOCKED");
+        expect(result.error.message).toContain("abandon the match instead");
+      }
+      expect(session.state).toBe(before);
+      session.apply("MatchAbandoned", { matchId: FIRST_MATCH });
+    },
+  );
+
+  it("after a completion, asks for the completion to be undone first, then undoes the start", () => {
+    const session = startWithFirstMatches();
+    const stateAtStart = session.state;
+    session.advanceMinutes(15);
+    const completion = session.apply("MatchCompleted", {
+      matchId: FIRST_MATCH,
+    });
+    expectUndoRejected(session, 1, "NOT_REVERSIBLE");
+    const blocked = session.tryUndo(1, FIRST_MATCH);
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.error.code).toBe("UNDO_BLOCKED");
+    session.undo(completion.seq);
+    session.undo(1, FIRST_MATCH);
+    expect(session.state.matches[FIRST_MATCH]).toBeUndefined();
+    expect(session.state.courts[fixtureCourtId(1)]).toEqual({
+      ...stateAtStart.courts[fixtureCourtId(1)],
+      activeMatchId: null,
+      matchIds: [],
+    });
+    expect(session.player(p(1))).toMatchObject({
+      status: "waiting",
+      gamesCompleted: 0,
+      currentWaitStartAt: session.state.startedAt,
+    });
+  });
+});
+
 describe("out-of-order undo", () => {
   // Current behaviour, pinned so a change is deliberate (see stateForReplayComparison).
   it("an undone reorder restores the previous order minus players who have started a match since", () => {
@@ -1164,14 +1332,45 @@ describe("out-of-order undo", () => {
     expect(session.state.queueOrder).toEqual([p(2)]);
   });
 
-  it("an undone match start re-inserts the ranks it cleared into a newer order", () => {
+  it("an undone match start re-inserts the ranks it cleared into a newer order, after their old neighbours", () => {
     const session = TestSession.start();
     session.apply("QueueReordered", { participantIds: [p(1), p(5), p(2)] });
     session.startMatch(1, [p(1), p(2)], [p(3), p(4)]);
     const startSeq = session.state.lastSeq;
     session.apply("QueueReordered", { participantIds: [p(6), p(5)] });
     session.undo(startSeq);
-    expect(session.state.queueOrder).toEqual([p(1), p(6), p(2), p(5)]);
+    // p(1) had nobody ahead, so goes first; p(2) goes back right after p(5).
+    expect(session.state.queueOrder).toEqual([p(1), p(6), p(5), p(2)]);
+  });
+
+  // Regression (review): ranks were restored at absolute positions, which
+  // shift once a later match start removes players ahead of them.
+  it("an undone match start puts ranks back exactly when later starts removed players ahead of them", () => {
+    const session = TestSession.start({ participantCount: 12 });
+    session.apply("QueueReordered", {
+      participantIds: [p(9), p(10), p(1), p(11)],
+    });
+    session.advanceMinutes(1);
+    session.startMatch(1, [p(1), p(2)], [p(3), p(4)]);
+    const firstStartSeq = session.state.lastSeq;
+    session.advanceMinutes(1);
+    session.startMatch(2, [p(9), p(5)], [p(6), p(7)]);
+    session.advanceMinutes(1);
+    session.undo(firstStartSeq);
+    expect(session.state.queueOrder).toEqual([p(10), p(1), p(11)]);
+
+    const withoutFirstStart = replay(
+      session.events.filter(
+        (event, index) =>
+          event.seq !== firstStartSeq && index !== session.events.length - 1,
+      ),
+    );
+    expect(withoutFirstStart.ok).toBe(true);
+    if (withoutFirstStart.ok) {
+      expect(session.state.queueOrder).toEqual(
+        withoutFirstStart.state.queueOrder,
+      );
+    }
   });
 
   it("undoes a Court 1 completion from three actions ago without touching later actions", () => {
@@ -1457,7 +1656,53 @@ const CANDIDATE_ACTIONS: CandidateAction[] = [
     const history = session.state.history;
     session.tryUndo(history[choice % history.length].event.seq);
   }),
+  // Undo a match started with the session (when the run has them).
+  (session, choice) => {
+    const initialMatchId = rotate(RANDOM_INITIAL_MATCH_IDS, choice)[0];
+    session.tryUndo(1, initialMatchId);
+  },
 ];
+
+const RANDOM_INITIAL_MATCHES: MatchAssignment[] = [
+  {
+    matchId: "initial-court-1",
+    courtId: fixtureCourtId(1),
+    teamA: [p(1), p(2)],
+    teamB: [p(3), p(4)],
+  },
+  {
+    matchId: "initial-court-2",
+    courtId: fixtureCourtId(2),
+    teamA: [p(5)],
+    teamB: [p(6)],
+  },
+];
+const RANDOM_INITIAL_MATCH_IDS = RANDOM_INITIAL_MATCHES.map(
+  (assignment) => assignment.matchId,
+);
+
+/** The log as if `matchId` had not been started with the session. */
+function logWithoutInitialMatch(
+  events: readonly SessionEvent[],
+  matchId: string,
+): SessionEvent[] {
+  const [sessionStarted, ...rest] = events;
+  if (sessionStarted.type !== "SessionStarted") {
+    throw new Error("The log must start with SessionStarted.");
+  }
+  return [
+    {
+      ...sessionStarted,
+      payload: {
+        ...sessionStarted.payload,
+        initialMatches: (sessionStarted.payload.initialMatches ?? []).filter(
+          (assignment) => assignment.matchId !== matchId,
+        ),
+      },
+    },
+    ...rest,
+  ];
+}
 
 /**
  * Structural invariants that must hold after every accepted action. Throws
@@ -1537,6 +1782,7 @@ function checkStateInvariants(state: SessionState, now: number): void {
   }
 }
 
+/** Runs with an even number of steps start with both courts already in play. */
 function runRandomSession(steps: readonly RandomStep[]): TestSession {
   const session = TestSession.start({
     participants: makeParticipants(POOL_SIZE),
@@ -1544,6 +1790,7 @@ function runRandomSession(steps: readonly RandomStep[]): TestSession {
       (participant) => participant.participantId,
     ),
     courts: ["doubles", "singles"],
+    initialMatches: steps.length % 2 === 0 ? RANDOM_INITIAL_MATCHES : [],
   });
   for (const step of steps) {
     session.advanceMinutes(step.advanceMinutes);
@@ -1577,8 +1824,8 @@ const ERASING_UNDO_TARGET_TYPES: ReadonlySet<string> = new Set([
  *   reorder (replaying without it, the newer order stands as written);
  * - a reorder undo filters the previous order by who has started a match
  *   since, which differs from replay once starts are also undone or reordered;
- * - `previousQueueIndexes` are position snapshots, so they shift when an
- *   earlier start is undone.
+ * - `queueOrderAtStart` is a snapshot of the order each start saw, which
+ *   differs when an earlier action is removed from the log.
  * The order itself is compared only when no such interaction happened.
  */
 function stateForReplayComparison(state: SessionState) {
@@ -1587,7 +1834,7 @@ function stateForReplayComparison(state: SessionState) {
   const matches: Record<string, Partial<MatchState>> = {};
   for (const [matchId, match] of Object.entries(state.matches)) {
     matches[matchId] = { ...match };
-    delete matches[matchId].previousQueueIndexes;
+    delete matches[matchId].queueOrderAtStart;
   }
   return { ...comparable, matches };
 }
@@ -1597,11 +1844,27 @@ function queueRanksComparable(
   targetSeq: number,
   targetType: string,
 ): boolean {
-  const interferingType =
-    targetType === "QueueReordered" ? "MatchStarted" : "QueueReordered";
-  return !events.some(
-    (event) => event.seq > targetSeq && event.type === interferingType,
-  );
+  return !events.some((event) => {
+    if (event.seq <= targetSeq) return false;
+    // A reorder undo filters the old order by who has started a match since,
+    // so later starts and start undos make it differ from replay (by design).
+    if (targetType === "QueueReordered") {
+      return (
+        event.type === "MatchStarted" || event.type === "MatchStartReverted"
+      );
+    }
+    // A start undo is exact while the order has only lost entries since the
+    // start. It is genuinely ambiguous after a newer reorder (the host's new
+    // order wins, by design) or after undoing a start from before this one:
+    // both put back ranks this start never saw, and replay can interleave
+    // players who shared a neighbour differently.
+    if (event.type === "QueueReordered") return true;
+    if (event.type !== "MatchStartReverted") return false;
+    const undoneStartSeq = event.payload.targetSeq;
+    const undoesAnEarlierRankClearingStart =
+      undoneStartSeq > 1 && undoneStartSeq < targetSeq;
+    return undoesAnEarlierRankClearingStart;
+  });
 }
 
 function undoableSeqs(state: SessionState): number[] {
@@ -1738,6 +2001,7 @@ describe("undo properties (fast-check, seeded)", () => {
 
   it("an accepted undo of any earlier erasing action equals replaying the log without that action", () => {
     let comparedUndoCount = 0;
+    let comparedInitialMatchUndoCount = 0;
     fc.assert(
       fc.property(
         steps,
@@ -1776,11 +2040,37 @@ describe("undo properties (fast-check, seeded)", () => {
               );
             }
           }
+          for (const matchId of RANDOM_INITIAL_MATCH_IDS) {
+            if (!session.state.matches[matchId]) continue;
+            const result = compensate(
+              session.state,
+              1,
+              session.nextMeta(),
+              matchId,
+            );
+            if (!result.ok) {
+              expect(result.error.message.length).toBeGreaterThan(0);
+              continue;
+            }
+            checkStateInvariants(result.state, session.now);
+            const withoutMatch = replay(
+              logWithoutInitialMatch(session.events, matchId),
+            );
+            if (!withoutMatch.ok) continue;
+            comparedInitialMatchUndoCount += 1;
+            expect(stateForReplayComparison(result.state)).toEqual(
+              stateForReplayComparison(withoutMatch.state),
+            );
+            expect(result.state.queueOrder).toEqual(
+              withoutMatch.state.queueOrder,
+            );
+          }
         },
       ),
       { seed: PROPERTY_SEED, numRuns: 150 },
     );
     // Guard against a generator that never exercises the property.
     expect(comparedUndoCount).toBeGreaterThan(150);
+    expect(comparedInitialMatchUndoCount).toBeGreaterThan(30);
   });
 });

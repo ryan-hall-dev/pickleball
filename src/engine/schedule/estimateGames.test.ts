@@ -36,6 +36,32 @@ describe("estimateGames", () => {
     });
   });
 
+  it("computes rounds from the actual session length, match length and changeover", () => {
+    // Default timings: 120 min of 15-min matches + 2-min changeovers = 7 rounds.
+    expect(
+      estimateGames({ ...base, courtFormats: ["doubles"], playerCount: 8 }),
+    ).toMatchObject({ rounds: 7 });
+    // Other timings: 90 min of 12 + 3 = 6 rounds; 100 min of 20 + 0 = 5 rounds.
+    expect(
+      estimateGames({
+        durationMinutes: 90,
+        targetMatchMinutes: 12,
+        changeoverMinutes: 3,
+        courtFormats: ["doubles"],
+        playerCount: 8,
+      }),
+    ).toMatchObject({ rounds: 6, gamesPerPlayer: 3 });
+    expect(
+      estimateGames({
+        durationMinutes: 100,
+        targetMatchMinutes: 20,
+        changeoverMinutes: 0,
+        courtFormats: ["doubles"],
+        playerCount: 8,
+      }),
+    ).toMatchObject({ rounds: 5 });
+  });
+
   it("only counts courts that can be filled, largest first", () => {
     expect(fillableSeats(["doubles", "doubles"], 7)).toBe(4);
     expect(fillableSeats(["singles", "doubles", "doubles"], 7)).toBe(6);

@@ -27,7 +27,6 @@ export function makePlayer(
     pendingGameCredit: 0,
     presentMs: 0,
     playMs: 0,
-    totalWaitMs: 0,
     currentWaitMs: 0,
     restMs: null,
     completedGameAgesMs: [],

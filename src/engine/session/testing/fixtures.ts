@@ -4,6 +4,7 @@ import { applyEvent, type ApplyEventResult } from "../applyEvent";
 import { compensate, type CompensateResult } from "../compensate";
 import type {
   EventMeta,
+  MatchAssignment,
   SessionEvent,
   SessionEventOf,
   SessionEventPayloads,
@@ -232,6 +233,7 @@ export class TestSession {
       seed?: number;
       attendeeIds?: ParticipantId[];
       startAt?: number;
+      initialMatches?: MatchAssignment[];
     } = {},
   ): TestSession {
     const participants =
@@ -244,6 +246,7 @@ export class TestSession {
       initialAttendeeIds:
         options.attendeeIds ??
         participants.map((participant) => participant.participantId),
+      initialMatches: options.initialMatches,
     });
     return session;
   }
@@ -294,8 +297,14 @@ export class TestSession {
     return this.events[this.events.length - 1] as SessionEventOf<TType>;
   }
 
-  tryUndo(targetSeq: number): CompensateResult {
-    const result = compensate(this.state, targetSeq, this.nextMeta());
+  /** `targetMatchId` picks one match started with the session (target = seq 1). */
+  tryUndo(targetSeq: number, targetMatchId?: string): CompensateResult {
+    const result = compensate(
+      this.state,
+      targetSeq,
+      this.nextMeta(),
+      targetMatchId,
+    );
     if (result.ok) {
       this.state = result.state;
       this.events.push(result.event);
@@ -303,8 +312,8 @@ export class TestSession {
     return result;
   }
 
-  undo(targetSeq: number): SessionEvent {
-    const result = this.tryUndo(targetSeq);
+  undo(targetSeq: number, targetMatchId?: string): SessionEvent {
+    const result = this.tryUndo(targetSeq, targetMatchId);
     if (!result.ok) {
       throw new Error(
         `Undo of ${targetSeq} rejected: ${result.error.code} ${result.error.message}`,
