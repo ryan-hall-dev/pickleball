@@ -2,7 +2,10 @@
 
 import { useActionState, useState } from "react";
 import { AttentionMessage } from "@/components/AttentionMessage";
-import { OUTLINE_BUTTON_CLASS_NAME } from "@/components/controlStyles";
+import {
+  ATTENTION_OUTLINE_BUTTON_CLASS_NAME,
+  OUTLINE_BUTTON_CLASS_NAME,
+} from "@/components/controlStyles";
 import {
   removeHost,
   type RemoveHostFormState,
@@ -40,7 +43,7 @@ export function RemoveHostButton({
           <button
             type="submit"
             disabled={isPending}
-            className={`${OUTLINE_BUTTON_CLASS_NAME} border-orange-edge text-orange-soft`}
+            className={ATTENTION_OUTLINE_BUTTON_CLASS_NAME}
           >
             {isPending ? "Removing…" : `Confirm remove ${hostDisplayName}`}
           </button>

@@ -5,7 +5,7 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { replay, type SessionConfig } from "@/engine/session";
 import type { Database } from "@/lib/database.types";
 import { loadSessionLog, type DatabaseClient } from "./sessionLog";
@@ -78,6 +78,9 @@ function requireData<T>(
 }
 
 /** Creates a user and returns a client signed in as them. */
+/** Auth users this run created; deleted (with their hosts rows) after all tests. */
+const createdAuthUserIds: string[] = [];
+
 async function signedInClient(
   stack: LocalStack,
   admin: DatabaseClient,
@@ -93,6 +96,7 @@ async function signedInClient(
     { data: created.data.user, error: created.error },
     "Creating a test user",
   ).id;
+  createdAuthUserIds.push(userId);
   const client = createClient<Database>(stack.apiUrl, stack.publishableKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -101,6 +105,10 @@ async function signedInClient(
   return { client, userId };
 }
 
+// One fixed set of test members, reused by every run (members referenced by a
+// session log can never be deleted, so new ones per run would pile up). The
+// ids are reserved for this test.
+const SHARED_MEMBER_ID_PREFIX = "7e570000-0000-4000-8000-0000000000";
 const PLAYER_FIRST_NAMES = [
   "Ines",
   "Otto",
@@ -167,19 +175,22 @@ async function createHostedDraftSession(
       .single(),
     "Creating the draft session",
   ).id;
-  const members = requireData(
-    await admin
-      .from("members")
-      .insert(
-        PLAYER_FIRST_NAMES.slice(0, playerCount).map((firstName) => ({
-          first_name: firstName,
-          last_name: "Tester",
-          skill_level: "intermediate" as const,
-        })),
-      )
-      .select("id, first_name, last_name"),
-    "Creating members",
+  const sharedMembers = PLAYER_FIRST_NAMES.slice(0, playerCount).map(
+    (firstName, index) => ({
+      id: `${SHARED_MEMBER_ID_PREFIX}${String(index + 1).padStart(2, "0")}`,
+      first_name: firstName,
+      last_name: "Tester",
+      skill_level: "intermediate" as const,
+    }),
   );
+  // Create the shared members once; later runs leave the existing rows untouched.
+  const upserted = await admin
+    .from("members")
+    .upsert(sharedMembers, { onConflict: "id", ignoreDuplicates: true });
+  if (upserted.error) {
+    throw new Error(`Creating members failed: ${upserted.error.message}`);
+  }
+  const members = sharedMembers;
   const participants = requireData(
     await admin
       .from("session_participants")
@@ -221,6 +232,21 @@ function createAdminClient(stack: LocalStack): DatabaseClient {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
+
+// Deleting the auth users also deletes their hosts rows (on delete cascade);
+// their sessions keep the history with host_id set to null.
+afterAll(async () => {
+  if (!localStack || createdAuthUserIds.length === 0) return;
+  const admin = createAdminClient(localStack);
+  const failures: string[] = [];
+  for (const userId of createdAuthUserIds) {
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) failures.push(`${userId}: ${error.message}`);
+  }
+  if (failures.length > 0) {
+    throw new Error(`Cleaning up test users failed: ${failures.join("; ")}`);
+  }
+});
 
 describe.skipIf(!localStack)("submitSessionAction (local Supabase)", () => {
   let admin: DatabaseClient;
@@ -573,6 +599,41 @@ describe.skipIf(!localStack)(
         },
       });
       expect(started).toMatchObject({ ok: true, seq: 1 });
+    });
+
+    // End the session so no live session outlives the run: abandon any match
+    // still in progress, then end. The rows themselves are append-only history.
+    afterAll(async () => {
+      const state = await replayedState();
+      let lastSeq = state.lastSeq;
+      for (const match of Object.values(state.matches)) {
+        if (match.status !== "active") continue;
+        const abandoned = await submit({
+          sessionId,
+          eventId: randomUUID(),
+          expectedLastSeq: lastSeq,
+          request: {
+            kind: "action",
+            action: {
+              type: "MatchAbandoned",
+              payload: { matchId: match.matchId },
+            },
+          },
+        });
+        if (!abandoned.ok)
+          throw new Error(`Cleanup abandon failed: ${abandoned.reason}`);
+        lastSeq = abandoned.seq;
+      }
+      const ended = await submit({
+        sessionId,
+        eventId: randomUUID(),
+        expectedLastSeq: lastSeq,
+        request: {
+          kind: "action",
+          action: { type: "SessionEnded", payload: {} },
+        },
+      });
+      if (!ended.ok) throw new Error(`Cleanup end failed: ${ended.reason}`);
     });
 
     it("refuses to undo a first match after a player was removed from it, pointing to abandon", async () => {
