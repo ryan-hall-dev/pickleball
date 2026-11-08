@@ -173,14 +173,14 @@ isOneToOne: false
                   ]
                 },"members": {
                   Row: {
-                    "avatar_url": string | null,"created_at": string,"first_name": string,"id": string,"is_active": boolean,"last_checked_in_at": string | null,"last_name": string,"skill_level": Database["public"]['Enums']["skill_level"] | null,"updated_at": string
+                    "avatar_url": string | null,"created_at": string,"first_name": string,"id": string,"is_active": boolean,"last_checked_in_at": string | null,"last_name": string,"search_name": string,"skill_level": Database["public"]['Enums']["skill_level"] | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "avatar_url"?: string | null,"created_at"?: string,"first_name": string,"id"?: string,"is_active"?: boolean,"last_checked_in_at"?: string | null,"last_name": string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"updated_at"?: string
+                    "avatar_url"?: string | null,"created_at"?: string,"first_name": string,"id"?: string,"is_active"?: boolean,"last_checked_in_at"?: string | null,"last_name": string,"search_name"?: never,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"updated_at"?: string
                   }
                   Update: {
-                    "avatar_url"?: string | null,"created_at"?: string,"first_name"?: string,"id"?: string,"is_active"?: boolean,"last_checked_in_at"?: string | null,"last_name"?: string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"updated_at"?: string
+                    "avatar_url"?: string | null,"created_at"?: string,"first_name"?: string,"id"?: string,"is_active"?: boolean,"last_checked_in_at"?: string | null,"last_name"?: string,"search_name"?: never,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"updated_at"?: string
                   }
                   Relationships: [
                     
