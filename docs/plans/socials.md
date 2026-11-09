@@ -4,9 +4,11 @@ Status: **awaiting Ryan's approval** (2026-11-09). Runs before M5. Implements `d
 
 ## 0. Decisions this plan rests on
 
+**Product principle (Ryan, 2026-11-09):** each social operates independently; players check in to the session they are physically attending. The QR/NFC check-in identifies which social's session the player is attending, not membership of any central system. No global player identity, and no cross-social membership, attendance checks, restrictions or coordination. A player can attend any number of socials; each social records them, their contact details and their attendance independently. The only restriction is within one social: no duplicate check-in for the same player in the same session.
+
 - An installation holds several independent socials. The app has **no venue entity, role or relationship**: socials may share a physical venue, but the app doesn't model it.
 - One login belongs to exactly one social, as `manager` (Social Manager) or `host` (operational host). A manager has every host right plus: invite and remove hosts, add courts, rename the social, and (M5) reissue the check-in link.
-- Each social owns its members, member phones, courts, saved setups, sessions and everything under a session. Nothing is shared between socials. A player in two socials is two unrelated member records with unrelated phone links.
+- Each social owns its members directory, the phones it recognises, its courts, saved setups, sessions and everything under a session. A player who attends two socials simply appears in each social's directory; nothing links the two.
 - **Courts belong to one social.** The Social Manager records the courts the venue gave their social (name and formats); the social's hosts use them in setups, matches and rotations. Names are unique per social. No bookings, availability, clash checks or links between socials' courts.
 - One check-in tag per social (`socials.checkin_tag`). A host can show the QR on screen (M5).
 - At most one open session (draft or live) per social; every host of the social can edit it, run it and approve its check-ins.

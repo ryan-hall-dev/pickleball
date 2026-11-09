@@ -4,6 +4,8 @@ Status: **proposed** (assessment, 2026-11-09). Not implemented. Needs Ryan's ans
 
 ## Business model (Ryan, 2026-11-09)
 
+**Product principle (Ryan, 2026-11-09):** each social operates independently; players check in to the session they are physically attending. The QR/NFC check-in identifies which social's session the player is attending, not membership of any central system. No global player identity, and no cross-social membership, attendance checks, restrictions or coordination. A player can attend any number of socials; each social records them, their contact details and their attendance independently. The only restriction is within one social: no duplicate check-in for the same player in the same session.
+
 - An installation holds several independent **socials** (e.g. Pickleball Riverside, Riverside Morning Social, Riverside Competitive Social). They may play at the same physical venue, but the app does **not** model venues: no venue ownership, bookings, availability, court allocation or conflicts between socials (Ryan, 2026-11-09). Those are arranged between the venue and each Social Manager.
 - **Courts belong to a social.** The venue tells the social which courts it may use; the Social Manager records them in the app; the hosts use them for matches and rotations.
 - Each social has its own **Social Manager**, who names it, configures it, builds its community and appoints its **operational hosts**. The roles are not interchangeable.
