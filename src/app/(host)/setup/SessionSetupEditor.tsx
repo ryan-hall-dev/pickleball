@@ -28,6 +28,7 @@ import type {
   SessionDraft,
 } from "@/server/setup/setupDraft";
 import type { SaveSessionDraftInput } from "@/server/setup/setupRules";
+import { CoHostDraftNotice } from "./CoHostDraftNotice";
 import { CourtsCard } from "./CourtsCard";
 import { DiscardDraftButton } from "./DiscardDraftButton";
 import {
@@ -821,6 +822,7 @@ function SessionSetupForm({
           onClose={() => setOpenSavedSetupsPanel("none")}
         />
       )}
+      <CoHostDraftNotice />
       <div aria-live="polite" className="empty:hidden">
         {savedSetupMessage &&
           (savedSetupMessage.tone === "info" ? (
@@ -895,7 +897,7 @@ function SessionSetupForm({
   );
 }
 
-/** DESIGN.md "Updated by another host": settings changed in another tab or device. */
+/** DESIGN.md "Updated by another host": settings changed by a co-host, another tab or device. */
 function DraftConflictBanner({ onReload }: { onReload: () => void }) {
   return (
     <section
@@ -909,7 +911,7 @@ function DraftConflictBanner({ onReload }: { onReload: () => void }) {
         !
       </span>
       <p className="min-w-0 flex-[1_1_300px] text-sm text-orange-text">
-        Setup was changed in another tab or by another device. Reload to see the
+        Setup was changed by another host, tab or device. Reload to see the
         latest &mdash; your unsaved changes here will be lost.
       </p>
       <button

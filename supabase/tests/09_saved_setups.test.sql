@@ -1,30 +1,36 @@
 -- Saved setups (Setup "Save this setup" / "Saved setups"): save_setup and
--- apply_saved_setup.
+-- apply_saved_setup. Setups belong to the social: any of its hosts saves,
+-- replaces and applies them; another social's are never found.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(37);
 
 insert into auth.users (id, email) values
   ('a9000000-0000-4000-8000-000000000001', 'pgtap-setups-owner@example.test'),
   ('a9000000-0000-4000-8000-000000000002', 'pgtap-setups-other@example.test'),
-  ('a9000000-0000-4000-8000-000000000003', 'pgtap-setups-outsider@example.test');
-insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000009', 'pgTAP Social');
+  ('a9000000-0000-4000-8000-000000000003', 'pgtap-setups-outsider@example.test'),
+  ('a9000000-0000-4000-8000-000000000004', 'pgtap-setups-cohost@example.test');
+-- The owner and a co-host share one social; the other host runs another social.
+insert into public.socials (id, name) values
+  ('50000000-0000-4000-8000-000000000009', 'pgTAP Social'),
+  ('50000000-0000-4000-8000-000000000019', 'pgTAP Other Social');
 insert into public.hosts (user_id, display_name, role, social_id) values
   ('a9000000-0000-4000-8000-000000000001', 'Owner Host', 'host', '50000000-0000-4000-8000-000000000009'),
-  ('a9000000-0000-4000-8000-000000000002', 'Other Host', 'host', '50000000-0000-4000-8000-000000000009');
+  ('a9000000-0000-4000-8000-000000000004', 'Co Host', 'host', '50000000-0000-4000-8000-000000000009'),
+  ('a9000000-0000-4000-8000-000000000002', 'Other Host', 'host', '50000000-0000-4000-8000-000000000019');
 insert into public.members (social_id, id, first_name, last_name) values
   ('50000000-0000-4000-8000-000000000009', 'b9000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
-insert into public.sessions (id, host_id, name, location, host_name, planned_start, planned_end, status, config_snapshot) values
-  ('d9000000-0000-4000-8000-000000000001', 'a9000000-0000-4000-8000-000000000001', 'Owner draft', null, 'Owner Host',
+insert into public.sessions (id, social_id, host_id, name, location, host_name, planned_start, planned_end, status, config_snapshot) values
+  ('d9000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000009', 'a9000000-0000-4000-8000-000000000001', 'Owner draft', null, 'Owner Host',
    '2026-12-05 18:00+00', '2026-12-05 20:00+00', 'draft', '{"matchFormat": "doubles", "laterStep": {"kept": true}}'),
-  ('d9000000-0000-4000-8000-000000000002', 'a9000000-0000-4000-8000-000000000002', 'Other draft', null, 'Other Host',
+  ('d9000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000019', 'a9000000-0000-4000-8000-000000000002', 'Other draft', null, 'Other Host',
    now(), now() + interval '2 hours', 'draft', null),
-  ('d9000000-0000-4000-8000-000000000003', 'a9000000-0000-4000-8000-000000000001', 'Old one', null, 'Owner Host',
+  ('d9000000-0000-4000-8000-000000000003', '50000000-0000-4000-8000-000000000009', 'a9000000-0000-4000-8000-000000000001', 'Old one', null, 'Owner Host',
    now(), now() + interval '2 hours', 'cancelled', null);
-insert into public.session_participants (id, session_id, member_id, first_name, last_name) values
-  ('e9000000-0000-4000-8000-000000000001', 'd9000000-0000-4000-8000-000000000001', 'b9000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
-insert into public.saved_setups (id, host_id, name, config, last_used_at) values
-  ('f9000000-0000-4000-8000-000000000002', 'a9000000-0000-4000-8000-000000000002', 'Other setup', '{}', now() - interval '30 days');
+insert into public.session_participants (id, session_id, social_id, member_id, first_name, last_name) values
+  ('e9000000-0000-4000-8000-000000000001', 'd9000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000009', 'b9000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
+insert into public.saved_setups (id, social_id, host_id, name, config, last_used_at) values
+  ('f9000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000019', 'a9000000-0000-4000-8000-000000000002', 'Other setup', '{}', now() - interval '30 days');
 
 create temporary table setup_ids (label text primary key, setup_id uuid) on commit drop;
 grant all on setup_ids to service_role;
@@ -96,15 +102,29 @@ select results_eq(
   $$values ('saturday social', '{"durationMinutes": 60}'::jsonb, true)$$,
   'the replaced setup takes the new name, config and last used time; there is still one'
 );
+select is(
+  public.save_setup('a9000000-0000-4000-8000-000000000004', 'SATURDAY SOCIAL', '{"durationMinutes": 60}'),
+  (select setup_id from setup_ids where label = 'saturday'),
+  'a co-host saving under the same name replaces the social''s setup'
+);
+select results_eq(
+  $$select name::text, host_id from public.saved_setups where social_id = '50000000-0000-4000-8000-000000000009'$$,
+  $$values ('SATURDAY SOCIAL', 'a9000000-0000-4000-8000-000000000004'::uuid)$$,
+  'still one setup in the social; "saved by" is the latest host'
+);
+select lives_ok(
+  $$select public.save_setup('a9000000-0000-4000-8000-000000000001', 'saturday social', '{"durationMinutes": 60}')$$,
+  'the owner saves it back'
+);
 select isnt(
   public.save_setup('a9000000-0000-4000-8000-000000000002', 'Saturday Social', '{}'),
   (select setup_id from setup_ids where label = 'saturday'),
-  'another host''s setup with the same name is a separate setup'
+  'another social''s setup with the same name is a separate setup'
 );
 select is(
   (select count(*) from public.saved_setups where lower(name) = 'saturday social'),
   2::bigint,
-  'each host keeps their own'
+  'each social keeps its own'
 );
 
 -- apply_saved_setup -----------------------------------------------------------------------
@@ -116,12 +136,12 @@ select throws_ok(
 select throws_ok(
   $$select public.apply_saved_setup('a9000000-0000-4000-8000-000000000002', 'd9000000-0000-4000-8000-000000000001',
     'f9000000-0000-4000-8000-000000000002', 0, '', 90, '{}')$$,
-  'P0002', 'DRAFT_NOT_OPEN', 'a host cannot apply a setup to someone else''s draft'
+  'P0002', 'DRAFT_NOT_OPEN', 'a host cannot apply a setup to another social''s draft'
 );
 select throws_ok(
   $$select public.apply_saved_setup('a9000000-0000-4000-8000-000000000001', 'd9000000-0000-4000-8000-000000000001',
     'f9000000-0000-4000-8000-000000000002', 0, '', 90, '{}')$$,
-  'P0002', 'SAVED_SETUP_NOT_FOUND', 'a host cannot apply another host''s setup'
+  'P0002', 'SAVED_SETUP_NOT_FOUND', 'a host cannot apply another social''s setup'
 );
 select throws_ok(
   $$select public.apply_saved_setup('a9000000-0000-4000-8000-000000000001', 'd9000000-0000-4000-8000-000000000003',
@@ -137,10 +157,10 @@ select throws_ok(
 update public.saved_setups set last_used_at = now() - interval '10 days'
 where id = (select setup_id from setup_ids where label = 'saturday');
 select lives_ok(
-  $$select public.apply_saved_setup('a9000000-0000-4000-8000-000000000001', 'd9000000-0000-4000-8000-000000000001',
+  $$select public.apply_saved_setup('a9000000-0000-4000-8000-000000000004', 'd9000000-0000-4000-8000-000000000001',
     (select setup_id from setup_ids where label = 'saturday'), 0, 'Riverside', 90,
     '{"matchFormat": "singles", "targetMatchMinutes": 12, "rotation": {"objectiveOrder": ["shortestWaits"]}}')$$,
-  'the owner applies their own setup to their own draft'
+  'a co-host applies the social''s setup (saved by the owner) to the social''s draft'
 );
 select results_eq(
   $$select name::text, location, planned_start, planned_end from public.sessions where id = 'd9000000-0000-4000-8000-000000000001'$$,
@@ -186,18 +206,18 @@ select is(
 
 reset role;
 
--- RLS: a host reads only their own setups ----------------------------------------------------
+-- RLS: a host reads only their own social's setups -------------------------------------------
 select set_config('request.jwt.claims', '{"sub":"a9000000-0000-4000-8000-000000000002","role":"authenticated"}', true);
 set local role authenticated;
 select is(
   (select count(*) from public.saved_setups where host_id = 'a9000000-0000-4000-8000-000000000001'),
   0::bigint,
-  'another host sees none of the owner''s setups'
+  'another social''s host sees none of the social''s setups'
 );
 select is(
   (select array_agg(name::text order by name) from public.saved_setups),
   array['Other setup', 'Saturday Social'],
-  'a host sees exactly their own two setups'
+  'a host sees exactly their own social''s two setups'
 );
 reset role;
 select set_config('request.jwt.claims', '{"sub":"a9000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
@@ -205,7 +225,7 @@ set local role authenticated;
 select results_eq(
   $$select name::text from public.saved_setups$$,
   $$values ('saturday social')$$,
-  'the owner sees their own setup'
+  'the owner sees their social''s setup'
 );
 reset role;
 select * from finish();

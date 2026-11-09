@@ -365,6 +365,11 @@ export const applySavedSetupInputSchema = z.object({
 
 export type ApplySavedSetupInput = z.input<typeof applySavedSetupInputSchema>;
 
+/** Shown when "Start a new session" opens the draft a co-host already started. */
+export function coHostDraftNotice(draftName: string): string {
+  return `A co-host already started \u201c${draftName}\u201d. You're editing it together.`;
+}
+
 /** After applying a saved setup: "Court 5 is no longer available and was left out." */
 export function courtsLeftOutNotice(
   courtNames: readonly string[],

@@ -13,8 +13,8 @@ insert into public.socials (id, name, checkin_tag) values
   ('50000000-0000-4000-8000-000000000003', 'pgTAP Social', 'tag0000000000000001');
 insert into public.hosts (user_id, display_name, social_id) values
   ('a0000000-0000-4000-8000-000000000002', 'Hal Host', '50000000-0000-4000-8000-000000000003');
-insert into public.sessions (id, host_id, name, host_name, planned_start, planned_end) values
-  ('d0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', 'Hal Host', now(), now() + interval '2 hours');
+insert into public.sessions (id, social_id, host_id, name, host_name, planned_start, planned_end) values
+  ('d0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', 'Hal Host', now(), now() + interval '2 hours');
 insert into public.members (social_id, id, first_name, last_name, skill_level, is_active) values
   ('50000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'advanced', true),
   ('50000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000002', 'Grant', 'Lee', null, true),
@@ -240,8 +240,8 @@ select is(
 
 -- Reject.
 reset role;
-insert into public.checkin_requests (id, session_id, first_name, last_name, skill_level, device_token_hash, ip_hash) values
-  ('c1000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', 'Rex', 'Reject', 'beginner', repeat('d', 64), repeat('d', 64));
+insert into public.checkin_requests (id, session_id, social_id, first_name, last_name, skill_level, device_token_hash, ip_hash) values
+  ('c1000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000003', 'Rex', 'Reject', 'beginner', repeat('d', 64), repeat('d', 64));
 set local role service_role;
 select is(public.reject_checkin('a0000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000001') ->> 'status', 'rejected', 'a host rejects a request');
 select is(public.reject_checkin('a0000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000001') ->> 'status', 'already_rejected', 'rejecting twice is idempotent');
@@ -311,8 +311,8 @@ select is(
 );
 reset role;
 -- Grant is already a participant from an earlier hand-add (e.g. left and came back).
-insert into public.session_participants (id, session_id, member_id, first_name, last_name) values
-  ('e0000000-0000-4000-8000-000000000012', 'd0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002', 'Grant', 'Lee');
+insert into public.session_participants (id, session_id, social_id, member_id, first_name, last_name) values
+  ('e0000000-0000-4000-8000-000000000012', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000002', 'Grant', 'Lee');
 set local role service_role;
 select throws_ok(
   $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where first_name = 'Grant'), gen_random_uuid(), gen_random_uuid(), 2, now())$$,

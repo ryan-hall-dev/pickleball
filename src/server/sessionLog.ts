@@ -41,7 +41,9 @@ function sessionEventFromRow(row: SessionEventRow): SessionEvent {
 
 /**
  * Loads a session's status and its whole action log (paged, in seq order).
- * Returns null when the session doesn't exist or the caller isn't a host (RLS).
+ * Returns null when the session doesn't exist, belongs to another social or
+ * the caller isn't a host (RLS: a host reads only their own social's sessions
+ * and their logs).
  */
 export async function loadSessionLog(
   client: DatabaseClient,

@@ -314,6 +314,15 @@ Carried into M5/M8 from M3:
 - M5: "a player can be in only one live session at a time" is checked when approving (it needs a replay of the other live session, so it isn't a database constraint). M5 also needs a server-side read for the check-in page header, phone recognition and request status.
 - M8: `end_session` takes `p_final_stats` (jsonb) for the final report; M3 passes nothing yet.
 
+Carried into M5/M8 from M4.5 (the A3 backfill closed leftover open sessions; `supabase/migrations/20261110150000_socials_sessions.sql`):
+
+- M8: events by actor `00000000-0000-0000-0000-000000000000` were appended by the migration (`Resumed`, `MatchAbandoned`, `SessionEnded`): label them "Closed by migration", never as a host.
+- M8: History must tolerate (or skip) ended sessions with an empty log (`last_seq = 0`, made by tests writing rows directly).
+- M8: sessions the migration ended have `final_stats` null.
+- M8: matches the migration abandoned have very long durations (from their start to the migration): exclude them from duration averages.
+- M8: Ryan's local DB is mostly test leftovers (Integration / Fresh start / Alice / Setups socials); don't read History results from it as real data.
+- M5: the pending check-in tray shows only the requests of the social's open session.
+
 Carried into M6 from M4:
 
 - Start must re-read the selected courts by id (active, supporting the format, current names) rather than trust the draft's `config_snapshot.courts`, which can hold a court deactivated or renamed after the last save. `matchFormat` in the draft snapshot is draft-only; `start_session` replaces the snapshot with the `SessionStarted` config.

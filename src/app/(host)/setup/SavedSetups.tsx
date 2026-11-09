@@ -97,7 +97,7 @@ export function SavedSetupsButtons({
   );
 }
 
-/** The host's saved setups, most recently used first, each with Use. */
+/** The social's saved setups (shared by its hosts), most recently used first, each with Use. */
 export function SavedSetupsList({
   savedSetups,
   isApplying,

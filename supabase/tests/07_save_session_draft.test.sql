@@ -2,29 +2,34 @@
 -- case-insensitive court names.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(25);
 
 insert into auth.users (id, email) values
   ('a7000000-0000-4000-8000-000000000001', 'pgtap-draft-owner@example.test'),
   ('a7000000-0000-4000-8000-000000000002', 'pgtap-draft-other@example.test'),
-  ('a7000000-0000-4000-8000-000000000003', 'pgtap-draft-outsider@example.test');
-insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000007', 'pgTAP Social');
+  ('a7000000-0000-4000-8000-000000000003', 'pgtap-draft-outsider@example.test'),
+  ('a7000000-0000-4000-8000-000000000004', 'pgtap-draft-cohost@example.test');
+-- The owner and a co-host share one social; the other host runs another social.
+insert into public.socials (id, name) values
+  ('50000000-0000-4000-8000-000000000007', 'pgTAP Social'),
+  ('50000000-0000-4000-8000-000000000017', 'pgTAP Other Social');
 insert into public.hosts (user_id, display_name, role, social_id) values
   ('a7000000-0000-4000-8000-000000000001', 'Owner Host', 'host', '50000000-0000-4000-8000-000000000007'),
-  ('a7000000-0000-4000-8000-000000000002', 'Other Host', 'host', '50000000-0000-4000-8000-000000000007');
+  ('a7000000-0000-4000-8000-000000000004', 'Co Host', 'host', '50000000-0000-4000-8000-000000000007'),
+  ('a7000000-0000-4000-8000-000000000002', 'Other Host', 'host', '50000000-0000-4000-8000-000000000017');
 insert into public.members (social_id, id, first_name, last_name) values
   ('50000000-0000-4000-8000-000000000007', 'b7000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
-insert into public.sessions (id, host_id, name, host_name, planned_start, planned_end, status, started_at, config_snapshot) values
+insert into public.sessions (id, social_id, host_id, name, host_name, planned_start, planned_end, status, started_at, config_snapshot) values
   -- The owner's draft, with a key another setup step owns.
-  ('d7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', 'Draft', 'Owner Host',
+  ('d7000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000007', 'a7000000-0000-4000-8000-000000000001', 'Draft', 'Owner Host',
    now(), now() + interval '2 hours', 'draft', null, '{"rotation":{"objectiveOrder":["equalGames"]},"targetMatchMinutes":15}'),
-  -- The other host's draft, with no snapshot yet.
-  ('d7000000-0000-4000-8000-000000000002', 'a7000000-0000-4000-8000-000000000002', 'Other draft', 'Other Host',
+  -- The other social's draft, with no snapshot yet.
+  ('d7000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000017', 'a7000000-0000-4000-8000-000000000002', 'Other draft', 'Other Host',
    now(), now() + interval '2 hours', 'draft', null, null);
--- The owner's earlier session that is live (another host's live one would also do).
-insert into public.sessions (id, host_id, name, host_name, planned_start, planned_end, status, started_at) values
-  ('d7000000-0000-4000-8000-000000000003', null, 'Live one', 'Owner Host',
-   now(), now() + interval '2 hours', 'live', now());
+-- The social's earlier session, no longer open (one open session per social).
+insert into public.sessions (id, social_id, host_id, name, host_name, planned_start, planned_end, status) values
+  ('d7000000-0000-4000-8000-000000000003', '50000000-0000-4000-8000-000000000007', null, 'Old one', 'Owner Host',
+   now(), now() + interval '2 hours', 'cancelled');
 
 -- Grants: only the server's secret key can call it.
 select ok(
@@ -50,7 +55,7 @@ select throws_ok(
 select throws_ok(
   $$select public.save_session_draft('a7000000-0000-4000-8000-000000000002', 'd7000000-0000-4000-8000-000000000001', 0,
     'Hijack', '', 'X', now(), now() + interval '1 hour', '{"courts":[]}')$$,
-  'P0002', 'DRAFT_NOT_OPEN', 'another host cannot save someone else''s draft'
+  'P0002', 'DRAFT_NOT_OPEN', 'a host of another social cannot save the draft'
 );
 select throws_ok(
   $$select public.save_session_draft('a7000000-0000-4000-8000-000000000001', 'd7000000-0000-4000-8000-000000000003', 0,
@@ -142,6 +147,18 @@ select is(
   (select draft_revision from public.sessions where id = 'd7000000-0000-4000-8000-000000000001'),
   3,
   'attendance does not bump the settings revision'
+);
+-- Co-editing: any host of the social saves the same draft, under the same revision check.
+select is(
+  public.save_session_draft('a7000000-0000-4000-8000-000000000004', 'd7000000-0000-4000-8000-000000000001', 3,
+    'Co-host edit', '', 'Co Host', '2026-11-07 18:00+00', '2026-11-07 20:00+00', '{}') ->> 'draftRevision',
+  '4',
+  'a co-host of the social saves the draft'
+);
+select throws_ok(
+  $$select public.save_session_draft('a7000000-0000-4000-8000-000000000001', 'd7000000-0000-4000-8000-000000000001', 3,
+    'Owner stale tab', '', 'Owner H.', '2026-11-07 18:00+00', '2026-11-07 20:00+00', '{}')$$,
+  'P0409', 'DRAFT_CHANGED_ELSEWHERE', 'the owner''s save at the revision the co-host moved on is refused'
 );
 
 -- Court names are unique within a social whatever their case (other socials:

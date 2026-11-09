@@ -13,8 +13,8 @@ import {
 import type { SkillLevel } from "@/server/members/memberSearch";
 import {
   listDraftParticipants,
-  listSavedSetups,
-  readHostOpenSession,
+  listSocialSavedSetups,
+  readSocialOpenSession,
   type ClubCourt,
   type DraftParticipant,
   type SavedSetupSummary,
@@ -37,6 +37,7 @@ import {
   type ApplySavedSetupInput,
   type SaveSetupInput,
   applySavedSetupInputSchema,
+  coHostDraftNotice,
   courtsLeftOutNotice,
   parseSavedSetupConfig,
   safeParseSavedSetupConfig,
@@ -47,12 +48,22 @@ import {
 
 // Setup screen writes (plan §7 M4). Every action verifies the caller as a host
 // with getUser() first, then writes with the service-role client
-// (docs/decisions/0002-server-only-writes.md). A host only ever touches their
-// OWN draft: every session read and write is filtered by host_id = caller.
-// Courts belong to the host's social: every court query filters by
-// host.socialId and every insert sets it (the service-role client bypasses RLS).
+// (docs/decisions/0002-server-only-writes.md). Drafts, courts and saved
+// setups belong to the host's social, and every host of the social works on
+// the same draft (co-editing; the draft revision refuses stale settings
+// writes). The service-role client bypasses RLS, so every query filters by
+// host.socialId and every insert sets it; the database functions derive the
+// social from the actor too.
 
 export type SetupActionResult = { ok: true } | { ok: false; message: string };
+
+/**
+ * After "Start a new session". `notice`: the social already had a draft that
+ * a co-host started, which this host now edits with them (their new draft's
+ * name was not used); null otherwise.
+ */
+export type StartSessionDraftResult =
+  { ok: true; notice: string | null } | { ok: false; message: string };
 
 /**
  * A draft settings write. On success, the draft's new settings revision (the
@@ -63,7 +74,7 @@ export type SaveSessionDraftResult =
   | { ok: true; draftRevision: number }
   | { ok: false; message: string; isConflict?: true };
 
-/** After a saved-setup write: the host's saved setups as the database now has them. */
+/** After a saved-setup write: the social's saved setups as the database now has them. */
 export type SaveSetupResult =
   | { ok: true; message: string; savedSetups: SavedSetupSummary[] }
   | { ok: false; message: string };
@@ -71,7 +82,7 @@ export type SaveSetupResult =
 /**
  * After applying a saved setup: the draft as the database now has it (the
  * editor takes these values), an optional note (e.g. a court left out), and
- * the host's saved setups.
+ * the social's saved setups.
  */
 export type ApplySavedSetupResult =
   | {
@@ -109,19 +120,19 @@ const POSTGRES_CHECK_VIOLATION = "23514";
 const SOMETHING_WENT_WRONG = "Something went wrong. Try again in a moment.";
 const DRAFT_NOT_OPEN =
   "This draft is no longer open (it was discarded or started). Reload the page.";
-/** Raised by the draft write functions when the session isn't the caller's open draft. */
+/** Raised by the draft write functions when the session isn't the social's open draft. */
 const DRAFT_NOT_OPEN_ERROR = "DRAFT_NOT_OPEN";
 const SAVED_BUT_LIST_NOT_REFRESHED =
   "Saved, but the list couldn't refresh. Reload the page.";
 const SAVED_SETUP_NOT_FOUND =
   "That saved setup isn't available any more. Reload the page.";
-/** Raised by apply_saved_setup when the setup isn't the caller's. */
+/** Raised by apply_saved_setup when the setup isn't the social's. */
 const SAVED_SETUP_NOT_FOUND_ERROR = "SAVED_SETUP_NOT_FOUND";
 const MS_PER_MINUTE = 60_000;
 /** Raised by the draft settings writes when the expected revision is stale. */
 const DRAFT_CHANGED_ELSEWHERE_ERROR = "DRAFT_CHANGED_ELSEWHERE";
 const DRAFT_CHANGED_ELSEWHERE =
-  "Setup was changed in another tab or by another device. Reload to see the latest \u2014 your unsaved changes here will be lost.";
+  "Setup was changed by another host, tab or device. Reload to see the latest \u2014 your unsaved changes here will be lost.";
 const draftRevisionSchema = z.number().int().min(0);
 
 /** The new revision a draft settings write returns ({ draftRevision }). */
@@ -136,7 +147,7 @@ function draftRevisionFrom(data: unknown): number {
 }
 const ONLY_MANAGERS_ADD_COURTS = "Only the social manager can add courts.";
 const LIVE_SESSION_EXISTS =
-  "You already have a live session. End it before setting up a new one.";
+  "Your social already has a live session. End it before setting up a new one.";
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -155,8 +166,8 @@ function firstIssueMessage(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Check the highlighted fields.";
 }
 
-/** The caller's own draft, or null when it isn't theirs or isn't a draft any more. */
-async function readOwnDraft(
+/** The social's draft, or null when it's another social's or isn't a draft any more. */
+async function readSocialDraft(
   adminClient: AdminClient,
   host: SignedInHost,
   sessionId: string,
@@ -165,7 +176,7 @@ async function readOwnDraft(
     .from("sessions")
     .select("id")
     .eq("id", sessionId)
-    .eq("host_id", host.userId)
+    .eq("social_id", host.socialId)
     .eq("status", "draft")
     .maybeSingle();
   if (error) throw new Error(`Reading the draft failed: ${error.message}`);
@@ -212,10 +223,13 @@ async function snapshotCourts(
   };
 }
 
-/** Creates the host's draft. Does nothing if they already have one open. */
+/**
+ * Creates the social's draft. When the social already has one open (a
+ * co-host started it), does nothing: the page then shows that draft.
+ */
 export async function startSessionDraft(
   input: StartSessionDraftInput,
-): Promise<SetupActionResult> {
+): Promise<StartSessionDraftResult> {
   const authorization = await authorizeCurrentHost("host");
   if (!authorization.ok) {
     return {
@@ -229,9 +243,12 @@ export async function startSessionDraft(
     return { ok: false, message: firstIssueMessage(parsed.error) };
   }
 
+  let notice: string | null = null;
   try {
     const adminClient = createSupabaseAdminClient();
     const { error } = await adminClient.from("sessions").insert({
+      social_id: host.socialId,
+      // "Created by"; any host of the social may edit and run it.
       host_id: host.userId,
       name: parsed.data.name,
       host_name: host.displayName,
@@ -241,11 +258,12 @@ export async function startSessionDraft(
       config_snapshot: DEFAULT_SESSION_DRAFT_CONFIG as unknown as Json,
     });
     if (error?.code === POSTGRES_UNIQUE_VIOLATION) {
-      // One open session per host: report a live one, reuse a draft.
+      // One open session per social: report a live one, reuse a draft
+      // (possibly a co-host's).
       const { data: openSession, error: readError } = await adminClient
         .from("sessions")
-        .select("status")
-        .eq("host_id", host.userId)
+        .select("status, name, host_id")
+        .eq("social_id", host.socialId)
         .in("status", ["draft", "live"])
         .maybeSingle();
       if (readError) {
@@ -256,6 +274,10 @@ export async function startSessionDraft(
       if (openSession?.status === "live") {
         return { ok: false, message: LIVE_SESSION_EXISTS };
       }
+      // The host's own draft (a double click, another tab) needs no notice.
+      if (openSession && openSession.host_id !== host.userId) {
+        notice = coHostDraftNotice(openSession.name);
+      }
     } else if (error) {
       throw new Error(`Creating the draft failed: ${error.message}`);
     }
@@ -265,11 +287,11 @@ export async function startSessionDraft(
   }
 
   revalidatePath(SETUP_PATH);
-  return { ok: true };
+  return { ok: true, notice };
 }
 
 /**
- * Saves the Session details, Courts and Rotation cards into the host's own draft.
+ * Saves the Session details, Courts and Rotation cards into the social's draft.
  * Court names are read from the database (never trusted from the browser) and
  * snapshotted with the chosen format.
  */
@@ -319,8 +341,8 @@ export async function saveSessionDraft(
     };
     // One statement, under the session's row lock: writes the details and
     // merges this step's config keys, keeping keys other setup steps own. It
-    // only touches the caller's own draft (DRAFT_NOT_OPEN otherwise), and
-    // only if nothing changed it since the revision this edit started from.
+    // only touches the social's draft (DRAFT_NOT_OPEN otherwise), and only if
+    // nothing (a co-host, another tab) changed it since this edit's revision.
     const { data, error } = await adminClient.rpc("save_session_draft", {
       p_actor_user_id: host.userId,
       p_session_id: draftInput.sessionId,
@@ -350,7 +372,7 @@ export async function saveSessionDraft(
   }
 }
 
-/** Discards the host's own draft (cancel_draft_session; it never had a log). */
+/** Discards the social's draft (cancel_draft_session; it never had a log). */
 export async function discardSessionDraft(
   sessionId: string,
 ): Promise<SetupActionResult> {
@@ -367,14 +389,14 @@ export async function discardSessionDraft(
 
   try {
     const adminClient = createSupabaseAdminClient();
-    // cancel_draft_session checks the actor is a host, not that the draft is
-    // theirs, so ownership is checked here first.
-    const ownDraft = await readOwnDraft(
+    // cancel_draft_session also accepts a cancelled session or refuses a live
+    // one; checking for an open draft first gives one clear message.
+    const socialDraft = await readSocialDraft(
       adminClient,
       host,
       parsedSessionId.data,
     );
-    if (!ownDraft) return { ok: false, message: DRAFT_NOT_OPEN };
+    if (!socialDraft) return { ok: false, message: DRAFT_NOT_OPEN };
     const { error } = await adminClient.rpc("cancel_draft_session", {
       p_actor_user_id: host.userId,
       p_session_id: parsedSessionId.data,
@@ -459,9 +481,9 @@ export async function addClubCourt(
 }
 
 /**
- * Runs one attendance function on the caller's own draft, then reads the
+ * Runs one attendance function on the social's draft, then reads the
  * attendee list back. Each function checks in the database, in its own
- * transaction, that the draft is the caller's and still open, so there is no
+ * transaction, that the draft is the actor's social's and still open, so there is no
  * separate ownership read here (it would only add a race).
  */
 async function writeDraftAttendance(
@@ -487,7 +509,11 @@ async function writeDraftAttendance(
   try {
     return {
       ok: true,
-      participants: await listDraftParticipants(adminClient, sessionId),
+      participants: await listDraftParticipants(
+        adminClient,
+        host.socialId,
+        sessionId,
+      ),
     };
   } catch (error) {
     logActionFailure(
@@ -504,7 +530,7 @@ async function writeDraftAttendance(
 }
 
 /**
- * Marks members as attending the host's draft, or not. Set semantics: members
+ * Marks members as attending the social's draft, or not. Set semantics: members
  * already in that state are left alone, so repeats and other tabs are safe.
  * Only active members can be added; "not attending" never removes guests.
  */
@@ -576,7 +602,7 @@ export async function addDraftGuest(
   );
 }
 
-/** Removes a guest from the host's draft (already gone counts as done). */
+/** Removes a guest from the social's draft (already gone counts as done). */
 export async function removeDraftGuest(
   input: RemoveDraftGuestInput,
 ): Promise<DraftAttendanceResult> {
@@ -611,9 +637,10 @@ function sameSetupName(first: string, second: string): boolean {
 }
 
 /**
- * Saves the editor's current values as one of the host's setups (location,
+ * Saves the editor's current values as one of the social's setups (location,
  * duration, courts, format, timings, rotation; never attendance). Saving
- * under a name the host already uses (ignoring case) replaces that setup.
+ * under a name the social already uses (ignoring case) replaces that setup,
+ * whichever host saved it.
  */
 export async function saveSetup(
   input: SaveSetupInput,
@@ -658,7 +685,7 @@ export async function saveSetup(
       changeoverMinutes: draft.changeoverMinutes,
       rotation: draft.rotation,
     };
-    // Never write a row listSavedSetups / applySavedSetup couldn't read.
+    // Never write a row listSocialSavedSetups / applySavedSetup couldn't read.
     const checkedConfig = safeParseSavedSetupConfig(config);
     if (!checkedConfig.success) {
       return {
@@ -670,7 +697,7 @@ export async function saveSetup(
     const { data: existingSetups, error: readError } = await adminClient
       .from("saved_setups")
       .select("name")
-      .eq("host_id", host.userId);
+      .eq("social_id", host.socialId);
     if (readError) {
       throw new Error(`Reading the saved setups failed: ${readError.message}`);
     }
@@ -686,7 +713,7 @@ export async function saveSetup(
     return {
       ok: true,
       message: `${isReplacing ? "Replaced" : "Saved"} \u201c${setupName}\u201d.`,
-      savedSetups: await listSavedSetups(adminClient, host.userId),
+      savedSetups: await listSocialSavedSetups(adminClient, host.socialId),
     };
   } catch (error) {
     logActionFailure("Saving a setup failed", host, error);
@@ -695,7 +722,7 @@ export async function saveSetup(
 }
 
 /**
- * Copies one of the host's saved setups into their own draft: location,
+ * Copies one of the social's saved setups into its draft: location,
  * courts, format, timings, rotation, and end = the draft's start + the
  * setup's duration. The session name, start and attendance stay as they are.
  * Courts that are gone or can't host the format are left out (and named).
@@ -724,7 +751,7 @@ export async function applySavedSetup(
       .from("saved_setups")
       .select("config")
       .eq("id", setupId)
-      .eq("host_id", host.userId)
+      .eq("social_id", host.socialId)
       .maybeSingle();
     if (setupError) {
       throw new Error(`Reading the saved setup failed: ${setupError.message}`);
@@ -777,7 +804,7 @@ export async function applySavedSetup(
   }
 
   try {
-    const openSession = await readHostOpenSession(host.userId);
+    const openSession = await readSocialOpenSession(host.socialId);
     if (openSession.status !== "draft") {
       return { ok: false, message: DRAFT_NOT_OPEN };
     }
@@ -785,9 +812,9 @@ export async function applySavedSetup(
       ok: true,
       draft: openSession.draft,
       notice,
-      savedSetups: await listSavedSetups(
+      savedSetups: await listSocialSavedSetups(
         createSupabaseAdminClient(),
-        host.userId,
+        host.socialId,
       ),
     };
   } catch (error) {
@@ -809,7 +836,7 @@ export type ReadSessionDraftResult =
   { ok: true; draft: SessionDraft } | { ok: false; message: string };
 
 /**
- * The host's own draft as the database has it now. The editor re-reads it
+ * The social's draft as the database has it now. The editor re-reads it
  * after its own earlier writes land, when the page it was rendered from was
  * read before them. Reads under the host's session (RLS).
  */
@@ -830,7 +857,7 @@ export async function readSessionDraft(
   }
 
   try {
-    const openSession = await readHostOpenSession(host.userId);
+    const openSession = await readSocialOpenSession(host.socialId);
     if (
       openSession.status !== "draft" ||
       openSession.draft.sessionId !== parsedSessionId.data

@@ -45,28 +45,28 @@ isOneToOne: false
                   ]
                 },"checkin_requests": {
                   Row: {
-                    "created_at": string,"decided_at": string | null,"decided_by": string | null,"device_token_hash": string,"first_name": string,"id": string,"ip_hash": string,"last_name": string,"member_id": string | null,"session_id": string,"session_participant_id": string | null,"skill_level": Database["public"]['Enums']["skill_level"] | null,"status": Database["public"]['Enums']["checkin_request_status"]
+                    "created_at": string,"decided_at": string | null,"decided_by": string | null,"device_token_hash": string,"first_name": string,"id": string,"ip_hash": string,"last_name": string,"member_id": string | null,"session_id": string,"session_participant_id": string | null,"skill_level": Database["public"]['Enums']["skill_level"] | null,"social_id": string,"status": Database["public"]['Enums']["checkin_request_status"]
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"device_token_hash": string,"first_name": string,"id"?: string,"ip_hash": string,"last_name": string,"member_id"?: string | null,"session_id": string,"session_participant_id"?: string | null,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"status"?: Database["public"]['Enums']["checkin_request_status"]
+                    "created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"device_token_hash": string,"first_name": string,"id"?: string,"ip_hash": string,"last_name": string,"member_id"?: string | null,"session_id": string,"session_participant_id"?: string | null,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id": string,"status"?: Database["public"]['Enums']["checkin_request_status"]
                   }
                   Update: {
-                    "created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"device_token_hash"?: string,"first_name"?: string,"id"?: string,"ip_hash"?: string,"last_name"?: string,"member_id"?: string | null,"session_id"?: string,"session_participant_id"?: string | null,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"status"?: Database["public"]['Enums']["checkin_request_status"]
+                    "created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"device_token_hash"?: string,"first_name"?: string,"id"?: string,"ip_hash"?: string,"last_name"?: string,"member_id"?: string | null,"session_id"?: string,"session_participant_id"?: string | null,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id"?: string,"status"?: Database["public"]['Enums']["checkin_request_status"]
                   }
                   Relationships: [
                     {
-      foreignKeyName: "checkin_requests_member_id_fkey"
-      columns: ["member_id"]
+      foreignKeyName: "checkin_requests_member_id_social_id_fkey"
+      columns: ["member_id","social_id"]
 isOneToOne: false
       referencedRelation: "members"
-      referencedColumns: ["id"]
+      referencedColumns: ["id","social_id"]
     },{
-      foreignKeyName: "checkin_requests_session_id_fkey"
-      columns: ["session_id"]
+      foreignKeyName: "checkin_requests_session_id_social_id_fkey"
+      columns: ["session_id","social_id"]
 isOneToOne: false
       referencedRelation: "sessions"
-      referencedColumns: ["id"]
+      referencedColumns: ["id","social_id"]
     },{
       foreignKeyName: "checkin_requests_session_participant_id_fkey"
       columns: ["session_participant_id"]
@@ -191,14 +191,14 @@ isOneToOne: false
                   ]
                 },"saved_setups": {
                   Row: {
-                    "config": NonNullable<Json>,"created_at": string,"host_id": string,"id": string,"last_used_at": string,"name": string,"updated_at": string
+                    "config": NonNullable<Json>,"created_at": string,"host_id": string | null,"id": string,"last_used_at": string,"name": string,"social_id": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "config": NonNullable<Json>,"created_at"?: string,"host_id": string,"id"?: string,"last_used_at"?: string,"name": string,"updated_at"?: string
+                    "config": NonNullable<Json>,"created_at"?: string,"host_id"?: string | null,"id"?: string,"last_used_at"?: string,"name": string,"social_id": string,"updated_at"?: string
                   }
                   Update: {
-                    "config"?: NonNullable<Json>,"created_at"?: string,"host_id"?: string,"id"?: string,"last_used_at"?: string,"name"?: string,"updated_at"?: string
+                    "config"?: NonNullable<Json>,"created_at"?: string,"host_id"?: string | null,"id"?: string,"last_used_at"?: string,"name"?: string,"social_id"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -207,6 +207,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "hosts"
       referencedColumns: ["user_id"]
+    },{
+      foreignKeyName: "saved_setups_social_id_fkey"
+      columns: ["social_id"]
+isOneToOne: false
+      referencedRelation: "socials"
+      referencedColumns: ["id"]
     }
                   ]
                 },"session_events": {
@@ -231,40 +237,40 @@ isOneToOne: false
                   ]
                 },"session_participants": {
                   Row: {
-                    "created_at": string,"first_name": string,"id": string,"is_guest": boolean,"last_name": string,"member_id": string | null,"session_id": string,"skill_level": Database["public"]['Enums']["skill_level"] | null
+                    "created_at": string,"first_name": string,"id": string,"is_guest": boolean,"last_name": string,"member_id": string | null,"session_id": string,"skill_level": Database["public"]['Enums']["skill_level"] | null,"social_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"first_name": string,"id"?: string,"is_guest"?: boolean,"last_name": string,"member_id"?: string | null,"session_id": string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null
+                    "created_at"?: string,"first_name": string,"id"?: string,"is_guest"?: boolean,"last_name": string,"member_id"?: string | null,"session_id": string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id": string
                   }
                   Update: {
-                    "created_at"?: string,"first_name"?: string,"id"?: string,"is_guest"?: boolean,"last_name"?: string,"member_id"?: string | null,"session_id"?: string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null
+                    "created_at"?: string,"first_name"?: string,"id"?: string,"is_guest"?: boolean,"last_name"?: string,"member_id"?: string | null,"session_id"?: string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id"?: string
                   }
                   Relationships: [
                     {
-      foreignKeyName: "session_participants_member_id_fkey"
-      columns: ["member_id"]
+      foreignKeyName: "session_participants_member_id_social_id_fkey"
+      columns: ["member_id","social_id"]
 isOneToOne: false
       referencedRelation: "members"
-      referencedColumns: ["id"]
+      referencedColumns: ["id","social_id"]
     },{
-      foreignKeyName: "session_participants_session_id_fkey"
-      columns: ["session_id"]
+      foreignKeyName: "session_participants_session_id_social_id_fkey"
+      columns: ["session_id","social_id"]
 isOneToOne: false
       referencedRelation: "sessions"
-      referencedColumns: ["id"]
+      referencedColumns: ["id","social_id"]
     }
                   ]
                 },"sessions": {
                   Row: {
-                    "checkin_open": boolean,"config_snapshot": Json | null,"created_at": string,"draft_revision": number,"ended_at": string | null,"final_stats": Json | null,"host_id": string | null,"host_name": string,"id": string,"last_seq": number,"location": string | null,"name": string,"planned_end": string,"planned_start": string,"started_at": string | null,"status": Database["public"]['Enums']["session_status"],"updated_at": string
+                    "checkin_open": boolean,"config_snapshot": Json | null,"created_at": string,"draft_revision": number,"ended_at": string | null,"final_stats": Json | null,"host_id": string | null,"host_name": string,"id": string,"last_seq": number,"location": string | null,"name": string,"planned_end": string,"planned_start": string,"social_id": string,"started_at": string | null,"status": Database["public"]['Enums']["session_status"],"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "checkin_open"?: boolean,"config_snapshot"?: Json | null,"created_at"?: string,"draft_revision"?: number,"ended_at"?: string | null,"final_stats"?: Json | null,"host_id"?: string | null,"host_name": string,"id"?: string,"last_seq"?: number,"location"?: string | null,"name": string,"planned_end": string,"planned_start": string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["session_status"],"updated_at"?: string
+                    "checkin_open"?: boolean,"config_snapshot"?: Json | null,"created_at"?: string,"draft_revision"?: number,"ended_at"?: string | null,"final_stats"?: Json | null,"host_id"?: string | null,"host_name": string,"id"?: string,"last_seq"?: number,"location"?: string | null,"name": string,"planned_end": string,"planned_start": string,"social_id": string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["session_status"],"updated_at"?: string
                   }
                   Update: {
-                    "checkin_open"?: boolean,"config_snapshot"?: Json | null,"created_at"?: string,"draft_revision"?: number,"ended_at"?: string | null,"final_stats"?: Json | null,"host_id"?: string | null,"host_name"?: string,"id"?: string,"last_seq"?: number,"location"?: string | null,"name"?: string,"planned_end"?: string,"planned_start"?: string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["session_status"],"updated_at"?: string
+                    "checkin_open"?: boolean,"config_snapshot"?: Json | null,"created_at"?: string,"draft_revision"?: number,"ended_at"?: string | null,"final_stats"?: Json | null,"host_id"?: string | null,"host_name"?: string,"id"?: string,"last_seq"?: number,"location"?: string | null,"name"?: string,"planned_end"?: string,"planned_start"?: string,"social_id"?: string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["session_status"],"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -273,6 +279,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "hosts"
       referencedColumns: ["user_id"]
+    },{
+      foreignKeyName: "sessions_social_id_fkey"
+      columns: ["social_id"]
+isOneToOne: false
+      referencedRelation: "socials"
+      referencedColumns: ["id"]
     }
                   ]
                 },"socials": {

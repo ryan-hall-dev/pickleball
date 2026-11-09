@@ -1,7 +1,8 @@
 -- Row-level security and grants (docs/decisions/0002-server-only-writes.md):
 -- anon reads and executes nothing; a signed-in non-host reads nothing; a host
--- reads their own social, its hosts, members and courts (the session tables
--- stay installation-wide until A3) but writes nothing with their own session;
+-- reads their own social and everything in it (hosts, members, courts, saved
+-- setups, sessions and everything under them) but writes nothing with their
+-- own session;
 -- only service_role executes the public functions; the log is append-only for
 -- every role. Isolation between socials: 11_social_isolation.test.sql.
 begin;
@@ -23,14 +24,14 @@ insert into public.member_devices (social_id, token_hash, member_id) values
   ('50000000-0000-4000-8000-000000000001', repeat('a', 64), 'b0000000-0000-4000-8000-000000000001');
 insert into public.courts (id, social_id, name) values
   ('c0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 'pgTAP Court');
-insert into public.saved_setups (host_id, name, config) values
-  ('a0000000-0000-4000-8000-000000000002', 'Tuesday social', '{}');
-insert into public.sessions (id, host_id, name, host_name, planned_start, planned_end) values
-  ('d0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', 'Hal Host', now(), now() + interval '2 hours');
-insert into public.session_participants (id, session_id, member_id, first_name, last_name) values
-  ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
-insert into public.checkin_requests (session_id, first_name, last_name, skill_level, device_token_hash, ip_hash) values
-  ('d0000000-0000-4000-8000-000000000001', 'Zoe', 'Park', 'beginner', repeat('b', 64), repeat('c', 64));
+insert into public.saved_setups (social_id, host_id, name, config) values
+  ('50000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', '{}');
+insert into public.sessions (id, social_id, host_id, name, host_name, planned_start, planned_end) values
+  ('d0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', 'Hal Host', now(), now() + interval '2 hours');
+insert into public.session_participants (id, session_id, social_id, member_id, first_name, last_name) values
+  ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
+insert into public.checkin_requests (session_id, social_id, first_name, last_name, skill_level, device_token_hash, ip_hash) values
+  ('d0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 'Zoe', 'Park', 'beginner', repeat('b', 64), repeat('c', 64));
 insert into public.checkin_attempts (kind, session_id, device_token_hash, ip_hash) values
   ('search', 'd0000000-0000-4000-8000-000000000001', repeat('b', 64), repeat('c', 64));
 -- The owner may insert (functions run as the owner); used to test update/delete blocking.
@@ -69,8 +70,8 @@ select is(
   (select string_agg(pronamespace::regnamespace::text || '.' || proname::text, ',' order by proname) from pg_proc
    where pronamespace in ('public'::regnamespace, 'private'::regnamespace)
      and has_function_privilege('authenticated', oid, 'execute')),
-  'private.current_social_id,private.is_host',
-  'authenticated can execute only the RLS helpers (is_host stays until A3 scopes the session tables)'
+  'private.current_social_id',
+  'authenticated can execute only the RLS helper'
 );
 select set_eq(
   $$select proname::text from pg_proc
@@ -89,7 +90,7 @@ select is(
   (select count(*) from pg_proc
    where pronamespace = 'private'::regnamespace and has_function_privilege('service_role', oid, 'execute')),
   0::bigint,
-  'nobody but the owner executes private helpers (besides the RLS helpers)'
+  'nobody but the owner executes private helpers (besides the RLS helper)'
 );
 select is(
   (select count(*)

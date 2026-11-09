@@ -12,9 +12,10 @@ import {
 } from "./setupRules";
 
 // Reads for the Setup screen use the signed-in host's session, so RLS decides
-// what is visible (hosts only; courts and members of the host's own social
-// only, so the court picker and "Who's playing?" never list another
-// social's). Writes live in setupActions.ts.
+// what is visible: only the host's own social's courts, members, sessions and
+// saved setups, so nothing of another social is ever listed. Queries still
+// filter by social where the service-role client (which bypasses RLS) reuses
+// them. Writes live in setupActions.ts.
 
 export interface ClubCourt {
   id: string;
@@ -50,22 +51,26 @@ export interface DraftParticipant {
   isMemberActive: boolean | null;
 }
 
-/** The host's one open session (the sessions_one_open_per_host_idx index). */
-export type HostOpenSession =
+/** The social's one open session (the sessions_one_open_per_social_idx index). */
+export type SocialOpenSession =
   | { status: "none" }
   | { status: "live"; sessionId: string; name: string }
   | { status: "draft"; draft: SessionDraft };
 
-export async function readHostOpenSession(
-  hostUserId: string,
-): Promise<HostOpenSession> {
+/**
+ * The social's open session, shared by all its hosts (co-editing: any host
+ * of the social edits the same draft). Read under RLS; filtered by social too.
+ */
+export async function readSocialOpenSession(
+  socialId: string,
+): Promise<SocialOpenSession> {
   const supabase = await createSupabaseServerClient();
   const { data: session, error } = await supabase
     .from("sessions")
     .select(
       "id, status, name, location, host_name, planned_start, planned_end, config_snapshot, draft_revision",
     )
-    .eq("host_id", hostUserId)
+    .eq("social_id", socialId)
     .in("status", ["draft", "live"])
     .maybeSingle();
   if (error)
@@ -86,7 +91,7 @@ export async function readHostOpenSession(
       plannedEnd: session.planned_end,
       config: parseSessionDraftConfig(session.config_snapshot),
       draftRevision: session.draft_revision,
-      participants: await listDraftParticipants(supabase, session.id),
+      participants: await listDraftParticipants(supabase, socialId, session.id),
     },
   };
 }
@@ -99,6 +104,7 @@ export async function readHostOpenSession(
  */
 export async function listDraftParticipants(
   supabase: SupabaseClient<Database>,
+  socialId: string,
   sessionId: string,
 ): Promise<DraftParticipant[]> {
   const rows = await readAllRows(
@@ -108,6 +114,7 @@ export async function listDraftParticipants(
         .select(
           "id, member_id, is_guest, first_name, last_name, skill_level, members(is_active)",
         )
+        .eq("social_id", socialId)
         .eq("session_id", sessionId)
         .order("created_at")
         .order("id")
@@ -142,7 +149,7 @@ export async function listActiveClubCourts(): Promise<ClubCourt[]> {
   }));
 }
 
-/** One of the host's saved setups, as the Saved setups list and reuse banner show it. */
+/** One of the social's saved setups, as the Saved setups list and reuse banner show it. */
 export interface SavedSetupSummary {
   setupId: string;
   name: string;
@@ -152,24 +159,24 @@ export interface SavedSetupSummary {
   topObjective: RotationObjective;
 }
 
-/** Plenty for one host; the list shows the most recently used first. */
+/** Plenty for one social; the list shows the most recently used first. */
 export const SAVED_SETUPS_LIST_LIMIT = 50;
 
 /**
- * The host's OWN saved setups, most recently used first. RLS also limits
- * every host to their own (saved_setups_select_own); the host filter is
- * still needed because the service-role client bypasses RLS. A row that
+ * The social's saved setups (shared by all its hosts), most recently used
+ * first. RLS also limits every host to their own social's; the social filter
+ * is still needed because the service-role client bypasses RLS. A row that
  * doesn't parse is skipped and logged (ids only) so one bad row can't break
  * the Setup screen. Takes the client like listDraftParticipants.
  */
-export async function listSavedSetups(
+export async function listSocialSavedSetups(
   supabase: SupabaseClient<Database>,
-  hostUserId: string,
+  socialId: string,
 ): Promise<SavedSetupSummary[]> {
   const { data, error } = await supabase
     .from("saved_setups")
     .select("id, name, config, last_used_at")
-    .eq("host_id", hostUserId)
+    .eq("social_id", socialId)
     .order("last_used_at", { ascending: false })
     .order("id")
     .limit(SAVED_SETUPS_LIST_LIMIT);
@@ -181,7 +188,7 @@ export async function listSavedSetups(
     if (!parsed.success) {
       console.error("Skipping a saved setup with a malformed config", {
         setupId: row.id,
-        hostUserId,
+        socialId,
       });
       return [];
     }
@@ -197,9 +204,9 @@ export async function listSavedSetups(
   });
 }
 
-/** The signed-in host's saved setups, read under RLS. */
-export async function listOwnSavedSetups(
-  hostUserId: string,
+/** The signed-in host's social's saved setups, read under RLS. */
+export async function listSocialSavedSetupsUnderRls(
+  socialId: string,
 ): Promise<SavedSetupSummary[]> {
-  return listSavedSetups(await createSupabaseServerClient(), hostUserId);
+  return listSocialSavedSetups(await createSupabaseServerClient(), socialId);
 }

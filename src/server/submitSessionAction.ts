@@ -256,8 +256,10 @@ function isSameRequest(
  * `eventId` (idempotency) and the `expectedLastSeq` the host was looking at.
  *
  * `userClient` is the signed-in host's cookie client: it identifies the actor
- * and reads the log under RLS. The write goes through the service-role client
- * with that verified actor id, which the database checks against `hosts`.
+ * and reads the log under RLS, so only a session of the host's own social is
+ * found. The write goes through the service-role client with that verified
+ * actor id; the database derives the actor's social from `hosts` and refuses
+ * another social's session (SESSION_NOT_FOUND). Any host of the social may act.
  *
  * Expected outcomes are returned (duplicate, conflict, rejected action);
  * anything else (not a host, unknown session, corrupt log, database failure)
@@ -281,7 +283,9 @@ export async function submitSessionAction(
 
   const log = await loadSessionLog(userClient, sessionId);
   if (!log) {
-    throw new Error(`Session ${sessionId} not found (or you are not a host).`);
+    throw new Error(
+      `Session ${sessionId} not found (or it isn't your social's, or you are not a host).`,
+    );
   }
   const replayed = replay(log.events);
   if (!replayed.ok) {

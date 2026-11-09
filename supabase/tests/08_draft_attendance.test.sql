@@ -7,26 +7,32 @@ select plan(37);
 insert into auth.users (id, email) values
   ('a8000000-0000-4000-8000-000000000001', 'pgtap-attendance-owner@example.test'),
   ('a8000000-0000-4000-8000-000000000002', 'pgtap-attendance-other@example.test'),
-  ('a8000000-0000-4000-8000-000000000003', 'pgtap-attendance-outsider@example.test');
-insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000008', 'pgTAP Social');
+  ('a8000000-0000-4000-8000-000000000003', 'pgtap-attendance-outsider@example.test'),
+  ('a8000000-0000-4000-8000-000000000004', 'pgtap-attendance-cohost@example.test');
+-- The owner and a co-host share one social; the other host runs another social.
+insert into public.socials (id, name) values
+  ('50000000-0000-4000-8000-000000000008', 'pgTAP Social'),
+  ('50000000-0000-4000-8000-000000000018', 'pgTAP Other Social');
 insert into public.hosts (user_id, display_name, role, social_id) values
   ('a8000000-0000-4000-8000-000000000001', 'Owner Host', 'host', '50000000-0000-4000-8000-000000000008'),
-  ('a8000000-0000-4000-8000-000000000002', 'Other Host', 'host', '50000000-0000-4000-8000-000000000008');
+  ('a8000000-0000-4000-8000-000000000004', 'Co Host', 'host', '50000000-0000-4000-8000-000000000008'),
+  ('a8000000-0000-4000-8000-000000000002', 'Other Host', 'host', '50000000-0000-4000-8000-000000000018');
 insert into public.members (social_id, id, first_name, last_name, skill_level, is_active) values
   ('50000000-0000-4000-8000-000000000008', 'b8000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'advanced', true),
   ('50000000-0000-4000-8000-000000000008', 'b8000000-0000-4000-8000-000000000002', 'Kofi', 'Mensah', null, true),
-  ('50000000-0000-4000-8000-000000000008', 'b8000000-0000-4000-8000-000000000003', 'Ina', 'Inactive', 'beginner', false);
-insert into public.sessions (id, host_id, name, host_name, planned_start, planned_end, status) values
-  ('d8000000-0000-4000-8000-000000000001', 'a8000000-0000-4000-8000-000000000001', 'Owner draft', 'Owner Host',
+  ('50000000-0000-4000-8000-000000000008', 'b8000000-0000-4000-8000-000000000003', 'Ina', 'Inactive', 'beginner', false),
+  ('50000000-0000-4000-8000-000000000018', 'b8000000-0000-4000-8000-000000000004', 'Omar', 'Other', 'beginner', true);
+insert into public.sessions (id, social_id, host_id, name, host_name, planned_start, planned_end, status) values
+  ('d8000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000008', 'a8000000-0000-4000-8000-000000000001', 'Owner draft', 'Owner Host',
    now(), now() + interval '2 hours', 'draft'),
-  ('d8000000-0000-4000-8000-000000000002', 'a8000000-0000-4000-8000-000000000002', 'Other draft', 'Other Host',
+  ('d8000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000018', 'a8000000-0000-4000-8000-000000000002', 'Other draft', 'Other Host',
    now(), now() + interval '2 hours', 'draft'),
-  -- The owner's earlier session, no longer a draft.
-  ('d8000000-0000-4000-8000-000000000003', 'a8000000-0000-4000-8000-000000000001', 'Old one', 'Owner Host',
+  -- The social's earlier session, no longer a draft.
+  ('d8000000-0000-4000-8000-000000000003', '50000000-0000-4000-8000-000000000008', 'a8000000-0000-4000-8000-000000000001', 'Old one', 'Owner Host',
    now(), now() + interval '2 hours', 'cancelled');
--- The other host's attendee, which nothing here may touch.
-insert into public.session_participants (id, session_id, member_id, first_name, last_name) values
-  ('e8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000002', 'b8000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
+-- The other social's attendee, which nothing here may touch.
+insert into public.session_participants (id, session_id, social_id, member_id, first_name, last_name) values
+  ('e8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000018', 'b8000000-0000-4000-8000-000000000004', 'Omar', 'Other');
 
 -- Grants: only the server's secret key can call them.
 select ok(not has_function_privilege('anon', 'public.set_draft_member_attendance(uuid, uuid, uuid[], boolean)', 'execute'),
@@ -59,16 +65,16 @@ select throws_ok(
 select throws_ok(
   $$select public.set_draft_member_attendance('a8000000-0000-4000-8000-000000000002', 'd8000000-0000-4000-8000-000000000001',
     array['b8000000-0000-4000-8000-000000000001']::uuid[], true)$$,
-  'P0002', 'DRAFT_NOT_OPEN', 'another host cannot change attendance on someone else''s draft'
+  'P0002', 'DRAFT_NOT_OPEN', 'a host of another social cannot change the draft''s attendance'
 );
 select throws_ok(
   $$select public.add_draft_guest('a8000000-0000-4000-8000-000000000002', 'd8000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Kai', 'Lee', null)$$,
-  'P0002', 'DRAFT_NOT_OPEN', 'another host cannot add a guest to someone else''s draft'
+  'P0002', 'DRAFT_NOT_OPEN', 'a host of another social cannot add a guest to the draft'
 );
 select throws_ok(
   $$select public.remove_draft_guest('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000002',
     'e8000000-0000-4000-8000-000000000001')$$,
-  'P0002', 'DRAFT_NOT_OPEN', 'a host cannot remove anyone from someone else''s draft'
+  'P0002', 'DRAFT_NOT_OPEN', 'a host cannot remove anyone from another social''s draft'
 );
 select throws_ok(
   $$select public.set_draft_member_attendance('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000003',
@@ -104,9 +110,9 @@ select results_eq(
 create temporary table first_rows on commit drop as
   select id, member_id from public.session_participants where session_id = 'd8000000-0000-4000-8000-000000000001';
 select lives_ok(
-  $$select public.set_draft_member_attendance('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000001',
+  $$select public.set_draft_member_attendance('a8000000-0000-4000-8000-000000000004', 'd8000000-0000-4000-8000-000000000001',
     array['b8000000-0000-4000-8000-000000000001', 'b8000000-0000-4000-8000-000000000002']::uuid[], true)$$,
-  'marking the same members again is fine (another tab, a retry)'
+  'a co-host marks the same members again on the social''s draft (co-editing, a retry)'
 );
 select set_eq(
   $$select id, member_id from public.session_participants where session_id = 'd8000000-0000-4000-8000-000000000001'$$,
@@ -190,8 +196,8 @@ select is(
 
 -- Clear: every attending member, after one was approved from a check-in ---------------------
 reset role;
-insert into public.checkin_requests (session_id, member_id, first_name, last_name, status, device_token_hash, ip_hash, decided_at, session_participant_id)
-select 'd8000000-0000-4000-8000-000000000001', 'b8000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'approved',
+insert into public.checkin_requests (session_id, social_id, member_id, first_name, last_name, status, device_token_hash, ip_hash, decided_at, session_participant_id)
+select 'd8000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000008', 'b8000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'approved',
        repeat('a', 64), repeat('b', 64), now(), id
 from public.session_participants
 where session_id = 'd8000000-0000-4000-8000-000000000001' and member_id = 'b8000000-0000-4000-8000-000000000001';
@@ -220,7 +226,7 @@ select lives_ok(
 select is(
   (select count(*) from public.session_participants where id = 'e8000000-0000-4000-8000-000000000001'),
   1::bigint,
-  'the other host''s draft is untouched'
+  'the other social''s draft is untouched'
 );
 
 select * from finish();

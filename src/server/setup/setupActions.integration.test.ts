@@ -2,13 +2,16 @@
 // The Setup screen's draft writes and reads against the LOCAL Supabase stack
 // (`pnpm db:start`):
 //   * only hosts may create, edit or discard drafts and change attendance,
-//     only the social manager adds courts, and a host can never edit, discard
-//     or change the attendance of another host's draft;
-//   * create / load / update / discard a draft, the one-open-session rule,
-//     adding a club court, and attendance (members, guests, Clear).
-// Test courts carry a unique token in their name; test sessions belong to
-// test hosts. Everything created is removed afterwards. Skips when the stack
-// isn't running, unless REQUIRE_LOCAL_SUPABASE=1.
+//     only the social manager adds courts; every host of a social works on
+//     the social's one draft (co-editing), and a host of another social can
+//     never see, edit, discard or change the attendance of it;
+//   * create / load / update / discard a draft, the one-open-session-per-social
+//     rule, adding a club court, attendance (members, guests, Clear), saved
+//     setups shared within a social, and the draft revision between co-hosts.
+// Every host group gets its own test social (with its own courts where it
+// needs them), so files can run in parallel. Test courts carry a unique token
+// in their name. Everything deletable is removed afterwards. Skips when the
+// stack isn't running, unless REQUIRE_LOCAL_SUPABASE=1.
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -36,8 +39,8 @@ import {
 } from "./setupActions";
 import {
   listActiveClubCourts,
-  listSavedSetups,
-  readHostOpenSession,
+  listSocialSavedSetups,
+  readSocialOpenSession,
 } from "./setupDraft";
 import {
   recommendedRotationPreferences,
@@ -121,31 +124,82 @@ function plannedTimes(hoursFromNow: number, durationMinutes = 120) {
   };
 }
 
+interface TestHost {
+  client: DatabaseClient;
+  userId: string;
+  socialId: string;
+}
+
+/** A social's test courts: doubles+singles, singles only, and a closed one. */
+interface TestCourts {
+  doublesCourtId: string;
+  singlesOnlyCourtId: string;
+  inactiveCourtId: string;
+}
+
 describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
   let admin: DatabaseClient;
-  let hostAlice: { client: DatabaseClient; userId: string };
-  let hostBob: { client: DatabaseClient; userId: string };
-  let managerCarol: { client: DatabaseClient; userId: string };
-  // Alice, Bob and Carol share one social (sessions and setups aren't scoped
-  // to socials until A3). Dan manages another social, whose courts and
-  // members Alice's social must never see or use.
+  // Bob (host) and Carol (manager) share the main social, which has the test
+  // courts. Alice and her co-host Ana run another social's draft (attendance);
+  // Omar manages a third social with a court named like the main one's.
+  // Every social is another social to the others.
+  let hostAlice: TestHost;
+  let coHostAna: TestHost;
+  let hostBob: TestHost;
+  let managerCarol: TestHost;
   let socialId: string;
+  let aliceSocialId: string;
   let otherSocialId: string;
-  let otherSocialManager: { client: DatabaseClient; userId: string };
-  // The other social's court, named like Alice's doubles court.
+  let otherSocialManager: TestHost;
+  // The other social's court, named like the main social's doubles court.
   let otherSocialCourtId: string;
   let nonHostClient: DatabaseClient;
   let signedOutClient: DatabaseClient;
   const createdUserIds: string[] = [];
+  const createdSocialIds: string[] = [];
   let doublesCourtId: string;
   let singlesOnlyCourtId: string;
   let inactiveCourtId: string;
+
+  async function createTestSocial(name: string): Promise<string> {
+    const { data, error } = await admin
+      .from("socials")
+      .insert({ name })
+      .select("id")
+      .single();
+    if (error) throw error;
+    createdSocialIds.push(data.id);
+    return data.id;
+  }
+
+  async function createTestCourts(courtSocialId: string): Promise<TestCourts> {
+    return {
+      doublesCourtId: await insertCourt(
+        "Doubles",
+        ["doubles", "singles"],
+        true,
+        courtSocialId,
+      ),
+      singlesOnlyCourtId: await insertCourt(
+        "Singles only",
+        ["singles"],
+        true,
+        courtSocialId,
+      ),
+      inactiveCourtId: await insertCourt(
+        "Closed",
+        ["doubles"],
+        false,
+        courtSocialId,
+      ),
+    };
+  }
 
   async function signedInUser(
     displayName: string | null,
     role: "host" | "manager" = "host",
     hostSocialId = socialId,
-  ): Promise<{ client: DatabaseClient; userId: string }> {
+  ): Promise<TestHost> {
     const email = `integration-setup-${randomUUID()}@example.test`;
     const password = `pw-${randomUUID()}`;
     const created = await admin.auth.admin.createUser({
@@ -172,7 +226,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     );
     const signIn = await client.auth.signInWithPassword({ email, password });
     if (signIn.error) throw signIn.error;
-    return { client, userId };
+    return { client, userId, socialId: hostSocialId };
   }
 
   async function insertCourt(
@@ -196,22 +250,20 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     return data.id;
   }
 
-  async function openSessionRows(hostUserId: string) {
+  /** Every session of the host's social, oldest first. */
+  async function socialSessionRows(host: TestHost) {
     const { data, error } = await admin
       .from("sessions")
       .select("*")
-      .eq("host_id", hostUserId)
+      .eq("social_id", host.socialId)
       .order("created_at");
     if (error) throw error;
     return data;
   }
 
-  async function openDraftFor(host: {
-    client: DatabaseClient;
-    userId: string;
-  }) {
+  async function openDraftFor(host: TestHost) {
     actingClient = host.client;
-    const openSession = await readHostOpenSession(host.userId);
+    const openSession = await readSocialOpenSession(host.socialId);
     if (openSession.status !== "draft") {
       throw new Error(`expected a draft, got ${openSession.status}`);
     }
@@ -262,7 +314,8 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       location: "Riverside courts",
       hostName: "Alice A.",
       ...plannedTimes(48, 90),
-      courtIds: [doublesCourtId],
+      // Courts belong to one social: tests that save courts name them.
+      courtIds: [],
       matchFormat: "doubles",
       targetMatchMinutes: 12,
       changeoverMinutes: 3,
@@ -282,26 +335,16 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     admin = createClient<Database>(localStack!.apiUrl, localStack!.secretKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: social, error: socialError } = await admin
-      .from("socials")
-      .insert({ name: "Integration setup social" })
-      .select("id")
-      .single();
-    if (socialError) throw socialError;
-    socialId = social.id;
-    const { data: otherSocial, error: otherSocialError } = await admin
-      .from("socials")
-      .insert({ name: "Integration setup other social" })
-      .select("id")
-      .single();
-    if (otherSocialError) throw otherSocialError;
-    otherSocialId = otherSocial.id;
+    socialId = await createTestSocial("Integration setup social");
+    aliceSocialId = await createTestSocial("Integration setup Alice social");
+    otherSocialId = await createTestSocial("Integration setup other social");
     otherSocialManager = await signedInUser(
       "Omar Other",
       "manager",
       otherSocialId,
     );
-    hostAlice = await signedInUser("Alice Setup");
+    hostAlice = await signedInUser("Alice Setup", "host", aliceSocialId);
+    coHostAna = await signedInUser("Ana Cohost", "host", aliceSocialId);
     hostBob = await signedInUser("Bob Setup");
     managerCarol = await signedInUser("Carol Manager", "manager");
     nonHostClient = (await signedInUser(null)).client;
@@ -310,9 +353,8 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       localStack!.publishableKey,
       { auth: { persistSession: false, autoRefreshToken: false } },
     );
-    doublesCourtId = await insertCourt("Doubles", ["doubles", "singles"]);
-    singlesOnlyCourtId = await insertCourt("Singles only", ["singles"]);
-    inactiveCourtId = await insertCourt("Closed", ["doubles"], false);
+    ({ doublesCourtId, singlesOnlyCourtId, inactiveCourtId } =
+      await createTestCourts(socialId));
     otherSocialCourtId = await insertCourt(
       "Doubles",
       ["doubles", "singles"],
@@ -323,35 +365,12 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
 
   afterAll(async () => {
     // Test-only cleanup with the secret key; the app never deletes sessions or courts.
-    const hostIds = createdUserIds;
-    const { data: sessions } = await admin
-      .from("sessions")
-      .select("id, status")
-      .in("host_id", hostIds);
-    const sessionIds = (sessions ?? []).map((session) => session.id);
-    const draftIds = (sessions ?? [])
-      .filter((session) => session.status === "draft")
-      .map((session) => session.id);
-    if (draftIds.length > 0) {
-      // Attendees first (they reference the session and members); the
-      // database only allows that while a session is a draft.
-      await admin
-        .from("session_participants")
-        .delete()
-        .in("session_id", draftIds);
-    }
-    if (sessionIds.length > 0) {
-      await admin.from("sessions").delete().in("id", sessionIds);
-    }
-    await admin.from("hosts").delete().in("user_id", hostIds);
-    for (const userId of hostIds) {
+    await admin.from("hosts").delete().in("user_id", createdUserIds);
+    for (const userId of createdUserIds) {
       await admin.auth.admin.deleteUser(userId);
     }
-    // Then both socials, with their courts and members.
-    await deleteTestSocials(
-      admin,
-      [socialId, otherSocialId].filter((id) => id !== undefined),
-    );
+    // Then the socials, with their setups, sessions, courts and members.
+    await deleteTestSocials(admin, createdSocialIds);
     vi.unstubAllEnvs();
   });
 
@@ -378,8 +397,8 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
             name: "Alice social",
             ...plannedTimes(24),
           }),
-        ).toEqual({ ok: true });
-        const aliceDraftBefore = await openSessionRows(hostAlice.userId);
+        ).toEqual({ ok: true, notice: null });
+        const aliceDraftBefore = await socialSessionRows(hostAlice);
         const expected = {
           ok: false,
           message: HOST_ACCESS_DENIAL_MESSAGES[denial],
@@ -447,9 +466,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           .eq("name", "Sneaky setup");
         expect(sneakySetupCount).toBe(0);
 
-        expect(await openSessionRows(hostAlice.userId)).toEqual(
-          aliceDraftBefore,
-        );
+        expect(await socialSessionRows(hostAlice)).toEqual(aliceDraftBefore);
         const { count: attendeeCount } = await admin
           .from("session_participants")
           .select("id", { count: "exact", head: true })
@@ -463,9 +480,9 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       },
     );
 
-    it("never lets a host edit or discard another host's draft", async () => {
+    it("never lets another social's host see, edit or discard the draft", async () => {
       const aliceDraft = await openDraftFor(hostAlice);
-      const before = await openSessionRows(hostAlice.userId);
+      const before = await socialSessionRows(hostAlice);
 
       actingClient = hostBob.client;
       expect(
@@ -477,17 +494,58 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         ok: false,
         message: DRAFT_NOT_OPEN,
       });
-      // Bob's own setup page doesn't show Alice's draft.
-      expect(await readHostOpenSession(hostBob.userId)).toEqual({
+      expect(await readSessionDraft(aliceDraft.sessionId)).toEqual({
+        ok: false,
+        message: DRAFT_NOT_OPEN,
+      });
+      // Bob's own setup page doesn't show Alice's draft, even when asked for
+      // her social (RLS reads only his own).
+      expect(await readSocialOpenSession(hostBob.socialId)).toEqual({
+        status: "none",
+      });
+      expect(await readSocialOpenSession(aliceSocialId)).toEqual({
         status: "none",
       });
 
-      expect(await openSessionRows(hostAlice.userId)).toEqual(before);
+      expect(await socialSessionRows(hostAlice)).toEqual(before);
+    });
+
+    it("lets a co-host of the social open, edit and re-read the same draft", async () => {
+      const aliceDraft = await openDraftFor(hostAlice);
+      // Starting a draft reuses the one the co-host already started, and says
+      // so (Ana's typed name isn't used).
+      actingClient = coHostAna.client;
+      expect(
+        await startSessionDraft({ name: "Ana's own", ...plannedTimes(26) }),
+      ).toEqual({
+        ok: true,
+        notice: `A co-host already started \u201c${aliceDraft.name}\u201d. You're editing it together.`,
+      });
+      const anaDraft = await openDraftFor(coHostAna);
+      expect(anaDraft.sessionId).toBe(aliceDraft.sessionId);
+      expect(await socialSessionRows(coHostAna)).toHaveLength(1);
+
+      actingClient = coHostAna.client;
+      const saved = await saveSessionDraft(
+        saveInputFor(aliceDraft.sessionId, { name: "Edited by Ana" }),
+        anaDraft.draftRevision,
+      );
+      expect(saved).toEqual({
+        ok: true,
+        draftRevision: anaDraft.draftRevision + 1,
+      });
+      const [row] = await socialSessionRows(hostAlice);
+      // Still created by Alice; edited by her co-host.
+      expect(row).toMatchObject({
+        host_id: hostAlice.userId,
+        name: "Edited by Ana",
+      });
+      expect((await openDraftFor(hostAlice)).name).toBe("Edited by Ana");
     });
 
     it("rejects invalid input before touching the database", async () => {
       const aliceDraft = await openDraftFor(hostAlice);
-      const before = await openSessionRows(hostAlice.userId);
+      const before = await socialSessionRows(hostAlice);
       expect(
         await saveAtCurrentRevision(
           saveInputFor(aliceDraft.sessionId, {
@@ -503,7 +561,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           saveInputFor(aliceDraft.sessionId, { name: "" }),
         ),
       ).toEqual({ ok: false, message: "Enter a session name." });
-      expect(await openSessionRows(hostAlice.userId)).toEqual(before);
+      expect(await socialSessionRows(hostAlice)).toEqual(before);
     });
   });
 
@@ -512,13 +570,14 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       actingClient = hostBob.client;
       const times = plannedTimes(30);
       expect(await startSessionDraft({ name: "Bob social", ...times })).toEqual(
-        { ok: true },
+        { ok: true, notice: null },
       );
+      // Their own draft again (a double click, another tab): no notice.
       expect(
         await startSessionDraft({ name: "Second try", ...plannedTimes(31) }),
-      ).toEqual({ ok: true });
+      ).toEqual({ ok: true, notice: null });
 
-      const sessions = await openSessionRows(hostBob.userId);
+      const sessions = await socialSessionRows(hostBob);
       expect(sessions).toHaveLength(1);
       expect(sessions[0]).toMatchObject({
         name: "Bob social",
@@ -565,10 +624,11 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         name: "  Bob's   Sunday social ",
         location: "",
         hostName: "Bob B.",
+        courtIds: [doublesCourtId],
       });
       expect(await saveAtCurrentRevision(input)).toEqual({ ok: true });
 
-      const [row] = await openSessionRows(hostBob.userId);
+      const [row] = await socialSessionRows(hostBob);
       expect(row).toMatchObject({
         name: "Bob's Sunday social",
         location: null,
@@ -603,7 +663,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
 
     it("refuses courts that are inactive or don't support the format", async () => {
       const draft = await openDraftFor(hostBob);
-      const before = await openSessionRows(hostBob.userId);
+      const before = await socialSessionRows(hostBob);
       actingClient = hostBob.client;
       for (const courtIds of [[singlesOnlyCourtId], [inactiveCourtId]]) {
         const result = await saveAtCurrentRevision(
@@ -611,7 +671,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         );
         expect(result).toMatchObject({ ok: false });
       }
-      expect(await openSessionRows(hostBob.userId)).toEqual(before);
+      expect(await socialSessionRows(hostBob)).toEqual(before);
 
       expect(
         await saveAtCurrentRevision(
@@ -621,7 +681,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           }),
         ),
       ).toEqual({ ok: true });
-      const [row] = await openSessionRows(hostBob.userId);
+      const [row] = await socialSessionRows(hostBob);
       expect(row.config_snapshot).toMatchObject({
         matchFormat: "singles",
         courts: [
@@ -639,7 +699,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
 
     it("refuses another social's court as unavailable, even with the same name", async () => {
       const draft = await openDraftFor(hostBob);
-      const before = await openSessionRows(hostBob.userId);
+      const before = await socialSessionRows(hostBob);
       actingClient = hostBob.client;
       const unavailable = {
         ok: false,
@@ -653,7 +713,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           }),
         ),
       ).toEqual(unavailable);
-      expect(await openSessionRows(hostBob.userId)).toEqual(before);
+      expect(await socialSessionRows(hostBob)).toEqual(before);
 
       expect(
         await saveSetup({
@@ -670,7 +730,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       expect(count).toBe(0);
     });
 
-    it("round-trips the rotation as the engine's RotationPreferences, and only the owner can write it", async () => {
+    it("round-trips the rotation as the engine's RotationPreferences, and another social's host can't write it", async () => {
       const draft = await openDraftFor(hostBob);
       const rotation = {
         objectiveOrder: [
@@ -699,7 +759,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
 
       // The raw snapshot holds exactly the engine's shape: a permutation of
       // all six objectives and all six rules as booleans, nothing else.
-      const [row] = await openSessionRows(hostBob.userId);
+      const [row] = await socialSessionRows(hostBob);
       const storedRotation = (row.config_snapshot as Record<string, unknown>)
         .rotation as RotationPreferences;
       expect(storedRotation).toEqual(rotation);
@@ -720,7 +780,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       ).toBe(true);
       expect((await openDraftFor(hostBob)).config.rotation).toEqual(rotation);
 
-      // Another host can't write it; an invalid order never reaches the database.
+      // Another social's host can't write it; an invalid order never reaches the database.
       actingClient = hostAlice.client;
       expect(
         await saveAtCurrentRevision(
@@ -764,6 +824,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       const { error } = await admin.from("session_participants").insert([
         {
           session_id: draft.sessionId,
+          social_id: socialId,
           member_id: member.id,
           // A multi-row insert sends every column, so set it explicitly.
           is_guest: false,
@@ -772,6 +833,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         },
         {
           session_id: draft.sessionId,
+          social_id: socialId,
           is_guest: true,
           first_name: "Guest",
           last_name: RUN_TOKEN,
@@ -812,9 +874,9 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       actingClient = hostBob.client;
       expect(await discardSessionDraft(draft.sessionId)).toEqual({ ok: true });
 
-      const [row] = await openSessionRows(hostBob.userId);
+      const [row] = await socialSessionRows(hostBob);
       expect(row.status).toBe("cancelled");
-      expect(await readHostOpenSession(hostBob.userId)).toEqual({
+      expect(await readSocialOpenSession(hostBob.socialId)).toEqual({
         status: "none",
       });
       expect(
@@ -830,13 +892,13 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
 
       expect(
         await startSessionDraft({ name: "Fresh start", ...plannedTimes(50) }),
-      ).toEqual({ ok: true });
+      ).toEqual({ ok: true, notice: null });
       const fresh = await openDraftFor(hostBob);
       expect(fresh.sessionId).not.toBe(draft.sessionId);
       expect(fresh.name).toBe("Fresh start");
     });
 
-    it("says so when the host already has a live session", async () => {
+    it("says so when the social already has a live session", async () => {
       const draft = await openDraftFor(hostBob);
       // Make it live directly (the real start is M6).
       const { error } = await admin
@@ -851,9 +913,9 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       ).toEqual({
         ok: false,
         message:
-          "You already have a live session. End it before setting up a new one.",
+          "Your social already has a live session. End it before setting up a new one.",
       });
-      expect(await readHostOpenSession(hostBob.userId)).toEqual({
+      expect(await readSocialOpenSession(hostBob.socialId)).toEqual({
         status: "live",
         sessionId: draft.sessionId,
         name: "Fresh start",
@@ -985,7 +1047,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     async function insertMember(
       firstName: string,
       isActive = true,
-      memberSocialId = socialId,
+      memberSocialId = aliceSocialId,
     ): Promise<string> {
       const { data, error } = await admin
         .from("members")
@@ -1210,7 +1272,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       expect(await attendeeRows(draft.sessionId)).toEqual(before);
     });
 
-    it("never changes another host's draft attendance", async () => {
+    it("never lets another social's host change the attendance, while a co-host can", async () => {
       const draft = await openDraftFor(hostAlice);
       const before = await attendeeRows(draft.sessionId);
       actingClient = hostBob.client;
@@ -1238,6 +1300,17 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           participantId: guestId,
         }),
       ).toEqual(draftNotOpen);
+      expect(await attendeeRows(draft.sessionId)).toEqual(before);
+
+      // Alice's co-host works on the same list (Grace already attends: no change).
+      actingClient = coHostAna.client;
+      expect(
+        await setDraftMemberAttendance({
+          sessionId: draft.sessionId,
+          memberIds: [graceId],
+          attending: true,
+        }),
+      ).toMatchObject({ ok: true });
       expect(await attendeeRows(draft.sessionId)).toEqual(before);
     });
 
@@ -1285,8 +1358,10 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     });
   });
   describe("saved setups", () => {
-    let hostDana: { client: DatabaseClient; userId: string };
-    let hostEve: { client: DatabaseClient; userId: string };
+    // Dana and her co-host Eve share a social with its own courts.
+    let hostDana: TestHost;
+    let coHostEve: TestHost;
+    let danaCourts: TestCourts;
     const waitsFirstRotation = {
       objectiveOrder: [
         "shortestWaits",
@@ -1307,17 +1382,19 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     } satisfies RotationPreferences;
 
     beforeAll(async () => {
-      hostDana = await signedInUser("Dana Setups");
-      hostEve = await signedInUser("Eve Setups");
-      for (const host of [hostDana, hostEve]) {
-        actingClient = host.client;
-        expect(
-          await startSessionDraft({
-            name: "Setups social",
-            ...plannedTimes(72),
-          }),
-        ).toEqual({ ok: true });
-      }
+      const danaSocialId = await createTestSocial(
+        "Integration setup Dana social",
+      );
+      danaCourts = await createTestCourts(danaSocialId);
+      hostDana = await signedInUser("Dana Setups", "host", danaSocialId);
+      coHostEve = await signedInUser("Eve Setups", "host", danaSocialId);
+      actingClient = hostDana.client;
+      expect(
+        await startSessionDraft({
+          name: "Setups social",
+          ...plannedTimes(72),
+        }),
+      ).toEqual({ ok: true, notice: null });
     });
 
     function appliedDraft(result: ApplySavedSetupResult) {
@@ -1325,11 +1402,12 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       return result;
     }
 
-    async function savedSetupRows(hostUserId: string) {
+    /** The host's social's saved setups, oldest first. */
+    async function savedSetupRows(host: TestHost) {
       const { data, error } = await admin
         .from("saved_setups")
-        .select("id, name, config, last_used_at")
-        .eq("host_id", hostUserId)
+        .select("id, name, config, last_used_at, host_id")
+        .eq("social_id", host.socialId)
         .order("created_at");
       if (error) throw error;
       return data;
@@ -1341,7 +1419,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       const setupValues = saveInputFor(draft.sessionId, {
         location: "Riverside courts",
         ...plannedTimes(72, 90),
-        courtIds: [doublesCourtId],
+        courtIds: [danaCourts.doublesCourtId],
         matchFormat: "doubles",
         targetMatchMinutes: 12,
         changeoverMinutes: 3,
@@ -1364,13 +1442,13 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       });
 
       // Stored without attendance or anything about the session.
-      const [setupRow] = await savedSetupRows(hostDana.userId);
+      const [setupRow] = await savedSetupRows(hostDana);
       expect(setupRow.config).toEqual({
         location: "Riverside courts",
         durationMinutes: 90,
         courts: [
           {
-            courtId: doublesCourtId,
+            courtId: danaCourts.doublesCourtId,
             name: `${RUN_TOKEN} Doubles`,
             format: "doubles",
           },
@@ -1388,7 +1466,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         ok: true,
         message: "Replaced \u201csaturday social\u201d.",
       });
-      const setupRows = await savedSetupRows(hostDana.userId);
+      const setupRows = await savedSetupRows(hostDana);
       expect(setupRows).toHaveLength(1);
       expect(setupRows[0].id).toBe(setupRow.id);
 
@@ -1399,7 +1477,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
             name: "Dana's Sunday",
             location: "",
             ...plannedTimes(96, 60),
-            courtIds: [singlesOnlyCourtId],
+            courtIds: [danaCourts.singlesOnlyCourtId],
             matchFormat: "singles",
             targetMatchMinutes: 20,
             changeoverMinutes: 5,
@@ -1433,7 +1511,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         config: {
           courts: [
             {
-              courtId: doublesCourtId,
+              courtId: danaCourts.doublesCourtId,
               name: `${RUN_TOKEN} Doubles`,
               format: "doubles",
             },
@@ -1449,12 +1527,12 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         Date.parse(applied.draft.plannedEnd) -
           Date.parse(applied.draft.plannedStart),
       ).toBe(90 * 60_000);
-      const [sessionRow] = await openSessionRows(hostDana.userId);
+      const [sessionRow] = await socialSessionRows(hostDana);
       expect(
         (sessionRow.config_snapshot as Record<string, unknown>).rotation,
       ).toEqual(waitsFirstRotation);
       expect(applied.savedSetups[0].setupId).toBe(setupRow.id);
-      const [usedSetup] = await savedSetupRows(hostDana.userId);
+      const [usedSetup] = await savedSetupRows(hostDana);
       expect(Date.parse(usedSetup.last_used_at)).toBeGreaterThanOrEqual(
         Date.parse(setupRows[0].last_used_at),
       );
@@ -1468,7 +1546,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           }),
         ),
       ).toEqual({ ok: true });
-      expect((await savedSetupRows(hostDana.userId))[0].config).toEqual(
+      expect((await savedSetupRows(hostDana))[0].config).toEqual(
         setupRow.config,
       );
     });
@@ -1478,14 +1556,23 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       const { data: insertedSetup, error } = await admin
         .from("saved_setups")
         .insert({
+          social_id: hostDana.socialId,
           host_id: hostDana.userId,
           name: "Has a closed court",
           config: {
             location: null,
             durationMinutes: 120,
             courts: [
-              { courtId: doublesCourtId, name: "Old name", format: "doubles" },
-              { courtId: inactiveCourtId, name: "Court 5", format: "doubles" },
+              {
+                courtId: danaCourts.doublesCourtId,
+                name: "Old name",
+                format: "doubles",
+              },
+              {
+                courtId: danaCourts.inactiveCourtId,
+                name: "Court 5",
+                format: "doubles",
+              },
             ],
             matchFormat: "doubles",
             targetMatchMinutes: 15,
@@ -1510,7 +1597,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       // Current names come from the database.
       expect(applied.draft.config.courts).toEqual([
         {
-          courtId: doublesCourtId,
+          courtId: danaCourts.doublesCourtId,
           name: `${RUN_TOKEN} Doubles`,
           format: "doubles",
         },
@@ -1520,7 +1607,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
 
     it("never writes a config it couldn't read back, and lists past a malformed row", async () => {
       const draft = await openDraftFor(hostDana);
-      const before = await savedSetupRows(hostDana.userId);
+      const before = await savedSetupRows(hostDana);
       actingClient = hostDana.client;
       // 20 seconds long: valid times, but it rounds to 0 whole minutes.
       const plannedStart = new Date(Date.now() + 80 * 3_600_000);
@@ -1538,11 +1625,12 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         message:
           "This setup can't be saved: Use a whole number of minutes from 1 to 720.",
       });
-      expect(await savedSetupRows(hostDana.userId)).toEqual(before);
+      expect(await savedSetupRows(hostDana)).toEqual(before);
 
       const { data: badRow, error } = await admin
         .from("saved_setups")
         .insert({
+          social_id: hostDana.socialId,
           host_id: hostDana.userId,
           name: "Malformed",
           config: { durationMinutes: "long" },
@@ -1551,57 +1639,94 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         .select("id")
         .single();
       if (error) throw error;
-      const listed = await listSavedSetups(admin, hostDana.userId);
+      const listed = await listSocialSavedSetups(admin, hostDana.socialId);
       expect(listed.map((setup) => setup.setupId)).not.toContain(badRow.id);
       expect(listed.length).toBe(before.length);
       expect(console.error).toHaveBeenCalledWith(
         "Skipping a saved setup with a malformed config",
-        { setupId: badRow.id, hostUserId: hostDana.userId },
+        { setupId: badRow.id, socialId: hostDana.socialId },
       );
       await admin.from("saved_setups").delete().eq("id", badRow.id);
     });
 
-    it("never lets another host see or apply someone's setup", async () => {
-      const danaDraft = await openDraftFor(hostDana);
-      const eveDraft = await openDraftFor(hostEve);
-      const [danaSetup] = await savedSetupRows(hostDana.userId);
-      const eveBefore = await openSessionRows(hostEve.userId);
-      const danaBefore = await openSessionRows(hostDana.userId);
+    it("shares setups within the social: a co-host lists, applies and replaces them", async () => {
+      const draft = await openDraftFor(coHostEve);
+      const [danaSetup] = await savedSetupRows(hostDana);
+      expect(danaSetup.host_id).toBe(hostDana.userId);
 
-      actingClient = hostEve.client;
-      expect(await listSavedSetups(hostEve.client, hostEve.userId)).toEqual([]);
+      actingClient = coHostEve.client;
+      const listed = await listSocialSavedSetups(
+        coHostEve.client,
+        coHostEve.socialId,
+      );
+      expect(listed.map((setup) => setup.setupId)).toContain(danaSetup.id);
+      const applied = appliedDraft(
+        await applyAtCurrentRevision({
+          sessionId: draft.sessionId,
+          setupId: danaSetup.id,
+        }),
+      );
+      expect(applied.draft.config.appliedSavedSetupId).toBe(danaSetup.id);
+
+      // Saving under Dana's name replaces the social's setup; Eve saved it last.
+      const setupCountBefore = (await savedSetupRows(hostDana)).length;
+      expect(
+        await saveSetup({
+          setupName: danaSetup.name,
+          draft: saveInputFor(draft.sessionId, { location: "Eve's courts" }),
+        }),
+      ).toMatchObject({
+        ok: true,
+        message: `Replaced \u201c${danaSetup.name}\u201d.`,
+      });
+      const after = await savedSetupRows(hostDana);
+      expect(after).toHaveLength(setupCountBefore);
+      expect(after.find((setup) => setup.id === danaSetup.id)).toMatchObject({
+        host_id: coHostEve.userId,
+        config: expect.objectContaining({ location: "Eve's courts" }),
+      });
+    });
+
+    it("never lets another social's host see or apply the social's setups", async () => {
+      const danaDraft = await openDraftFor(hostDana);
+      const [danaSetup] = await savedSetupRows(hostDana);
+      const danaSessionsBefore = await socialSessionRows(hostDana);
+      const danaSetupsBefore = await savedSetupRows(hostDana);
+      const omarSocialSetups = await savedSetupRows(otherSocialManager);
+
+      actingClient = otherSocialManager.client;
+      // RLS: nothing of Dana's social, even when asked for it.
+      expect(
+        await listSocialSavedSetups(
+          otherSocialManager.client,
+          hostDana.socialId,
+        ),
+      ).toEqual([]);
       const notFound = {
         ok: false,
         message: "That saved setup isn't available any more. Reload the page.",
       };
       expect(
         await applyAtCurrentRevision({
-          sessionId: eveDraft.sessionId,
-          setupId: danaSetup.id,
-        }),
-      ).toEqual(notFound);
-      expect(
-        await applyAtCurrentRevision({
           sessionId: danaDraft.sessionId,
           setupId: danaSetup.id,
         }),
       ).toEqual(notFound);
-      expect(await openSessionRows(hostEve.userId)).toEqual(eveBefore);
-      expect(await openSessionRows(hostDana.userId)).toEqual(danaBefore);
-      expect((await savedSetupRows(hostDana.userId))[0]).toEqual(danaSetup);
-
-      // Eve saving under Dana's name makes her own setup.
+      // Saving under the same name makes the other social's own setup.
       expect(
         await saveSetup({
           setupName: danaSetup.name,
-          draft: saveInputFor(eveDraft.sessionId),
+          draft: saveInputFor(danaDraft.sessionId),
         }),
       ).toMatchObject({
         ok: true,
         message: `Saved \u201c${danaSetup.name}\u201d.`,
       });
-      expect((await savedSetupRows(hostDana.userId))[0]).toEqual(danaSetup);
-      expect(await savedSetupRows(hostEve.userId)).toHaveLength(1);
+      expect(await savedSetupRows(otherSocialManager)).toHaveLength(
+        omarSocialSetups.length + 1,
+      );
+      expect(await socialSessionRows(hostDana)).toEqual(danaSessionsBefore);
+      expect(await savedSetupRows(hostDana)).toEqual(danaSetupsBefore);
     });
   });
 
@@ -1609,17 +1734,23 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     const CHANGED_ELSEWHERE = {
       ok: false,
       message:
-        "Setup was changed in another tab or by another device. Reload to see the latest \u2014 your unsaved changes here will be lost.",
+        "Setup was changed by another host, tab or device. Reload to see the latest \u2014 your unsaved changes here will be lost.",
       isConflict: true,
     };
-    let hostFrank: { client: DatabaseClient; userId: string };
+    // Frank and his co-host Gina share a social.
+    let hostFrank: TestHost;
+    let coHostGina: TestHost;
 
     beforeAll(async () => {
-      hostFrank = await signedInUser("Frank Tabs");
+      const frankSocialId = await createTestSocial(
+        "Integration setup Frank social",
+      );
+      hostFrank = await signedInUser("Frank Tabs", "host", frankSocialId);
+      coHostGina = await signedInUser("Gina Cohost", "host", frankSocialId);
       actingClient = hostFrank.client;
       expect(
         await startSessionDraft({ name: "Two tabs", ...plannedTimes(120) }),
-      ).toEqual({ ok: true });
+      ).toEqual({ ok: true, notice: null });
     });
 
     it("refuses a save based on a stale revision and overwrites nothing", async () => {
@@ -1648,7 +1779,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           loaded.draftRevision,
         ),
       ).toEqual(CHANGED_ELSEWHERE);
-      const [row] = await openSessionRows(hostFrank.userId);
+      const [row] = await socialSessionRows(hostFrank);
       expect(row).toMatchObject({ name: "Tab A", draft_revision: 1 });
       expect(
         (row.config_snapshot as unknown as { rotation: RotationPreferences })
@@ -1666,7 +1797,59 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       ).toEqual({ ok: true, draftRevision: 2 });
     });
 
-    it("re-reads only the host's own open draft, at its current revision", async () => {
+    it("refuses a co-host's save based on a revision the other host already moved on", async () => {
+      const frankLoaded = await openDraftFor(hostFrank);
+      const ginaLoaded = await openDraftFor(coHostGina);
+      expect(ginaLoaded).toEqual(frankLoaded);
+
+      actingClient = hostFrank.client;
+      expect(
+        await saveSessionDraft(
+          saveInputFor(frankLoaded.sessionId, { name: "Frank's edit" }),
+          frankLoaded.draftRevision,
+        ),
+      ).toEqual({ ok: true, draftRevision: frankLoaded.draftRevision + 1 });
+      actingClient = coHostGina.client;
+      expect(
+        await saveSessionDraft(
+          saveInputFor(ginaLoaded.sessionId, { name: "Gina's edit" }),
+          ginaLoaded.draftRevision,
+        ),
+      ).toEqual(CHANGED_ELSEWHERE);
+      expect((await openDraftFor(coHostGina)).name).toBe("Frank's edit");
+    });
+
+    it("lets exactly one of two concurrent saves at one revision win", async () => {
+      const loaded = await openDraftFor(hostFrank);
+      // Straight to the database function, in parallel, as both co-hosts.
+      const saveAs = (actor: TestHost, name: string) =>
+        admin.rpc("save_session_draft", {
+          p_actor_user_id: actor.userId,
+          p_session_id: loaded.sessionId,
+          p_expected_draft_revision: loaded.draftRevision,
+          p_name: name,
+          p_location: "",
+          p_host_name: "Co-hosts",
+          p_planned_start: loaded.plannedStart,
+          p_planned_end: loaded.plannedEnd,
+          p_config_patch: {},
+        });
+      const results = await Promise.all([
+        saveAs(hostFrank, "Race Frank"),
+        saveAs(coHostGina, "Race Gina"),
+      ]);
+      const winners = results.filter((result) => result.error === null);
+      const conflicts = results.filter(
+        (result) => result.error?.message === "DRAFT_CHANGED_ELSEWHERE",
+      );
+      expect(winners).toHaveLength(1);
+      expect(conflicts).toHaveLength(1);
+      const saved = await openDraftFor(hostFrank);
+      expect(saved.draftRevision).toBe(loaded.draftRevision + 1);
+      expect(["Race Frank", "Race Gina"]).toContain(saved.name);
+    });
+
+    it("re-reads only the social's open draft, at its current revision", async () => {
       const loaded = await openDraftFor(hostFrank);
       actingClient = hostFrank.client;
       const saved = await saveSessionDraft(
@@ -1686,6 +1869,12 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         },
       });
 
+      // A co-host re-reads the same draft; another social's host can't.
+      actingClient = coHostGina.client;
+      expect(await readSessionDraft(loaded.sessionId)).toMatchObject({
+        ok: true,
+        draft: { sessionId: loaded.sessionId, name: "Flushed from tab" },
+      });
       actingClient = hostBob.client;
       expect(await readSessionDraft(loaded.sessionId)).toEqual({
         ok: false,
@@ -1704,11 +1893,12 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
 
     it("doesn't bump the revision for attendance", async () => {
       const loaded = await openDraftFor(hostFrank);
+      const guestParticipantId = randomUUID();
       actingClient = hostFrank.client;
       expect(
         await addDraftGuest({
           sessionId: loaded.sessionId,
-          participantId: randomUUID(),
+          participantId: guestParticipantId,
           firstName: "Tab",
           lastName: "Guest",
           skillLevel: "",
@@ -1724,6 +1914,17 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           loaded.draftRevision,
         ),
       ).toMatchObject({ ok: true });
+      // Removing the guest again doesn't bump it either (and lets cleanup
+      // delete the draft once it is discarded).
+      expect(
+        await removeDraftGuest({
+          sessionId: loaded.sessionId,
+          participantId: guestParticipantId,
+        }),
+      ).toMatchObject({ ok: true });
+      expect((await openDraftFor(hostFrank)).draftRevision).toBe(
+        loaded.draftRevision + 1,
+      );
     });
 
     it("refuses to apply a saved setup over a stale revision", async () => {
@@ -1739,7 +1940,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         .select("id, last_used_at")
         .eq("host_id", hostFrank.userId)
         .then(({ data }) => data ?? []);
-      const before = await openSessionRows(hostFrank.userId);
+      const before = await socialSessionRows(hostFrank);
 
       expect(
         await applySavedSetup({
@@ -1748,7 +1949,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           expectedDraftRevision: loaded.draftRevision - 1,
         }),
       ).toEqual(CHANGED_ELSEWHERE);
-      expect(await openSessionRows(hostFrank.userId)).toEqual(before);
+      expect(await socialSessionRows(hostFrank)).toEqual(before);
       const { data: unusedSetup } = await admin
         .from("saved_setups")
         .select("last_used_at")

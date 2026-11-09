@@ -287,6 +287,7 @@ async function seed() {
   check(
     await client.from("sessions").upsert({
       id: sessionId,
+      social_id: socialId,
       host_id: hostUserId,
       name: "Evening social",
       location: "Riverside courts",
@@ -296,12 +297,13 @@ async function seed() {
         plannedStart.getTime() + 2 * 3_600_000,
       ).toISOString(),
     }),
-    "saving the draft session (a host can have only one open session: cancel or end the other one first)",
+    "saving the draft session (a social can have only one open session: cancel or end the other one first)",
   );
 
   const attendees = members.slice(0, options.attending).map((member) => ({
     id: seedUuid(`participant-${member.id}`),
     session_id: sessionId,
+    social_id: socialId,
     member_id: member.id,
     is_guest: false,
     first_name: member.first_name,

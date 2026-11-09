@@ -704,7 +704,7 @@ describe("SessionSetupEditor", () => {
     const CONFLICT = {
       ok: false as const,
       message:
-        "Setup was changed in another tab or by another device. Reload to see the latest \u2014 your unsaved changes here will be lost.",
+        "Setup was changed by another host, tab or device. Reload to see the latest \u2014 your unsaved changes here will be lost.",
       isConflict: true as const,
     };
 
@@ -744,7 +744,7 @@ describe("SessionSetupEditor", () => {
         SAVE_WAIT,
       );
       expect(banner).toHaveTextContent(
-        "Setup was changed in another tab or by another device. Reload to see the latest \u2014 your unsaved changes here will be lost.",
+        "Setup was changed by another host, tab or device. Reload to see the latest \u2014 your unsaved changes here will be lost.",
       );
       expect(
         within(banner).getByRole("button", { name: "Reload" }),

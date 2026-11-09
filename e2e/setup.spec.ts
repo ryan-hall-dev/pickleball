@@ -114,8 +114,11 @@ test("a host sets up a draft's details and courts, sees the summary, reloads and
   page,
 }) => {
   const courtToken = uniqueCourtToken();
-  const { email } = await signInAsNewManager(page, "setup", (socialId) =>
-    insertCourts(socialId, [`${courtToken} A`, `${courtToken} B`]),
+  const { email, socialId } = await signInAsNewManager(
+    page,
+    "setup",
+    (newSocialId) =>
+      insertCourts(newSocialId, [`${courtToken} A`, `${courtToken} B`]),
   );
   const hostUserId = (await findUserIdByEmail(email))!;
   testHostUserIds.push(hostUserId);
@@ -220,6 +223,7 @@ test("a host sets up a draft's details and courts, sees the summary, reloads and
     .insert(
       Array.from({ length: 10 }, (_, index) => ({
         session_id: sessionId,
+        social_id: socialId,
         is_guest: true,
         first_name: `Guest${index}`,
         last_name: courtToken,
@@ -761,7 +765,7 @@ test("a host saves a setup, discards the draft, and reuses the setup in a new on
 test("the stepper and checklist flag a half-filled guest form", async ({
   page,
 }) => {
-  const { email } = await signInAsNewManager(page, "setup-stepper");
+  const { email, socialId } = await signInAsNewManager(page, "setup-stepper");
   const hostUserId = (await findUserIdByEmail(email))!;
   testHostUserIds.push(hostUserId);
   await startNewDraft(page);
@@ -781,6 +785,7 @@ test("the stepper and checklist flag a half-filled guest form", async ({
     .insert(
       Array.from({ length: 4 }, (_, index) => ({
         session_id: sessionId,
+        social_id: socialId,
         is_guest: true,
         first_name: `Guest${index}`,
         last_name: "Stepper",
@@ -832,7 +837,7 @@ test("a stale tab can't overwrite newer settings: it says so, and saves again af
     name: "Setup changed elsewhere",
   });
   await expect(conflictBanner).toContainText(
-    "Setup was changed in another tab or by another device. Reload to see the latest — your unsaved changes here will be lost.",
+    "Setup was changed by another host, tab or device. Reload to see the latest — your unsaved changes here will be lost.",
   );
   await expect(saveStatus(tabB)).toHaveText("! Not saved: changed elsewhere");
   await expect(tabB.getByLabel("Session name")).toHaveValue("Stale tab name");

@@ -5,9 +5,10 @@ import { readHostAccess } from "@/server/auth/currentHost";
 import { listAllActiveMembers } from "@/server/members/memberDirectory";
 import {
   listActiveClubCourts,
-  listOwnSavedSetups,
-  readHostOpenSession,
+  listSocialSavedSetupsUnderRls,
+  readSocialOpenSession,
 } from "@/server/setup/setupDraft";
+import { CoHostDraftNoticeProvider } from "./CoHostDraftNotice";
 import { SessionSetupEditor } from "./SessionSetupEditor";
 import { SetupPageHeader } from "./SetupPageHeader";
 import { StartSessionDraftButton } from "./StartSessionDraftButton";
@@ -21,18 +22,20 @@ export default function SessionSetupPage() {
     // The design's setup page ends 56px down; the host layout gives 48px.
     <div className="flex flex-col gap-4 pb-2">
       {/* Per-user data streams in behind its own boundary (cacheComponents). */}
-      <Suspense
-        fallback={
-          <>
-            <SetupPageHeader />
-            <p className="text-muted" aria-live="polite">
-              Loading your session…
-            </p>
-          </>
-        }
-      >
-        <SessionSetupContent />
-      </Suspense>
+      <CoHostDraftNoticeProvider>
+        <Suspense
+          fallback={
+            <>
+              <SetupPageHeader />
+              <p className="text-muted" aria-live="polite">
+                Loading your session…
+              </p>
+            </>
+          }
+        >
+          <SessionSetupContent />
+        </Suspense>
+      </CoHostDraftNoticeProvider>
     </div>
   );
 }
@@ -41,13 +44,13 @@ async function SessionSetupContent() {
   const hostAccess = await readHostAccess();
   // Fails closed: only hosts see setup (RLS also returns nothing otherwise).
   if (hostAccess.status !== "host") return null;
-  const openSession = await readHostOpenSession(hostAccess.host.userId);
+  const openSession = await readSocialOpenSession(hostAccess.host.socialId);
 
   if (openSession.status === "draft") {
     const [clubCourts, activeMembers, savedSetups] = await Promise.all([
       listActiveClubCourts(),
       listAllActiveMembers(),
-      listOwnSavedSetups(hostAccess.host.userId),
+      listSocialSavedSetupsUnderRls(hostAccess.host.socialId),
     ]);
     return (
       <SessionSetupEditor

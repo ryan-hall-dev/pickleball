@@ -78,11 +78,27 @@ function requireData<T>(
   return result.data;
 }
 
-/** Creates a user and returns a client signed in as them. */
 /** Auth users this run created; deleted (with their hosts rows) after all tests. */
 const createdAuthUserIds: string[] = [];
-const createdSocialIds: string[] = [];
 
+/**
+ * Fixed test socials, reused by every run (upserted by id): sessions with a
+ * log can never be deleted, so a fresh social per run would pile up. The
+ * hosts are new each run. Each social has at most one open session, and
+ * this file uses each one sequentially.
+ */
+const TEST_SOCIAL = {
+  id: "7e570000-0000-4000-8000-000000000001",
+  name: "Integration social (tests)",
+} as const;
+const OTHER_TEST_SOCIAL = {
+  id: "7e570000-0000-4000-8000-000000000002",
+  name: "Integration other social (tests)",
+} as const;
+type TestSocial = typeof TEST_SOCIAL | typeof OTHER_TEST_SOCIAL;
+const POSTGRES_UNIQUE_VIOLATION = "23505";
+
+/** Creates a user and returns a client signed in as them. */
 async function signedInClient(
   stack: LocalStack,
   admin: DatabaseClient,
@@ -142,28 +158,134 @@ const ROTATION: SessionConfig["rotation"] = {
 
 interface HostedDraftSession {
   host: DatabaseClient;
+  hostUserId: string;
+  socialId: string;
   sessionId: string;
   config: SessionConfig;
 }
 
-/** A new host with a draft session of `playerCount` attending guests on `courtCount` doubles courts. */
+/** Another signed-in host of `socialId` (a co-host). */
+async function addCoHost(
+  stack: LocalStack,
+  admin: DatabaseClient,
+  socialId: string,
+): Promise<{ client: DatabaseClient; userId: string }> {
+  const coHost = await signedInClient(stack, admin);
+  requireData(
+    await admin
+      .from("hosts")
+      .insert({
+        user_id: coHost.userId,
+        display_name: "Integration Co-host",
+        social_id: socialId,
+      })
+      .select()
+      .single(),
+    "Adding the co-host",
+  );
+  return coHost;
+}
+
+/**
+ * Ends a live session the way a host would, through the engine: abandons any
+ * match still in progress, then ends. `host` reads the log under RLS.
+ */
+async function endLiveSessionThroughEngine(
+  host: DatabaseClient,
+  admin: DatabaseClient,
+  sessionId: string,
+): Promise<void> {
+  const submitAsHost = (input: SubmitSessionActionInput) =>
+    submitSessionAction(host, input, { serviceRoleClient: admin });
+  const log = await loadSessionLog(host, sessionId);
+  if (!log) throw new Error(`Session ${sessionId} isn't readable by the host.`);
+  const replayed = replay(log.events);
+  if (!replayed.ok) throw new Error(replayed.error.message);
+  let lastSeq = replayed.state.lastSeq;
+  if (replayed.state.pausedBySeq !== null) {
+    const resumed = await submitAsHost({
+      sessionId,
+      eventId: randomUUID(),
+      expectedLastSeq: lastSeq,
+      request: { kind: "action", action: { type: "Resumed", payload: {} } },
+    });
+    if (!resumed.ok) throw new Error(`Resuming failed: ${resumed.reason}`);
+    lastSeq = resumed.seq;
+  }
+  for (const match of Object.values(replayed.state.matches)) {
+    if (match.status !== "active") continue;
+    const abandoned = await submitAsHost({
+      sessionId,
+      eventId: randomUUID(),
+      expectedLastSeq: lastSeq,
+      request: {
+        kind: "action",
+        action: { type: "MatchAbandoned", payload: { matchId: match.matchId } },
+      },
+    });
+    if (!abandoned.ok)
+      throw new Error(`Abandoning failed: ${abandoned.reason}`);
+    lastSeq = abandoned.seq;
+  }
+  const ended = await submitAsHost({
+    sessionId,
+    eventId: randomUUID(),
+    expectedLastSeq: lastSeq,
+    request: { kind: "action", action: { type: "SessionEnded", payload: {} } },
+  });
+  if (!ended.ok) throw new Error(`Ending failed: ${ended.reason}`);
+}
+
+/**
+ * Closes the social's open session left by an earlier run that stopped
+ * early: a draft is cancelled, a live session is ended through the engine.
+ */
+async function closeStaleOpenSession(
+  host: { client: DatabaseClient; userId: string },
+  admin: DatabaseClient,
+  socialId: string,
+): Promise<void> {
+  const stale = requireData(
+    await admin
+      .from("sessions")
+      .select("id, status")
+      .eq("social_id", socialId)
+      .in("status", ["draft", "live"])
+      .single(),
+    "Reading the stale open session",
+  );
+  if (stale.status === "draft") {
+    const { error } = await admin.rpc("cancel_draft_session", {
+      p_actor_user_id: host.userId,
+      p_session_id: stale.id,
+    });
+    if (error)
+      throw new Error(`Cancelling the stale draft failed: ${error.message}`);
+    return;
+  }
+  await endLiveSessionThroughEngine(host.client, admin, stale.id);
+}
+
+/**
+ * A new host of `social` with the social's draft session of `playerCount`
+ * attending guests on `courtCount` doubles courts.
+ */
 async function createHostedDraftSession(
   stack: LocalStack,
   admin: DatabaseClient,
   playerCount: number,
   courtCount: number,
+  social: TestSocial = TEST_SOCIAL,
 ): Promise<HostedDraftSession> {
   const hostUser = await signedInClient(stack, admin);
-  // Each host gets its own social (sessions aren't scoped to socials until A3).
   const socialId = requireData(
     await admin
       .from("socials")
-      .insert({ name: "Integration social" })
+      .upsert({ id: social.id, name: social.name }, { onConflict: "id" })
       .select("id")
       .single(),
-    "Creating the social",
+    "Upserting the test social",
   ).id;
-  createdSocialIds.push(socialId);
   requireData(
     await admin
       .from("hosts")
@@ -176,10 +298,11 @@ async function createHostedDraftSession(
       .single(),
     "Adding the host",
   );
-  const sessionId = requireData(
-    await admin
+  const insertDraft = () =>
+    admin
       .from("sessions")
       .insert({
+        social_id: socialId,
         host_id: hostUser.userId,
         name: "Integration social",
         host_name: "Integration Host",
@@ -187,15 +310,21 @@ async function createHostedDraftSession(
         planned_end: new Date(Date.now() + 2 * 3_600_000).toISOString(),
       })
       .select("id")
-      .single(),
-    "Creating the draft session",
-  ).id;
+      .single();
+  let draftInsert = await insertDraft();
+  if (draftInsert.error?.code === POSTGRES_UNIQUE_VIOLATION) {
+    // One open session per social: an earlier run left one open.
+    await closeStaleOpenSession(hostUser, admin, socialId);
+    draftInsert = await insertDraft();
+  }
+  const sessionId = requireData(draftInsert, "Creating the draft session").id;
   const participants = requireData(
     await admin
       .from("session_participants")
       .insert(
         PLAYER_FIRST_NAMES.slice(0, playerCount).map((firstName) => ({
           session_id: sessionId,
+          social_id: socialId,
           is_guest: true,
           first_name: firstName,
           last_name: "Tester",
@@ -223,7 +352,13 @@ async function createHostedDraftSession(
       isGuest: true,
     })),
   };
-  return { host: hostUser.client, sessionId, config };
+  return {
+    host: hostUser.client,
+    hostUserId: hostUser.userId,
+    socialId,
+    sessionId,
+    config,
+  };
 }
 
 function createAdminClient(stack: LocalStack): DatabaseClient {
@@ -233,8 +368,9 @@ function createAdminClient(stack: LocalStack): DatabaseClient {
 }
 
 // Deleting the auth users also deletes their hosts rows (on delete cascade);
-// their sessions keep the history with host_id set to null. Then the emptied
-// socials go.
+// their sessions keep the history with host_id set to null. Then whatever of
+// the fixed test socials can go (a social keeping logged sessions stays, to
+// be reused by the next run).
 afterAll(async () => {
   if (!localStack || createdAuthUserIds.length === 0) return;
   const admin = createAdminClient(localStack);
@@ -243,7 +379,9 @@ afterAll(async () => {
     const { error } = await admin.auth.admin.deleteUser(userId);
     if (error) failures.push(`${userId}: ${error.message}`);
   }
-  failures.push(...(await deleteTestSocials(admin, createdSocialIds)));
+  failures.push(
+    ...(await deleteTestSocials(admin, [TEST_SOCIAL.id, OTHER_TEST_SOCIAL.id])),
+  );
   if (failures.length > 0) {
     throw new Error(`Cleaning up test users failed: ${failures.join("; ")}`);
   }
@@ -481,7 +619,42 @@ describe.skipIf(!localStack)("submitSessionAction (local Supabase)", () => {
         expectedLastSeq: 4,
         request: { kind: "action", action: { type: "Paused", payload: {} } },
       }),
-    ).rejects.toThrow(/not found \(or you are not a host\)/);
+    ).rejects.toThrow(
+      /not found \(or it isn't your social's, or you are not a host\)/,
+    );
+  });
+
+  it("refuses a host of another social: the session isn't found, and the database refuses it too", async () => {
+    const otherSocial = await createHostedDraftSession(
+      localStack!,
+      admin,
+      1,
+      1,
+      OTHER_TEST_SOCIAL,
+    );
+    await expect(
+      submit(otherSocial.host, {
+        sessionId,
+        eventId: randomUUID(),
+        expectedLastSeq: 4,
+        request: { kind: "action", action: { type: "Paused", payload: {} } },
+      }),
+    ).rejects.toThrow(/not found/);
+
+    // Even with a valid action and seq, the write function derives the
+    // actor's social and finds no such session in it.
+    const { error } = await admin.rpc("append_session_event", {
+      p_actor_user_id: otherSocial.hostUserId,
+      p_session_id: sessionId,
+      p_event_id: randomUUID(),
+      p_expected_last_seq: 4,
+      p_type: "Paused",
+      p_payload: {},
+      p_occurred_at: new Date().toISOString(),
+    });
+    expect(error?.message).toBe("SESSION_NOT_FOUND");
+    const log = await loadSessionLog(host, sessionId);
+    expect(log?.events).toHaveLength(4);
   });
 
   it("refuses to end while a match is in progress, then ends after it completes", async () => {
@@ -544,6 +717,7 @@ describe.skipIf(!localStack)(
   () => {
     let admin: DatabaseClient;
     let host: DatabaseClient;
+    let socialId: string;
     let sessionId: string;
     let playerIds: string[];
     const firstMatchId = randomUUID();
@@ -565,6 +739,7 @@ describe.skipIf(!localStack)(
       admin = createAdminClient(stack);
       const draft = await createHostedDraftSession(stack, admin, 8, 2);
       host = draft.host;
+      socialId = draft.socialId;
       sessionId = draft.sessionId;
       playerIds = draft.config.participants.map(
         (participant) => participant.participantId,
@@ -605,36 +780,7 @@ describe.skipIf(!localStack)(
     // End the session so no live session outlives the run: abandon any match
     // still in progress, then end. The rows themselves are append-only history.
     afterAll(async () => {
-      const state = await replayedState();
-      let lastSeq = state.lastSeq;
-      for (const match of Object.values(state.matches)) {
-        if (match.status !== "active") continue;
-        const abandoned = await submit({
-          sessionId,
-          eventId: randomUUID(),
-          expectedLastSeq: lastSeq,
-          request: {
-            kind: "action",
-            action: {
-              type: "MatchAbandoned",
-              payload: { matchId: match.matchId },
-            },
-          },
-        });
-        if (!abandoned.ok)
-          throw new Error(`Cleanup abandon failed: ${abandoned.reason}`);
-        lastSeq = abandoned.seq;
-      }
-      const ended = await submit({
-        sessionId,
-        eventId: randomUUID(),
-        expectedLastSeq: lastSeq,
-        request: {
-          kind: "action",
-          action: { type: "SessionEnded", payload: {} },
-        },
-      });
-      if (!ended.ok) throw new Error(`Cleanup end failed: ${ended.reason}`);
+      await endLiveSessionThroughEngine(host, admin, sessionId);
     });
 
     it("refuses to undo a first match after a player was removed from it, pointing to abandon", async () => {
@@ -733,6 +879,35 @@ describe.skipIf(!localStack)(
         reason: "INVALID_ACTION",
         error: { code: "ALREADY_COMPENSATED" },
       });
+    });
+
+    it("lets a co-host of the social act on the same session", async () => {
+      const coHost = await addCoHost(localStack!, admin, socialId);
+      const lastSeq = (await replayedState()).lastSeq;
+      const paused = await submitSessionAction(
+        coHost.client,
+        {
+          sessionId,
+          eventId: randomUUID(),
+          expectedLastSeq: lastSeq,
+          request: { kind: "action", action: { type: "Paused", payload: {} } },
+        },
+        { serviceRoleClient: admin },
+      );
+      expect(paused).toMatchObject({ ok: true, seq: lastSeq + 1 });
+      const log = await loadSessionLog(host, sessionId);
+      expect(log?.events.at(-1)).toMatchObject({
+        type: "Paused",
+        actorId: coHost.userId,
+      });
+      // The creator sees the co-host's action and carries on from it.
+      const resumed = await submit({
+        sessionId,
+        eventId: randomUUID(),
+        expectedLastSeq: lastSeq + 1,
+        request: { kind: "action", action: { type: "Resumed", payload: {} } },
+      });
+      expect(resumed).toMatchObject({ ok: true, seq: lastSeq + 2 });
     });
   },
 );
