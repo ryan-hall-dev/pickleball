@@ -1,0 +1,1827 @@
+<title>M5 Check-in Review</title>
+<meta name="claude:viewport-fit-sides" content="cover" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap"
+/>
+<style>
+  /* Layout: a court-side review board. Sticky group nav, an approval panel first, then the journey, then every screen at its real CSS size. Single dark look, matching the app (DESIGN.md is dark-only). */
+  :root {
+    color-scheme: dark;
+    --bg: #0f1419;
+    --bg-header: #121a21;
+    --card: #182028;
+    --card-border: #24303b;
+    --inner: #1c2630;
+    --inner-border: #2a3642;
+    --text: #f1f5f9;
+    --muted: #9aa8b6;
+    --soft: #d5dee7;
+    --outline: #3a4856;
+    --lime: #d4f23a;
+    --lime-surface: #1f2a14;
+    --lime-edge: #4c5f14;
+    --lime-soft: #e3fa7a;
+    --on-lime: #18200a;
+    --blue: #5aa9ff;
+    --blue-surface: #13263c;
+    --blue-edge: #2f5e8f;
+    --blue-soft: #cfe6ff;
+    --link: #8cc4ff;
+    --link-hover: #bfdfff;
+    --orange: #ff9f43;
+    --orange-surface: #251c12;
+    --orange-edge: #5a4220;
+    --orange-soft: #ffd6ae;
+    --orange-text: #ffb877;
+    --on-orange: #2a1606;
+    --font: "Outfit", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 76px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 400 15px/1.45 var(--font);
+    font-variant-numeric: tabular-nums;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto;
+    height: env(safe-area-inset-top, 0px);
+    z-index: 10;
+    background: var(--bg-header);
+  }
+  a {
+    color: var(--link);
+  }
+  a:hover {
+    color: var(--link-hover);
+  }
+  :focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    margin: 0;
+  }
+  p {
+    margin: 0;
+  }
+  .wrap {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  /* Top bar */
+  .topbar {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 5;
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--card-border);
+  }
+  .topbar .wrap {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-block: 10px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 17px;
+    white-space: nowrap;
+  }
+  .logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--lime);
+    position: relative;
+    flex: none;
+  }
+  .logo i {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--on-lime);
+  }
+  .nav {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    min-width: 0;
+  }
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+  .nav a {
+    flex: none;
+    text-decoration: none;
+    color: var(--muted);
+    font-weight: 500;
+    padding: 10px 14px;
+    border-radius: 12px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .nav a:hover {
+    color: var(--text);
+    background: var(--inner);
+  }
+  .nav a[aria-current="true"] {
+    color: var(--text);
+    background: #222d37;
+    font-weight: 600;
+  }
+  .count {
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--inner-border);
+    color: var(--soft);
+    border-radius: 999px;
+    padding: 1px 8px;
+  }
+  .count.warn {
+    background: var(--orange);
+    color: var(--on-orange);
+  }
+
+  main .wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 56px;
+    padding-block: 28px 80px;
+  }
+
+  /* Intro */
+  .intro {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+  .intro-text {
+    flex: 1 1 520px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  h1 {
+    font-size: clamp(28px, 4vw, 40px);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+  }
+  .lede {
+    color: var(--soft);
+    max-width: 68ch;
+    font-size: 16px;
+  }
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .stat {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 12px 16px;
+    min-width: 120px;
+  }
+  .stat b {
+    display: block;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .stat span {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .stat.attn {
+    background: var(--orange-surface);
+    border-color: var(--orange-edge);
+  }
+  .stat.attn b {
+    color: var(--orange);
+  }
+
+  /* Section heads */
+  section {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .sec-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .sec-head h2 {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .sec-head p {
+    color: var(--muted);
+    max-width: 70ch;
+  }
+
+  /* Pills */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .pill.needs {
+    background: var(--orange-surface);
+    color: var(--orange-text);
+    border: 1px solid var(--orange-edge);
+  }
+  .pill.needs::before {
+    content: "!";
+    display: inline-grid;
+    place-items: center;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--orange);
+    color: var(--on-orange);
+    font-size: 10px;
+    font-weight: 800;
+  }
+  .pill.agreed {
+    background: var(--lime-surface);
+    color: var(--lime-soft);
+    border: 1px solid var(--lime-edge);
+  }
+  .pill.agreed::before {
+    content: "✓";
+  }
+  .pill.new {
+    background: var(--blue-surface);
+    color: var(--blue-soft);
+    border: 1px solid var(--blue-edge);
+  }
+
+  /* Duplicate attendance proposal */
+  .feature {
+    background: var(--card);
+    border: 1px solid var(--orange-edge);
+    border-radius: 24px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+    gap: 18px;
+  }
+  .feature h3 {
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .box {
+    background: var(--inner);
+    border: 1px solid var(--inner-border);
+    border-radius: 18px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+  .box.warn {
+    background: var(--orange-surface);
+    border-color: var(--orange-edge);
+    color: var(--orange-soft);
+  }
+  .rules {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    counter-reset: r;
+  }
+  .rules li {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 10px;
+    counter-increment: r;
+  }
+  .rules li::before {
+    content: counter(r);
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--inner-border);
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    font-size: 13px;
+  }
+  .rules b {
+    color: var(--text);
+  }
+  .rules span {
+    color: var(--soft);
+  }
+  .shotlinks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .shotlinks a {
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 12px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--outline);
+    border-radius: 10px;
+    color: var(--text);
+  }
+  .shotlinks a:hover {
+    background: var(--inner);
+  }
+
+  /* Decisions */
+  .decisions {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .dgroup h3 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: var(--soft);
+  }
+  .dlist {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
+    gap: 10px;
+  }
+  .dec {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 14px 16px;
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 4px 12px;
+    align-items: start;
+  }
+  .dec.key {
+    border-color: var(--orange-edge);
+  }
+  .dec .n {
+    grid-row: span 3;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: var(--inner-border);
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+  }
+  .dec.key .n {
+    background: var(--orange);
+    color: var(--on-orange);
+  }
+  .dec .t {
+    font-weight: 700;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    align-items: center;
+  }
+  .dec .d {
+    color: var(--soft);
+    font-size: 14px;
+  }
+  .dec .refs {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .dec .refs a {
+    font-weight: 600;
+  }
+  .filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .filter button {
+    font: inherit;
+    font-weight: 600;
+    font-size: 14px;
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid var(--inner-border);
+    background: var(--inner);
+    color: var(--soft);
+    cursor: pointer;
+  }
+  .filter button[aria-pressed="true"] {
+    background: var(--text);
+    color: var(--bg);
+    border-color: var(--text);
+  }
+
+  /* Journey */
+  .journey {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .step {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 0 16px;
+  }
+  .rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .dot {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    background: var(--inner-border);
+    color: var(--text);
+    flex: none;
+  }
+  .dot.player {
+    background: var(--lime);
+    color: var(--on-lime);
+  }
+  .dot.host {
+    background: var(--blue);
+    color: #06182b;
+  }
+  .line {
+    width: 2px;
+    flex: 1;
+    background: var(--inner-border);
+    min-height: 20px;
+  }
+  .step:last-child .line {
+    display: none;
+  }
+  .step-body {
+    padding-bottom: 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+  .step-body h3 {
+    font-size: 17px;
+    font-weight: 700;
+    padding-top: 9px;
+  }
+  .who {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .step-body > p {
+    color: var(--soft);
+    max-width: 75ch;
+  }
+  .branches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
+    gap: 10px;
+  }
+  .branch {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    background: var(--inner);
+    border: 1px solid var(--inner-border);
+    border-radius: 16px;
+    padding: 10px;
+    text-decoration: none;
+    color: var(--text);
+    min-width: 0;
+  }
+  .branch:hover {
+    border-color: var(--outline);
+    background: #222d37;
+    color: var(--text);
+  }
+  .branch img {
+    width: 56px;
+    height: 76px;
+    object-fit: cover;
+    object-position: top;
+    border-radius: 8px;
+    flex: none;
+    background: var(--bg);
+  }
+  .branch .bt {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .branch .bt b {
+    font-size: 14px;
+  }
+  .branch .bt span {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .branch.end-ok {
+    border-color: var(--lime-edge);
+  }
+  .branch.end-no {
+    border-color: var(--outline);
+  }
+  .branch.end-dup {
+    border-color: var(--orange-edge);
+  }
+
+  /* Screens */
+  .group-index {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .group-index a {
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--soft);
+    background: var(--inner);
+    border: 1px solid var(--inner-border);
+    border-radius: 999px;
+    padding: 8px 12px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .group-index a:hover {
+    color: var(--text);
+    border-color: var(--outline);
+  }
+  .group-index a .code {
+    color: var(--muted);
+  }
+  .screens {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .screen {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 24px;
+    padding: 20px 22px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px 28px;
+    align-items: flex-start;
+    scroll-margin-top: 80px;
+  }
+  .screen.wide {
+    flex-direction: column;
+  }
+  .shot {
+    flex: 0 1 auto;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .screen.wide .shot {
+    width: 100%;
+  }
+  .shot-frame {
+    background: #080b0e;
+    border-radius: 18px;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  .shot img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 18px;
+  }
+  .shot .size {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .meta {
+    flex: 1 1 300px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .meta-head {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .meta-head .code {
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .meta-head h3 {
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .meta p {
+    color: var(--soft);
+  }
+  .copy {
+    background: var(--inner);
+    border: 1px solid var(--inner-border);
+    border-radius: 16px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .copy h4 {
+    margin: 0;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .copy ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .copy li {
+    font-size: 14px;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+  .copy li::before {
+    content: "“";
+    color: var(--muted);
+  }
+  .copy li::after {
+    content: "”";
+    color: var(--muted);
+  }
+  .pager {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+  }
+  .pager a {
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+    border: 1px solid var(--outline);
+    border-radius: 12px;
+    padding: 0 14px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .pager a:hover {
+    background: var(--inner);
+  }
+  .decref {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .decref a {
+    font-weight: 700;
+    text-decoration: none;
+    border-radius: 999px;
+    padding: 2px 9px;
+    background: var(--orange-surface);
+    border: 1px solid var(--orange-edge);
+    color: var(--orange-text);
+  }
+
+  footer {
+    color: var(--muted);
+    font-size: 13px;
+    border-top: 1px solid var(--card-border);
+    padding-top: 18px;
+  }
+
+  @media (max-width: 640px) {
+    .brand span {
+      display: none;
+    }
+    .screen {
+      padding: 14px;
+      border-radius: 20px;
+    }
+    .feature {
+      padding: 16px;
+    }
+  }
+</style>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <i style="left: 8px; top: 9px"></i><i style="left: 15px; top: 7px"></i
+        ><i style="left: 20px; top: 13px"></i
+        ><i style="left: 9px; top: 17px"></i
+        ><i style="left: 16px; top: 20px"></i
+        ><i style="left: 13px; top: 13px"></i>
+      </div>
+      <span>M5 review</span>
+    </div>
+    <nav class="nav" aria-label="Sections">
+      <a href="#approve"
+        >Your approval <span class="count warn" id="navNeeds"></span
+      ></a>
+      <a href="#journey">Player journey</a>
+      <a href="#player">Player check-in <span class="count">18</span></a>
+      <a href="#tray">Host tray <span class="count">6</span></a>
+      <a href="#qr">QR / NFC <span class="count">5</span></a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <section class="intro" aria-labelledby="t">
+      <div class="intro-text">
+        <div class="eyebrow">
+          Pickleball Social Manager · Milestone 5 · Design draft, 10 Nov 2026
+        </div>
+        <h1 id="t">Player check-in, pending tray and QR</h1>
+        <p class="lede">
+          Every screen M5 needs that had no design yet, drawn from DESIGN.md and
+          the reference exports. Nothing here is built. Screens show at their
+          real CSS size (phones at 390 px, the host page at 1280 px). Anything
+          not already agreed in the M5 plan is marked
+          <span class="pill needs">Needs Ryan</span>.
+        </p>
+      </div>
+      <div class="stats" aria-label="Summary">
+        <div class="stat"><b>29</b><span>screens</span></div>
+        <div class="stat attn">
+          <b id="statNeeds">–</b><span>decisions need you</span>
+        </div>
+        <div class="stat"><b>3</b><span>groups</span></div>
+      </div>
+    </section>
+
+    <section id="approve" aria-labelledby="approve-h">
+      <div class="sec-head">
+        <h2 id="approve-h">Needs your approval</h2>
+        <p>
+          Start with the duplicate-attendance proposal, which changes how hosts
+          handle a player who's already checked in. The numbered list below is
+          every other proposal from the drafts. Orange ones change behaviour;
+          the rest are copy or layout.
+        </p>
+      </div>
+
+      <article class="feature" id="duplicate" aria-labelledby="dup-h">
+        <div
+          style="
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 12px;
+            align-items: center;
+          "
+        >
+          <h3 id="dup-h" style="font-size: 22px; font-weight: 800">
+            A player can never be checked in to the same session twice
+          </h3>
+          <span class="pill needs">Needs Ryan · D-A to D-D</span>
+        </div>
+        <div class="feature-grid">
+          <div class="box">
+            <h3>What happens today</h3>
+            <p style="color: var(--soft)">
+              The database already allows only one attendance row per member per
+              session. But if a host pressed Approve on a request for someone
+              already attending, the approval would either fail with a technical
+              error or "succeed" by moving that member's phone link to the new
+              phone. The first draft also left Approve on the row ("Check with
+              the player before approving"). Both are wrong.
+            </p>
+          </div>
+          <div class="box warn">
+            <h3>Proposed rule</h3>
+            <p>
+              A check-in for someone already attending can't be approved. The
+              host closes it as "already checked in", or rejects it if it isn't
+              them. The player's phone learns the outcome only after a host
+              decides.
+            </p>
+          </div>
+        </div>
+        <ol class="rules">
+          <li>
+            <div>
+              <b>Own phone, already in.</b>
+              <span
+                >If the phone is already linked to that member and they're
+                attending, the page answers at once with "You're already checked
+                in" (P09). No request is created.</span
+              >
+            </div>
+          </li>
+          <li>
+            <div>
+              <b>Any other phone.</b>
+              <span
+                >The request is accepted and the phone shows "Waiting for the
+                host to approve" (P06), the same as any request. This keeps the
+                privacy rule: whoever holds the phone can't find out whether a
+                named person is here.</span
+              >
+            </div>
+          </li>
+          <li>
+            <div>
+              <b>Tray row with no Approve.</b>
+              <span
+                >The row is marked "Already checked in to this session. They
+                can't be added twice." The actions are "Close: already checked
+                in" and "Reject" (H01).</span
+              >
+            </div>
+          </li>
+          <li>
+            <div>
+              <b>Outcome on the phone.</b>
+              <span
+                >"Close: already checked in" shows "You're already checked in"
+                on the requesting phone (P09b). Reject shows the neutral "Please
+                speak to the host" (P08). The phone is not linked to the member
+                either way.</span
+              >
+            </div>
+          </li>
+          <li>
+            <div>
+              <b>Race between hosts.</b>
+              <span
+                >If the member is added after the row appeared (another host
+                approved a request from a different phone, or added them in
+                Who's playing), the row switches on the next 5-second update. An
+                Approve already pressed is refused, and the row changes to
+                "Approve stopped: already checked in" (H03).</span
+              >
+            </div>
+          </li>
+          <li>
+            <div>
+              <b>Enforced on the server.</b>
+              <span
+                >In M5 the approval function refuses an already-attending member
+                (<code>ALREADY_IN_SESSION</code>) and never moves a phone link.
+                The database's one-row-per-member rule stays as the final
+                guarantee.</span
+              >
+            </div>
+          </li>
+        </ol>
+        <div class="dlist" id="dupDecisions"></div>
+        <div class="shotlinks" aria-label="Screens for this proposal">
+          <a href="#H01">H01 · Tray row</a><a href="#H03">H03 · Race state</a
+          ><a href="#H00">H00 · On the Setup page</a
+          ><a href="#P09">P09 · Own phone</a
+          ><a href="#P09b">P09b · After a host closes it</a
+          ><a href="#P06">P06 · Waiting</a>
+        </div>
+      </article>
+
+      <div class="filter" role="group" aria-label="Show decisions">
+        <button type="button" id="f-key" aria-pressed="true">
+          Behaviour changes
+        </button>
+        <button type="button" id="f-all" aria-pressed="false">
+          All proposals
+        </button>
+      </div>
+      <div class="decisions" id="decisions"></div>
+    </section>
+
+    <section id="journey" aria-labelledby="journey-h">
+      <div class="sec-head">
+        <h2 id="journey-h">The player's journey</h2>
+        <p>
+          From tapping the sticker or scanning the QR code to approval or
+          rejection. Green dots are steps on the player's phone and blue dots
+          are the host's. Each card opens its screen.
+        </p>
+      </div>
+      <div class="journey" id="journeyList"></div>
+    </section>
+
+    <section id="player" aria-labelledby="player-h">
+      <div class="sec-head">
+        <h2 id="player-h">Player check-in</h2>
+        <p>
+          The public page at <code>/t/&lt;tag&gt;</code>: no login, phone first,
+          390 px.
+        </p>
+      </div>
+      <nav
+        class="group-index"
+        aria-label="Player screens"
+        data-index="player"
+      ></nav>
+      <div class="screens" data-group="player"></div>
+    </section>
+
+    <section id="tray" aria-labelledby="tray-h">
+      <div class="sec-head">
+        <h2 id="tray-h">Host pending-check-in tray</h2>
+        <p>
+          On the Setup page, seen by every host of the social, showing only the
+          open session's requests. Live reuses it in M7.
+        </p>
+      </div>
+      <nav
+        class="group-index"
+        aria-label="Host tray screens"
+        data-index="tray"
+      ></nav>
+      <div class="screens" data-group="tray"></div>
+    </section>
+
+    <section id="qr" aria-labelledby="qr-h">
+      <div class="sec-head">
+        <h2 id="qr-h">QR / NFC management</h2>
+        <p>
+          One check-in link per social, used by its QR code and every sticker.
+          Any host can show and print it; only a manager can issue a new one.
+        </p>
+      </div>
+      <nav
+        class="group-index"
+        aria-label="QR and NFC screens"
+        data-index="qr"
+      ></nav>
+      <div class="screens" data-group="qr"></div>
+    </section>
+
+    <footer>
+      Source: <code>docs/designs/m5/</code> on
+      <code>feature/session-manager-mvp</code> (HTML mockups, render script,
+      README). The QR codes are drawn placeholders and won't scan. Plan:
+      <code>docs/plans/m5-player-checkin.md</code>.
+    </footer>
+  </div>
+</main>
+
+<script>
+  const DUP_DECISIONS = [
+    {
+      id: "D-A",
+      t: "A separate outcome for “already checked in”",
+      d: "Store it as its own request outcome (for example already_in_session) rather than reusing “rejected”, so the history and the player's screen are accurate.",
+      refs: ["H01"],
+    },
+    {
+      id: "D-B",
+      t: "Tell the phone after a host closes it",
+      d: "After “Close: already checked in”, the requesting phone shows “You're already checked in” (P09b). Recommended, because a host confirmed it in person. The alternative is the neutral rejected message.",
+      refs: ["P09b", "P08"],
+    },
+    {
+      id: "D-C",
+      t: "Don't link the phone",
+      d: "Closing a duplicate never links the requesting phone to the member. Their existing phone keeps its link.",
+      refs: ["H01"],
+    },
+    {
+      id: "D-D",
+      t: "New player with the same name as someone attending",
+      d: "Question: should a “New player” row whose name matches someone already attending show a hint (“Same name as someone already checked in”)? A member who uses the guest form would otherwise create a second member and could attend twice. Proposal: show the hint and let the host decide; no automatic matching.",
+      refs: ["H01"],
+    },
+  ];
+
+  const DECISIONS = [
+    {
+      g: "Host tray",
+      items: [
+        [
+          1,
+          "Tray placement",
+          "A full-width card directly under the setup stepper, above both columns, so it stays near the top on tablet and phone. Alternative: top of the summary aside.",
+          ["H00", "H04a"],
+          true,
+        ],
+        [
+          2,
+          "Tray header",
+          "A count badge (blue while requests wait, grey at 0) and a blue border while requests wait. Subtitle “Approve to add them to Who's playing. Oldest first.”",
+          ["H01", "H02"],
+        ],
+        [3, "Order", "Rows oldest first.", ["H01"]],
+        [
+          4,
+          "Level changes",
+          "A member who chose “Update your level” shows the new level plus “level changed from <old>”. The request already stores the chosen level.",
+          ["H01"],
+          true,
+        ],
+        [
+          5,
+          "Already in this session",
+          "Replaced by the duplicate-attendance proposal above: no Approve on these rows.",
+          ["H01", "H03"],
+          true,
+        ],
+        [
+          6,
+          "Decided rows",
+          "Approved, rejected and decided-elsewhere rows show a one-line message for about 4 s, then leave. Adds a “Check-in rejected” confirmation.",
+          ["H03"],
+          true,
+        ],
+        [
+          7,
+          "Failed actions",
+          "Orange message “Couldn't approve. Check your connection and retry.” with Retry; Reject stays available.",
+          ["H03"],
+        ],
+        [
+          8,
+          "QR button",
+          "“Show QR code” always sits in the tray header, not only in the empty state.",
+          ["H01", "H02"],
+        ],
+      ],
+    },
+    {
+      g: "Player page",
+      items: [
+        [
+          9,
+          "Confirm as a bottom sheet",
+          "Within thumb reach on phones, with modal styling and the page dimmed behind it.",
+          ["P04a", "P04b"],
+          true,
+        ],
+        [
+          10,
+          "Update your level",
+          "Collapsed by default. When opened, nothing is preselected (the saved level stays private). Choosing none keeps the saved level.",
+          ["P04b", "P04c"],
+          true,
+        ],
+        [
+          11,
+          "Uppercase CTAs",
+          "Per DESIGN.md (“CHECK IN AS GRACE”); the PNG uses sentence case.",
+          ["P01"],
+        ],
+        [
+          12,
+          "Search wording",
+          "Placeholder “Type your name” (the PNG says “first name”), because search covers the full name. Hint “Type at least 2 letters of your name”.",
+          ["P01", "P02"],
+        ],
+        [
+          13,
+          "Exactly 5 matches",
+          "A line reads “5 names shown. Not listed? Type more of your name.” It only reveals that at least 5 match. Alternative: no line.",
+          ["P03a"],
+          true,
+        ],
+        [
+          14,
+          "Rows open the sheet",
+          "Search rows have a chevron and open the confirm sheet directly; there's no selected state.",
+          ["P03a"],
+        ],
+        [
+          15,
+          "Section labels",
+          "P1 and P2 sit under “Who's checking in?”. P2 says “Find your name” instead of “Not you? Find your name”.",
+          ["P02"],
+        ],
+        [
+          16,
+          "Approval note",
+          "The confirm sheet and guest form say “A host approves each check-in before you're added to today's players.”",
+          ["P04a", "P05a"],
+        ],
+        [
+          17,
+          "Guest form details",
+          "Titled “Check in as a guest”, with the level labelled “Your level”. Errors appear after pressing Check in. Back link “Back to find your name”.",
+          ["P05a", "P05b"],
+        ],
+        [
+          18,
+          "State screens",
+          "P6–P13 show only the logo and social name, not the LIVE NOW card.",
+          ["P06"],
+        ],
+        [
+          19,
+          "No cancel while waiting",
+          "P6 has no cancel button (none is in the plan), a polite live line and a “While you wait” box.",
+          ["P06"],
+          true,
+        ],
+        [
+          20,
+          "What happens next",
+          "Generic: “The hosts put you on a court when it's your turn. Stay near the courts and listen for your name.”",
+          ["P07", "P09"],
+        ],
+        [
+          21,
+          "Rejected tone",
+          "A neutral grey icon and an outline “Try again”, which returns to the welcome screen.",
+          ["P08"],
+        ],
+        [
+          22,
+          "Retry buttons",
+          "P10 “Try again” and P12 “Check again” both just reload. Alternative: no button.",
+          ["P10", "P12"],
+        ],
+        [
+          23,
+          "Inactive link",
+          "Shows the app name, not the social's, and “Ask a host at the courts for the current QR code.”",
+          ["P11"],
+        ],
+        [
+          24,
+          "One error screen",
+          "P13 covers offline and server errors and says retrying won't send a second request (same phone, same session returns the existing request).",
+          ["P13"],
+        ],
+      ],
+    },
+    {
+      g: "QR / NFC",
+      items: [
+        [
+          25,
+          "No nav item",
+          "Sticker and QR opens from the tray's “Show QR code” and from the Hosts page. Any host of the social can use it.",
+          ["S01"],
+          true,
+        ],
+        [
+          26,
+          "Page contents",
+          "Full link with Copy, an NFC note (write the same link to the sticker), “Show full screen” and “Print stickers”.",
+          ["S01"],
+        ],
+        [
+          27,
+          "Full-screen QR",
+          "Social name, “Scan to check in”, the QR on a white panel, a short URL, and a 44 px close button (Esc too).",
+          ["S02"],
+        ],
+        [
+          28,
+          "Print layout",
+          "A4 only, 12 stickers (3 × 4), black on white with cut lines. US Letter isn't covered.",
+          ["S03"],
+          true,
+        ],
+        [
+          29,
+          "Check-in link card",
+          "Every host sees it on the Hosts page; only managers see “Issue new link”. The UI says “link” where the plan says “tag”.",
+          ["S04a"],
+          true,
+        ],
+        [
+          30,
+          "Confirm button style",
+          "Solid orange, because DESIGN.md has no destructive button. Focus starts on Cancel.",
+          ["S04b"],
+        ],
+        [
+          31,
+          "Pending check-ins survive",
+          "“Check-ins already sent are not affected.” Verified: requests belong to the session, not the link, so the sentence stays.",
+          ["S04b"],
+        ],
+        [
+          32,
+          "Placeholders",
+          "pickleball.example and the tag k7Qm2xPa stand in for the real domain and tag format.",
+          ["S01"],
+        ],
+      ],
+    },
+  ];
+
+  const S = (code, file, title, note, copy, decs, wide) => ({
+    code,
+    file,
+    title,
+    note,
+    copy,
+    decs,
+    wide,
+  });
+  const SCREENS = {
+    player: [
+      S(
+        "P01",
+        "P01-welcome-recognised",
+        "Welcome, recognised phone",
+        "The phone's device cookie matches a member of this social, so only that member is shown. The PNG's “Not checked in” captions are removed (privacy rule).",
+        [
+          "Who's checking in?",
+          "This phone was used by",
+          "Not you? Find your name",
+          "Type at least 2 letters of your name",
+          "Not a member? Check in as a guest",
+          "Check in as Grace",
+        ],
+        [11, 12],
+      ),
+      S(
+        "P02",
+        "P02-welcome-new-phone",
+        "Welcome, new phone",
+        "No recognised card. Nothing is listed until 2 letters are typed, and there's no CTA until a name is chosen.",
+        [
+          "Find your name",
+          "Type your name",
+          "Not a member? Check in as a guest",
+        ],
+        [12, 15],
+      ),
+      S(
+        "P03a",
+        "P03a-search-results",
+        "Search, 2 or more letters",
+        "At most 5 names, with initials and name only: no level and no status. Search covers this social's members only.",
+        ["5 names shown. Not listed? Type more of your name."],
+        [13, 14],
+      ),
+      S(
+        "P03b",
+        "P03b-search-no-match",
+        "Search, no match",
+        "Points to the guest form.",
+        ["No one matches “Xy”. Check the spelling, or check in as a guest."],
+        [],
+      ),
+      S(
+        "P04a",
+        "P04a-confirm-recognised",
+        "Confirm, recognised phone",
+        "A recognised phone sees its own member's saved name and level.",
+        [
+          "Check in as Grace Kim?",
+          "Your saved level",
+          "A host approves each check-in before you're added to today's players.",
+          "Check in",
+          "Back",
+        ],
+        [9, 16],
+      ),
+      S(
+        "P04b",
+        "P04b-confirm-picked-from-search",
+        "Confirm, picked from search",
+        "Name only. The saved level stays private, with an optional “Update your level”.",
+        ["Update your level (optional)", "Check in", "Back"],
+        [9, 10],
+      ),
+      S(
+        "P04c",
+        "P04c-confirm-update-level-open",
+        "Confirm, update level open",
+        "Nothing preselected; choosing none keeps the saved level.",
+        [
+          "Skip this to keep your saved level. Tap a selected level again to clear it.",
+        ],
+        [10],
+      ),
+      S(
+        "P05a",
+        "P05a-guest-form",
+        "Guest form",
+        "First name, last name and level are all required.",
+        [
+          "Back to find your name",
+          "Check in as a guest",
+          "First name",
+          "Last name",
+          "Your level",
+          "Check in",
+        ],
+        [16, 17],
+      ),
+      S(
+        "P05b",
+        "P05b-guest-form-errors",
+        "Guest form, errors",
+        "Inline orange errors with a “!” and words, linked to their fields.",
+        ["Enter your first name", "Enter your last name", "Choose your level"],
+        [17],
+      ),
+      S(
+        "P06",
+        "P06-waiting-for-approval",
+        "Waiting for the host",
+        "Updates every 5 s, and reloading returns here. A non-linked phone asking for someone already attending also lands here, so nothing leaks.",
+        [
+          "Waiting for the host to approve",
+          "Your check-in for <session> has been sent.",
+          "This page updates by itself every few seconds.",
+          "Keep this page open, or come back to the same link later. Your request stays here.",
+          "Taking a while? Let a host know you've arrived.",
+        ],
+        [18, 19],
+      ),
+      S(
+        "P07",
+        "P07-approved",
+        "Approved",
+        "The host approved the request; the player now appears in Who's playing.",
+        [
+          "You're in, Grace",
+          "You're checked in to <session>.",
+          "The hosts put you on a court when it's your turn.",
+          "You can close this page.",
+        ],
+        [20],
+      ),
+      S(
+        "P08",
+        "P08-rejected",
+        "Rejected",
+        "Neutral wording. A retry is a new request and counts towards the rate limits.",
+        [
+          "Check-in not approved",
+          "The host didn't approve this check-in. Please speak to the host.",
+          "Try again",
+        ],
+        [21],
+      ),
+      S(
+        "P09",
+        "P09-already-checked-in",
+        "Already checked in (own phone)",
+        "Only for the member's own linked phone, answered at once without a request.",
+        [
+          "You're already checked in to <session>",
+          "Nothing more to do, Grace. Stay near the courts and listen for your name.",
+        ],
+        [20],
+      ),
+      S(
+        "P09b",
+        "P09b-already-checked-in-host-confirmed",
+        "Already checked in (host closed it)",
+        "New. Shown on the requesting phone after a host chose “Close: already checked in”. Before that, the phone showed Waiting.",
+        [
+          "You're already checked in to <session>. A host confirmed you're on the list. Nothing else to do.",
+        ],
+        ["D-B"],
+      ),
+      S(
+        "P10",
+        "P10-too-many-attempts",
+        "Too many attempts",
+        "Rate limits per phone, network and session apply to every search and submit.",
+        ["Too many attempts. Wait a few minutes and try again.", "Try again"],
+        [22],
+      ),
+      S(
+        "P11",
+        "P11-link-not-active",
+        "Link not active",
+        "An unknown or reissued tag. It reveals nothing about hosts, sessions or the social.",
+        [
+          "This check-in link isn't active",
+          "Ask a host at the courts for the current QR code.",
+        ],
+        [23],
+      ),
+      S(
+        "P12",
+        "P12-no-social-open",
+        "No session open",
+        "The social has no draft or live session with check-in open.",
+        [
+          "No social open right now",
+          "Check back when your host opens the session.",
+          "Check again",
+        ],
+        [22],
+      ),
+      S(
+        "P13",
+        "P13-something-went-wrong",
+        "Something went wrong",
+        "One screen for offline and server errors.",
+        [
+          "We couldn't reach the check-in. Check your connection and try again.",
+          "If you'd already pressed Check in, trying again won't send a second request.",
+          "Try again",
+        ],
+        [24],
+      ),
+    ],
+    tray: [
+      S(
+        "H00",
+        "H00-setup-with-tray",
+        "Setup page with the tray",
+        "1280 px. Other sections are abbreviated and dimmed for review only.",
+        [
+          "Check-ins waiting",
+          "Approve to add them to Who's playing. Oldest first.",
+          "Show QR code",
+        ],
+        [1, 2],
+        true,
+      ),
+      S(
+        "H01",
+        "H01-tray-three-pending",
+        "Three requests",
+        "An already-checked-in row with no Approve, a member who changed level, and a new player.",
+        [
+          "Already checked in to this session. They can't be added twice.",
+          "Close: already checked in",
+          "Reject",
+          "level changed from Advanced",
+          "NEW PLAYER",
+        ],
+        [4, 5, "D-A", "D-C", "D-D"],
+        true,
+      ),
+      S(
+        "H02",
+        "H02-tray-empty",
+        "Empty",
+        "Shown when nothing is waiting.",
+        [
+          "No check-ins waiting. Players scan the social's QR code or tap the sticker to check in.",
+          "Show QR code",
+        ],
+        [2, 8],
+        true,
+      ),
+      S(
+        "H03",
+        "H03-row-states",
+        "Row states",
+        "Approving, failed with Retry, decided by another host, approved, rejected, and the duplicate race.",
+        [
+          "Approving…",
+          "Couldn't approve. Check your connection and retry.",
+          "Already decided by another host",
+          "Added to Who's playing",
+          "Approve stopped: already checked in",
+          "Added by another host a moment ago.",
+          "Request closed. Their phone shows they're already checked in.",
+        ],
+        [5, 6, 7],
+        true,
+      ),
+      S(
+        "H04a",
+        "H04a-tablet-820",
+        "Tablet, 820 px",
+        "The tray wraps above the setup columns.",
+        [],
+        [1],
+      ),
+      S(
+        "H04b",
+        "H04b-phone-390",
+        "Phone, 390 px",
+        "Actions stack under each row with 44 px targets.",
+        [],
+        [],
+      ),
+    ],
+    qr: [
+      S(
+        "S01",
+        "S01-sticker-and-qr-page",
+        "Sticker and QR page",
+        "Any host. Opens from the tray and the Hosts page.",
+        [
+          "Sticker and QR",
+          "Copy link",
+          "NFC stickers: write this same link to the sticker. Every sticker and QR code for this social uses it.",
+          "Show full screen",
+          "Print stickers",
+        ],
+        [25, 26, 32],
+        true,
+      ),
+      S(
+        "S02",
+        "S02-qr-full-screen",
+        "Full-screen QR",
+        "For a player to scan from the host's tablet.",
+        ["Scan to check in", "Close full screen"],
+        [27],
+      ),
+      S(
+        "S03",
+        "S03-print-layout",
+        "Print layout",
+        "A4, 12 stickers.",
+        [
+          "12 stickers per A4 page. Print on sticker sheets or plain paper and cut along the dashed lines.",
+        ],
+        [28],
+      ),
+      S(
+        "S04a",
+        "S04a-hosts-issue-new-link",
+        "Hosts page, check-in link",
+        "Manager view; other hosts don't see the issue button.",
+        ["Check-in link", "Open Sticker and QR", "Issue new link"],
+        [29],
+        true,
+      ),
+      S(
+        "S04b",
+        "S04b-issue-new-link-confirm",
+        "Issue new link, confirm",
+        "The old link stops working at once.",
+        [
+          "Issue a new check-in link?",
+          "The current link and QR code stop working immediately, including every printed and NFC sticker.",
+          "Check-ins already sent are not affected.",
+          "Cancel",
+          "Issue new link",
+        ],
+        [30, 31],
+        true,
+      ),
+    ],
+  };
+
+  const JOURNEY = [
+    {
+      who: "player",
+      t: "Tap the sticker or scan the QR code",
+      p: "The NFC sticker and the printed QR code carry the same link, /t/<tag>. The tag identifies the social, and the page opens that social's open session.",
+      b: [
+        ["P11", "Link not active", "Unknown or reissued tag", "end-no"],
+        ["P12", "No session open", "Nothing to check in to yet", "end-no"],
+      ],
+    },
+    {
+      who: "player",
+      t: "Welcome",
+      p: "The header shows the social, the session, the time left and courts. The phone is either recognised or new.",
+      b: [
+        ["P01", "Recognised phone", "“Check in as Grace”"],
+        ["P02", "New phone", "Find your name"],
+      ],
+    },
+    {
+      who: "player",
+      t: "Find your name, or check in as a guest",
+      p: "Nothing is listed before 2 letters, at most 5 names show, and nobody's status is shown.",
+      b: [
+        ["P03a", "Search results", "Names only"],
+        ["P03b", "No match", "Offers the guest form"],
+        ["P05a", "Guest form", "First-time player"],
+        ["P05b", "Guest errors", "Inline, with words"],
+      ],
+    },
+    {
+      who: "player",
+      t: "Confirm",
+      p: "One tap to send. A recognised phone sees its saved level; a name picked from search can optionally update it.",
+      b: [
+        ["P04a", "Recognised", "Name + saved level"],
+        ["P04b", "From search", "Name only"],
+        ["P04c", "Update level", "Optional"],
+      ],
+    },
+    {
+      who: "player",
+      t: "Send",
+      p: "The server checks the rate limits and duplicates. The same phone sending again gets back its existing request.",
+      b: [
+        ["P09", "Own phone, already in", "Answered at once", "end-dup"],
+        ["P10", "Too many attempts", "Wait and retry", "end-no"],
+        ["P13", "Something went wrong", "Retry is safe", "end-no"],
+        ["P06", "Waiting for the host", "Every other case", ""],
+      ],
+    },
+    {
+      who: "host",
+      t: "A host decides in the tray",
+      p: "Within 5 seconds the request appears for every host of the social. One host's decision wins; the others see “Already decided”.",
+      b: [
+        ["H01", "Pending rows", "Approve / Reject, or close a duplicate"],
+        ["H03", "Row states", "Pending, failed, race"],
+        ["H00", "On the Setup page", "Under the stepper"],
+      ],
+    },
+    {
+      who: "player",
+      t: "Outcome on the phone",
+      p: "The waiting screen switches by itself.",
+      b: [
+        ["P07", "Approved", "“You're in”, added to Who's playing", "end-ok"],
+        ["P08", "Rejected", "Neutral, can try again", "end-no"],
+        ["P09b", "Already checked in", "Host closed a duplicate", "end-dup"],
+      ],
+    },
+  ];
+
+  const all = [...SCREENS.player, ...SCREENS.tray, ...SCREENS.qr];
+  const byCode = Object.fromEntries(all.map((s) => [s.code, s]));
+  const esc = (v) =>
+    String(v).replace(
+      /[&<>"]/g,
+      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+    );
+  const img = (s) => `screens/${s.file}.png`;
+
+  function decCard(id, t, d, refs, key) {
+    const links = refs.map((r) => `<a href="#${r}">${r}</a>`).join(", ");
+    return `<div class="dec${key ? " key" : ""}" id="dec-${id}"><div class="n">${esc(id)}</div><div class="t">${esc(t)} <span class="pill needs">Needs Ryan</span></div><div class="d">${esc(d)}</div><div class="refs">Screens: ${links}</div></div>`;
+  }
+  document.getElementById("dupDecisions").innerHTML = DUP_DECISIONS.map((x) =>
+    decCard(x.id, x.t, x.d, x.refs, true),
+  ).join("");
+
+  function renderDecisions(onlyKey) {
+    document.getElementById("decisions").innerHTML = DECISIONS.map((grp) => {
+      const items = grp.items.filter((i) => !onlyKey || i[4]);
+      if (!items.length) return "";
+      return `<div class="dgroup"><h3>${esc(grp.g)}</h3><div class="dlist">${items.map(([n, t, d, refs, key]) => decCard(n, t, d, refs, key)).join("")}</div></div>`;
+    }).join("");
+  }
+  const fKey = document.getElementById("f-key"),
+    fAll = document.getElementById("f-all");
+  function setFilter(onlyKey) {
+    fKey.setAttribute("aria-pressed", String(onlyKey));
+    fAll.setAttribute("aria-pressed", String(!onlyKey));
+    renderDecisions(onlyKey);
+  }
+  fKey.addEventListener("click", () => setFilter(true));
+  fAll.addEventListener("click", () => setFilter(false));
+  setFilter(true);
+
+  const needs =
+    DUP_DECISIONS.length + DECISIONS.reduce((n, g) => n + g.items.length, 0);
+  document.getElementById("statNeeds").textContent = needs;
+  document.getElementById("navNeeds").textContent = needs;
+
+  document.getElementById("journeyList").innerHTML = JOURNEY.map(
+    (st, i) => `
+  <div class="step"><div class="rail"><div class="dot ${st.who}" aria-hidden="true">${i + 1}</div><div class="line"></div></div>
+  <div class="step-body"><div><div class="who">${st.who === "host" ? "Host" : "Player's phone"}</div><h3>${esc(st.t)}</h3></div><p>${esc(st.p)}</p>
+  <div class="branches">${st.b.map(([code, t, sub, cls]) => `<a class="branch ${cls || ""}" href="#${code}"><img src="${img(byCode[code])}" alt="" loading="lazy"><span class="bt"><b>${code} · ${esc(t)}</b><span>${esc(sub)}</span></span></a>`).join("")}</div></div></div>`,
+  ).join("");
+
+  for (const [group, list] of Object.entries(SCREENS)) {
+    document.querySelector(`[data-index="${group}"]`).innerHTML = list
+      .map(
+        (s) =>
+          `<a href="#${s.code}"><span class="code">${s.code}</span>${esc(s.title)}</a>`,
+      )
+      .join("");
+    document.querySelector(`[data-group="${group}"]`).innerHTML = list
+      .map((s, i) => {
+        const prev = list[i - 1],
+          next = list[i + 1];
+        const decs = s.decs.length
+          ? `<div class="decref">Decisions: ${s.decs.map((d) => `<a href="#dec-${d}">${d}</a>`).join("")}</div>`
+          : "";
+        const copy = s.copy.length
+          ? `<div class="copy"><h4>Wording</h4><ul>${s.copy.map((c) => `<li>${esc(c)}</li>`).join("")}</ul></div>`
+          : "";
+        return `<article class="screen${s.wide ? " wide" : ""}" id="${s.code}" aria-labelledby="h-${s.code}">
+      <figure class="shot" style="margin:0"><div class="shot-frame"><img src="${img(s)}" alt="${esc(s.code + ": " + s.title)}" loading="lazy" data-half></div>
+      <figcaption class="size"><a href="${img(s)}" target="_blank" rel="noopener">Open full size</a></figcaption></figure>
+      <div class="meta"><div class="meta-head"><span class="code">${s.code}</span><h3 id="h-${s.code}">${esc(s.title)}</h3></div><p>${esc(s.note)}</p>${copy}${decs}
+      <div class="pager">${prev ? `<a href="#${prev.code}">← ${prev.code}</a>` : ""}${next ? `<a href="#${next.code}">${next.code} →</a>` : ""}<a href="#${group}">Top of group</a></div></div></article>`;
+      })
+      .join("");
+  }
+
+  // Show screenshots (rendered at 2x) at their real CSS size, never wider than the column.
+  function sizeImage(el) {
+    if (el.naturalWidth) el.style.width = el.naturalWidth / 2 + "px";
+  }
+  document.querySelectorAll("img[data-half]").forEach((el) => {
+    el.complete
+      ? sizeImage(el)
+      : el.addEventListener("load", () => sizeImage(el));
+  });
+
+  // If a decision link is hidden by the filter, show all first.
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest('a[href^="#dec-"]');
+    if (a && !document.querySelector(a.getAttribute("href"))) setFilter(false);
+  });
+
+  // Highlight the nav item for the section in view.
+  const navLinks = [...document.querySelectorAll(".nav a")];
+  const io = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((en) => {
+        if (en.isIntersecting)
+          navLinks.forEach((l) =>
+            l.setAttribute(
+              "aria-current",
+              String(l.getAttribute("href") === "#" + en.target.id),
+            ),
+          );
+      });
+    },
+    { rootMargin: "-40% 0px -55% 0px" },
+  );
+  ["approve", "journey", "player", "tray", "qr"].forEach((id) =>
+    io.observe(document.getElementById(id)),
+  );
+</script>

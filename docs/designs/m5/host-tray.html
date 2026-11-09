@@ -713,6 +713,21 @@
       .w390 .row-actions {
         flex-basis: 100%;
       }
+      .row-actions .btn.btn-wide {
+        flex: 2 1 auto;
+        max-width: 260px;
+      }
+      .w390 .row-actions .btn.btn-wide {
+        max-width: none;
+      }
+      .row-note {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 6px;
+        font-size: 13px;
+        color: var(--text-soft);
+      }
       .state-label {
         font-size: 12px;
         text-transform: uppercase;
@@ -841,21 +856,19 @@
                 <div class="row-flag">
                   <span class="badge-bang" aria-hidden="true">!</span
                   ><span
-                    >Already in this session.
-                    <span class="sub"
-                      >Check with the player before approving.</span
-                    ></span
+                    >Already checked in to this session.
+                    <span class="sub">They can't be added twice.</span></span
                   >
                 </div>
               </div>
             </div>
             <div class="row-actions">
               <button
-                class="btn btn-secondary"
+                class="btn btn-secondary btn-wide"
                 type="button"
-                aria-label="Approve Grace Kim"
+                aria-label="Close Grace Kim's request: already checked in"
               >
-                <span data-include="tpl-icon-check"></span>Approve
+                Close: already checked in
               </button>
               <button
                 class="btn btn-outline"
@@ -1097,8 +1110,11 @@
             >H1 · Tray with 3 pending requests (close-up, 1280 px page
             width).</b
           >
-          Grace Kim is already in this session (request from a phone not linked
-          to her), so the row is marked in orange with words and "!".
+          Grace Kim is already checked in (this request came from a phone not
+          linked to her), so her row has no Approve: "Close: already checked in"
+          resolves the request (her phone then shows P9b); Reject is for when it
+          is someone else. Pending rows switch to this automatically within one
+          5 s poll when the member becomes attending.
         </figcaption>
         <div class="screen w1280" data-screen style="padding: 24px 28px">
           <div data-include="tpl-tray-three"></div>
@@ -1119,8 +1135,11 @@
       <!-- H3 -->
       <figure class="frame" data-shot="H03-row-states">
         <figcaption>
-          <b>H3 · Row states.</b> Decided rows (approved, rejected, decided
-          elsewhere) show their message for about 4 s, then leave the list.
+          <b>H3 · Row states.</b> Decided rows (approved, rejected, closed as
+          already checked in, decided elsewhere) show their message for about 4
+          s, then leave the list. A pending row also switches to the
+          already-checked-in row by itself, within one 5 s poll, when the member
+          becomes attending.
         </figcaption>
         <div class="screen w760" data-screen style="padding: 22px">
           <section
@@ -1200,6 +1219,68 @@
                   >
                     Reject
                   </button>
+                </div>
+              </li>
+            </ul>
+            <div class="state-label">Approve stopped: already checked in</div>
+            <ul class="tray-list" style="margin: 0">
+              <li class="tray-row attention">
+                <div class="row-who">
+                  <span class="avatar orange" aria-hidden="true">GK</span>
+                  <div class="row-text">
+                    <div class="row-name">Grace Kim</div>
+                    <div class="row-meta">
+                      <span class="chip">Member</span
+                      ><span class="chip">Beginner</span><span>4 min ago</span>
+                    </div>
+                    <div class="row-flag" role="alert">
+                      <span class="badge-bang" aria-hidden="true">!</span
+                      ><span
+                        >Already checked in to this session.
+                        <span class="sub"
+                          >They can't be added twice.</span
+                        ></span
+                      >
+                    </div>
+                    <div class="row-note">
+                      <span class="badge-i" aria-hidden="true">i</span>Added by
+                      another host a moment ago.
+                    </div>
+                  </div>
+                </div>
+                <div class="row-actions">
+                  <button
+                    class="btn btn-secondary btn-wide"
+                    type="button"
+                    aria-label="Close Grace Kim's request: already checked in"
+                  >
+                    Close: already checked in
+                  </button>
+                  <button
+                    class="btn btn-outline"
+                    type="button"
+                    aria-label="Reject Grace Kim"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </li>
+            </ul>
+            <div class="state-label">Closed: already checked in</div>
+            <ul class="tray-list" style="margin: 0">
+              <li class="tray-row" role="status">
+                <div class="row-who">
+                  <span class="avatar" aria-hidden="true">GK</span>
+                  <div class="row-text">
+                    <div class="row-name">Grace Kim</div>
+                    <div class="row-meta">
+                      <span class="badge-i" aria-hidden="true">i</span
+                      ><span style="font-size: 13px; color: var(--text-soft)"
+                        >Request closed. Their phone shows they're already
+                        checked in.</span
+                      >
+                    </div>
+                  </div>
                 </div>
               </li>
             </ul>

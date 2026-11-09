@@ -18,36 +18,37 @@ Render (from the repo root): `export PATH="/opt/homebrew/opt/node@24/bin:$PATH" 
 
 **Player (390 px)**
 
-| PNG                                   | Screen                                                                              |
-| ------------------------------------- | ----------------------------------------------------------------------------------- |
-| `P01-welcome-recognised.png`          | Welcome, recognised phone (PNG layout; "This phone was used by" card, pinned CTA)   |
-| `P02-welcome-new-phone.png`           | Welcome, new phone (search + guest link, no CTA)                                    |
-| `P03a-search-results.png`             | Search with 2+ letters: 5 names, initials + name only                               |
-| `P03b-search-no-match.png`            | Search, no match                                                                    |
-| `P04a-confirm-recognised.png`         | Confirm bottom sheet, recognised phone (name + saved level)                         |
-| `P04b-confirm-picked-from-search.png` | Confirm bottom sheet, picked from search (name only, "Update your level" collapsed) |
-| `P04c-confirm-update-level-open.png`  | Same, "Update your level" opened                                                    |
-| `P05a-guest-form.png`                 | First-time guest form                                                               |
-| `P05b-guest-form-errors.png`          | Guest form with inline orange errors                                                |
-| `P06-waiting-for-approval.png`        | Waiting for the host to approve                                                     |
-| `P07-approved.png`                    | Approved, "You're in"                                                               |
-| `P08-rejected.png`                    | Rejected (neutral) with Try again                                                   |
-| `P09-already-checked-in.png`          | Already checked in (own linked phone only)                                          |
-| `P10-too-many-attempts.png`           | Rate limited                                                                        |
-| `P11-link-not-active.png`             | Unknown or reissued tag                                                             |
-| `P12-no-social-open.png`              | No social open right now                                                            |
-| `P13-something-went-wrong.png`        | Something went wrong / offline                                                      |
+| PNG                                          | Screen                                                                                          |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `P01-welcome-recognised.png`                 | Welcome, recognised phone (PNG layout; "This phone was used by" card, pinned CTA)               |
+| `P02-welcome-new-phone.png`                  | Welcome, new phone (search + guest link, no CTA)                                                |
+| `P03a-search-results.png`                    | Search with 2+ letters: 5 names, initials + name only                                           |
+| `P03b-search-no-match.png`                   | Search, no match                                                                                |
+| `P04a-confirm-recognised.png`                | Confirm bottom sheet, recognised phone (name + saved level)                                     |
+| `P04b-confirm-picked-from-search.png`        | Confirm bottom sheet, picked from search (name only, "Update your level" collapsed)             |
+| `P04c-confirm-update-level-open.png`         | Same, "Update your level" opened                                                                |
+| `P05a-guest-form.png`                        | First-time guest form                                                                           |
+| `P05b-guest-form-errors.png`                 | Guest form with inline orange errors                                                            |
+| `P06-waiting-for-approval.png`               | Waiting for the host to approve                                                                 |
+| `P07-approved.png`                           | Approved, "You're in"                                                                           |
+| `P08-rejected.png`                           | Rejected (neutral) with Try again                                                               |
+| `P09-already-checked-in.png`                 | Already checked in (own linked phone only, straight away)                                       |
+| `P09b-already-checked-in-host-confirmed.png` | Already checked in, confirmed by a host (a non-linked phone, after "Close: already checked in") |
+| `P10-too-many-attempts.png`                  | Rate limited                                                                                    |
+| `P11-link-not-active.png`                    | Unknown or reissued tag                                                                         |
+| `P12-no-social-open.png`                     | No social open right now                                                                        |
+| `P13-something-went-wrong.png`               | Something went wrong / offline                                                                  |
 
 **Host tray**
 
-| PNG                          | Screen                                                                                                 |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `H00-setup-with-tray.png`    | Setup page (1280 px, other sections abbreviated) with the tray placed                                  |
-| `H01-tray-three-pending.png` | Tray with 3 requests: member flagged "Already in this session", member with a level change, new player |
-| `H02-tray-empty.png`         | Empty state                                                                                            |
-| `H03-row-states.png`         | Approving, failed + Retry, already decided by another host, approved, rejected                         |
-| `H04a-tablet-820.png`        | Tablet wrapping                                                                                        |
-| `H04b-phone-390.png`         | Phone wrapping                                                                                         |
+| PNG                          | Screen                                                                                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `H00-setup-with-tray.png`    | Setup page (1280 px, other sections abbreviated) with the tray placed                                                                              |
+| `H01-tray-three-pending.png` | Tray with 3 requests: member already checked in (no Approve; "Close: already checked in" or Reject), member with a level change, new player        |
+| `H02-tray-empty.png`         | Empty state                                                                                                                                        |
+| `H03-row-states.png`         | Approving, failed + Retry, approve stopped (already checked in), closed as already checked in, already decided by another host, approved, rejected |
+| `H04a-tablet-820.png`        | Tablet wrapping                                                                                                                                    |
+| `H04b-phone-390.png`         | Phone wrapping                                                                                                                                     |
 
 **Sticker and QR**
 
@@ -69,8 +70,11 @@ Everything below is a proposal not covered by `DESIGN.md` or the M5 plan. Each p
 2. Tray header: a 32 px count badge (blue when requests are waiting, grey at 0) in place of a numbered section badge; the tray border is blue while requests wait and neutral when empty. Subtitle "Approve to add them to Who's playing. Oldest first."
 3. Rows are ordered oldest first.
 4. A member who chose "Update your level" shows the new level plus "level changed from <old>". The request needs to carry the chosen level for this.
-5. "Already in this session" row: orange tint, `!` and the words, plus "Check with the player before approving." Approve and Reject stay available. What Approve does for an already-attending member (no-op apart from linking the phone, or blocked) is not decided in the plan.
-6. Decided rows (approved, rejected, decided by another host) show a one-line message for about 4 s, then leave the list. A "Check-in rejected" confirmation is added alongside the plan's approved one.
+5. **Already checked in (Ryan, 2026-11-10: a player already attending is never approved into the same session again).** Server rule: `session_participants` is unique on `(session_id, member_id)`, so duplicate attendance is already impossible in the database, but today `approve_checkin` for an attending member either errors (`PARTICIPANT_ID_MISMATCH`) or re-links the device. In M5, `approve_checkin` refuses with `ALREADY_IN_SESSION`: no participant row, no device link. Design: a request for a member who is already attending gets an orange-edged row with `!` and "Already checked in to this session. They can't be added twice." and **no Approve button**. Its actions are blue "Close: already checked in" (resolves the request; the requesting phone then shows P9b) and outline "Reject" (for when it isn't them). Pending rows switch to this row by themselves within one 5 s poll when the member becomes attending. If the member is added after the row was shown (another host approved a request from a different phone, or a host added them in Who's playing), pressing Approve is refused and the row switches to the same already-checked-in row with "Added by another host a moment ago." (H3). Before a host decides, a non-linked phone still sees P6 Waiting, so a phone never learns anyone's status from a submit. Open for Ryan:
+   - **(a)** Record "Close: already checked in" as a new request outcome (a new `checkin_request_status` value, e.g. `already_in_session`) rather than reusing `rejected`. Recommended: a new value, so the phone and history can tell the two apart.
+   - **(b)** After the host closes it, tell the requesting phone "You're already checked in" (P9b) rather than showing the neutral rejected message (P8). Recommended: P9b, since a host confirmed it in person.
+   - **(c)** Don't link the requesting phone to the member in this case. Recommended: no link (the phone may not be theirs).
+6. Decided rows (approved, rejected, closed as already checked in, decided by another host) show a one-line message for about 4 s, then leave the list. A "Check-in rejected" confirmation is added alongside the plan's approved one.
 7. Failed approve/reject: orange row message "Couldn't approve. Check your connection and retry." with a blue Retry; Reject stays available.
 8. "Show QR code" (outline, 44 px) is always in the tray header, not only in the empty state.
 
@@ -140,6 +144,7 @@ Everything below is a proposal not covered by `DESIGN.md` or the M5 plan. Each p
 - P7: `You're in, Grace` · `You're checked in to <session>.` · pill `Checked in` · `What happens next` · `The hosts put you on a court when it's your turn.` · `Stay near the courts and listen for your name.` · `You can close this page.`
 - P8: `Check-in not approved` · `The host didn't approve this check-in. Please speak to the host.` · `Try again`
 - P9: `You're already checked in to <session>` · `Nothing more to do, Grace. Stay near the courts and listen for your name.`
+- P9b: `You're already checked in to <session>` · `A host confirmed you're on the list. Nothing else to do.` · pill `Checked in`
 - P10: `Too many attempts` · `Too many attempts. Wait a few minutes and try again.` · `Try again`
 - P11: `Pickleball Social Manager` · `This check-in link isn't active` · `Ask a host at the courts for the current QR code.`
 - P12: `No social open right now` · `Check back when your host opens the session.` · `Check again`
@@ -149,7 +154,10 @@ Everything below is a proposal not covered by `DESIGN.md` or the M5 plan. Each p
 
 - `Check-ins waiting` · `Approve to add them to Who's playing. Oldest first.` · `Show QR code`
 - Chips: `Member` · `NEW PLAYER` · `<level>` · `level changed from <old level>` · `2 min ago`
-- `Already in this session.` `Check with the player before approving.`
+- `Already checked in to this session.` `They can't be added twice.`
+- `Close: already checked in` (screen-reader label `Close <name>'s request: already checked in`) · `Reject`
+- `Added by another host a moment ago.` (after a refused Approve)
+- `Request closed. Their phone shows they're already checked in.`
 - `Approve` · `Reject` (screen-reader labels `Approve <name>`, `Reject <name>`)
 - `Approving…` · `Couldn't approve.` `Check your connection and retry.` · `Retry`
 - `Already decided by another host` · `Added to Who's playing` · `Check-in rejected. The player sees "Please speak to the host".`
