@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>M5 · Sticker and QR, issue new link · design drafts</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Tokens: mirror DESIGN.md / src/app/globals.css @theme. */
+      :root {
+        --bg: #0f1419;
+        --bg-header: #121a21;
+        --bg-backdrop: #080b0e;
+        --card: #182028;
+        --card-border: #24303b;
+        --inner: #1c2630;
+        --inner-border: #2a3642;
+        --nav-active: #222d37;
+        --text: #f1f5f9;
+        --text-muted: #9aa8b6;
+        --text-soft: #d5dee7;
+        --text-row: #c3cdd8;
+        --placeholder: #7d8b99;
+        --outline: #3a4856;
+        --link: #8cc4ff;
+        --link-hover: #bfdfff;
+        --lime: #d4f23a;
+        --lime-surface: #1f2a14;
+        --lime-edge: #4c5f14;
+        --on-lime: #18200a;
+        --lime-soft: #e3fa7a;
+        --blue: #5aa9ff;
+        --blue-surface: #13263c;
+        --blue-edge: #2f5e8f;
+        --on-blue: #06182b;
+        --blue-soft: #cfe6ff;
+        --orange: #ff9f43;
+        --orange-surface: #22201a;
+        --orange-edge: #5a4220;
+        --on-orange: #2a1606;
+        --orange-soft: #ffb877;
+        --orange-text: #ffd6ae;
+        --modal-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+        --font: Outfit, system-ui, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #05080a;
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 15px;
+        line-height: 1.4;
+      }
+      a {
+        color: var(--link);
+      }
+      a:hover {
+        color: var(--link-hover);
+      }
+      button,
+      input {
+        font-family: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      :focus-visible {
+        outline: 2px solid var(--lime);
+        outline-offset: 2px;
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      .gallery-intro {
+        padding: 32px 40px 0;
+      }
+      .gallery-intro h1 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 800;
+      }
+      .gallery-intro p {
+        margin: 6px 0 0;
+        color: var(--text-muted);
+        max-width: 900px;
+      }
+      .gallery {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 40px 32px;
+        padding: 32px 40px 64px;
+        align-items: flex-start;
+      }
+      .frame {
+        margin: 0;
+        padding: 12px;
+        background: #05080a;
+      }
+      .frame figcaption {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin: 0 0 10px;
+      }
+      .frame figcaption b {
+        color: var(--text);
+      }
+      .screen {
+        background: var(--bg);
+        border: 1px solid var(--card-border);
+        border-radius: 20px;
+        overflow: hidden;
+        position: relative;
+      }
+      .w1280 {
+        width: 1280px;
+      }
+
+      /* Host header */
+      .host-header {
+        border-bottom: 1px solid var(--card-border);
+        background: var(--bg-header);
+      }
+      .host-header-inner {
+        padding: 12px 28px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px 24px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 44px;
+        font-size: 19px;
+        font-weight: 700;
+      }
+      .nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .nav a {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 16px;
+        border-radius: 12px;
+        color: var(--text-muted);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .nav a[aria-current="page"] {
+        background: var(--nav-active);
+        color: var(--text);
+        font-weight: 600;
+      }
+      .host-me {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .host-me .who {
+        font-size: 14px;
+        color: var(--text-muted);
+      }
+      .avatar {
+        flex: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        background: #2a3642;
+        color: var(--text-soft);
+      }
+      main {
+        padding: 24px 28px 48px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .page-head h1 {
+        margin: 0;
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+      .page-head p {
+        margin: 4px 0 0;
+        color: var(--text-muted);
+        max-width: 720px;
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 44px;
+        color: var(--link);
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .columns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        align-items: flex-start;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--card-border);
+        border-radius: 24px;
+        padding: 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        min-width: 0;
+      }
+      .card h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .card p {
+        margin: 0;
+      }
+      .muted {
+        color: var(--text-muted);
+        font-size: 14px;
+      }
+      .abbreviated {
+        opacity: 0.5;
+      }
+      .skeleton {
+        height: 48px;
+        border-radius: 14px;
+        background: var(--inner);
+        border: 1px solid var(--inner-border);
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 0;
+        font-family: inherit;
+        white-space: nowrap;
+        text-decoration: none;
+      }
+      .btn-outline {
+        height: 44px;
+        padding: 0 16px;
+        border-radius: 14px;
+        border: 1px solid var(--outline);
+        background: transparent;
+        color: var(--text);
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .btn-secondary {
+        height: 44px;
+        padding: 0 16px;
+        border-radius: 14px;
+        background: var(--blue);
+        color: var(--on-blue);
+        font-size: 15px;
+        font-weight: 700;
+      }
+      .btn-attention {
+        height: 44px;
+        padding: 0 16px;
+        border-radius: 14px;
+        border: 1px solid var(--orange-edge);
+        background: transparent;
+        color: var(--orange-soft);
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .btn-lg {
+        height: 56px;
+        border-radius: 16px;
+        font-size: 17px;
+      }
+      .btn-orange-solid {
+        height: 56px;
+        padding: 0 20px;
+        border-radius: 16px;
+        background: var(--orange);
+        color: var(--on-orange);
+        font-size: 17px;
+        font-weight: 800;
+      }
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field label {
+        font-size: 13px;
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+      .link-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .input {
+        flex: 1 1 280px;
+        min-width: 0;
+        height: 48px;
+        border-radius: 14px;
+        border: 1px solid var(--inner-border);
+        background: var(--inner);
+        color: var(--text);
+        padding: 0 14px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .copied {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--lime-soft);
+      }
+      .badge-check {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--lime);
+        color: var(--on-lime);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .badge-bang {
+        flex: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--orange);
+        color: var(--on-orange);
+        font-size: 12px;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .badge-i {
+        flex: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--inner-border);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .note {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        font-size: 14px;
+        color: var(--text-soft);
+        background: var(--inner);
+        border: 1px solid var(--inner-border);
+        border-radius: 16px;
+        padding: 12px 14px;
+      }
+      .warning {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        background: var(--orange-surface);
+        border: 1px solid var(--orange-edge);
+        border-radius: 14px;
+        padding: 10px 14px;
+        color: var(--orange-text);
+        font-size: 14px;
+      }
+
+      /* QR: always dark modules on white with a quiet zone, for reliable scanning. */
+      .qr-panel {
+        background: #ffffff;
+        border-radius: 20px;
+        padding: 18px;
+        display: inline-flex;
+      }
+      .qr {
+        display: block;
+      }
+
+      /* Hosts list */
+      .host-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .host-list li {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 16px;
+        background: var(--inner);
+        border: 1px solid var(--inner-border);
+        font-weight: 600;
+      }
+      .role {
+        margin-left: auto;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--lime);
+        color: var(--on-lime);
+      }
+      .role.host {
+        background: var(--inner-border);
+        color: var(--text);
+      }
+
+      /* Dialog */
+      .backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(8, 11, 14, 0.82);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+      }
+      .dialog {
+        width: 600px;
+        max-width: 100%;
+        background: var(--card);
+        border: 1px solid var(--inner-border);
+        border-radius: 28px;
+        padding: 28px;
+        box-shadow: var(--modal-shadow);
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .dialog h2 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 800;
+      }
+      .dialog-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: flex-end;
+      }
+      .dialog-actions .btn {
+        flex: 1 1 200px;
+      }
+
+      /* Full-screen QR */
+      .fullscreen {
+        width: 820px;
+        height: 1180px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        padding: 40px;
+        text-align: center;
+      }
+      .fullscreen .close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+      }
+      .fullscreen h1 {
+        margin: 0;
+        font-size: 44px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+      .fullscreen .social {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .fullscreen .url {
+        font-size: 20px;
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+
+      /* Print preview */
+      .print-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 28px;
+        background: var(--bg-header);
+        border-bottom: 1px solid var(--card-border);
+      }
+      .print-toolbar p {
+        margin: 0;
+        flex: 1 1 300px;
+        color: var(--text-muted);
+        font-size: 14px;
+      }
+      .paper-wrap {
+        padding: 28px;
+        display: flex;
+        justify-content: center;
+        background: #2a3642;
+      }
+      .paper {
+        width: 794px;
+        height: 1123px;
+        background: #ffffff;
+        color: #0f1419;
+        padding: 38px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(4, 1fr);
+        gap: 0;
+      }
+      .sticker {
+        border: 1px dashed #b8c2cc;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 10px;
+        text-align: center;
+      }
+      .sticker .s-name {
+        font-size: 15px;
+        font-weight: 800;
+        line-height: 1.15;
+      }
+      .sticker .s-cta {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .sticker .s-url {
+        font-size: 11px;
+        color: #3a4856;
+      }
+    </style>
+  </head>
+  <body>
+    <template id="tpl-logo"
+      ><svg width="40" height="40" viewBox="0 0 52 52" aria-hidden="true">
+        <circle cx="26" cy="26" r="24" fill="#D4F23A" />
+        <circle cx="18" cy="18" r="3" fill="#0F1419" />
+        <circle cx="30" cy="15" r="3" fill="#0F1419" />
+        <circle cx="36" cy="27" r="3" fill="#0F1419" />
+        <circle cx="25" cy="34" r="3" fill="#0F1419" />
+        <circle cx="15" cy="29" r="3" fill="#0F1419" />
+        <circle cx="26" cy="24" r="3" fill="#0F1419" /></svg
+    ></template>
+    <template id="tpl-header-setup">
+      <header class="host-header">
+        <div class="host-header-inner">
+          <div class="brand">
+            <span data-include="tpl-logo"></span>Riverside Pickleball Club
+          </div>
+          <nav class="nav" aria-label="Host">
+            <a href="#">Session setup</a><a href="#">Members</a
+            ><a href="#">Hosts</a>
+          </nav>
+          <div class="host-me">
+            <span class="avatar">RH</span><span class="who">Host · Ryan H.</span
+            ><button class="btn btn-outline" type="button">Sign out</button>
+          </div>
+        </div>
+      </header>
+    </template>
+    <template id="tpl-header-hosts">
+      <header class="host-header">
+        <div class="host-header-inner">
+          <div class="brand">
+            <span data-include="tpl-logo"></span>Riverside Pickleball Club
+          </div>
+          <nav class="nav" aria-label="Host">
+            <a href="#">Session setup</a><a href="#">Members</a
+            ><a href="#" aria-current="page">Hosts</a>
+          </nav>
+          <div class="host-me">
+            <span class="avatar">RH</span
+            ><span class="who">Manager · Ryan H.</span
+            ><button class="btn btn-outline" type="button">Sign out</button>
+          </div>
+        </div>
+      </header>
+    </template>
+    <template id="tpl-hosts-page">
+      <div data-include="tpl-header-hosts"></div>
+      <main>
+        <div class="page-head"><h1>Hosts</h1></div>
+        <div class="columns">
+          <section
+            class="card abbreviated"
+            style="flex: 999 1 480px"
+            aria-label="Who can host (abbreviated)"
+          >
+            <h2>Who can host</h2>
+            <ul class="host-list">
+              <li>
+                Ryan H. <span class="muted" style="font-weight: 400">(you)</span
+                ><span class="role">MANAGER</span>
+              </li>
+              <li>Ana Souza<span class="role host">HOST</span></li>
+              <li>Tom Becker<span class="role host">HOST</span></li>
+            </ul>
+          </section>
+          <div
+            style="
+              flex: 1 1 360px;
+              display: flex;
+              flex-direction: column;
+              gap: 16px;
+              min-width: 0;
+            "
+          >
+            <section class="card" aria-labelledby="checkin-link-title">
+              <h2 id="checkin-link-title">Check-in link</h2>
+              <p class="muted">
+                Players open this link from the QR code or a sticker to check
+                in.
+              </p>
+              <div
+                class="note"
+                style="font-weight: 600; overflow-wrap: anywhere"
+              >
+                pickleball.example/t/k7Qm2xPa
+              </div>
+              <a
+                href="#"
+                style="
+                  font-weight: 600;
+                  min-height: 44px;
+                  display: inline-flex;
+                  align-items: center;
+                "
+                >Open Sticker and QR</a
+              >
+              <div
+                style="
+                  border-top: 1px solid var(--card-border);
+                  padding-top: 16px;
+                  display: flex;
+                  flex-direction: column;
+                  gap: 10px;
+                "
+              >
+                <p class="muted">
+                  Issue a new link if the old one was shared where it shouldn't
+                  be. The current link, QR code and every printed sticker stop
+                  working.
+                </p>
+                <div>
+                  <button class="btn btn-attention" type="button">
+                    Issue new link
+                  </button>
+                </div>
+              </div>
+            </section>
+            <section
+              class="card abbreviated"
+              aria-label="Invite a host (abbreviated)"
+            >
+              <h2>Invite a host</h2>
+              <div class="skeleton"></div>
+            </section>
+            <section
+              class="card abbreviated"
+              aria-label="Social name (abbreviated)"
+            >
+              <h2>Social name</h2>
+              <div class="skeleton"></div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </template>
+
+    <div class="gallery-intro">
+      <h1>
+        M5 · Sticker and QR page, full-screen QR, print layout, issue new link
+      </h1>
+      <p>
+        The QR here is a drawn placeholder pattern (not scannable). The built
+        page renders a real QR server-side or with a vetted library.
+      </p>
+    </div>
+
+    <div class="gallery">
+      <!-- S1 -->
+      <figure class="frame" data-shot="S01-sticker-and-qr-page">
+        <figcaption>
+          <b>S1 · Sticker and QR page (any host).</b> Opened from "Show QR code"
+          in the check-in tray. "Copied" appears for a few seconds after
+          pressing Copy link (shown here for review).
+        </figcaption>
+        <div class="screen w1280" data-screen>
+          <div data-include="tpl-header-setup"></div>
+          <main>
+            <a class="back-link" href="#"
+              ><svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                aria-hidden="true"
+              >
+                <path d="M15 6l-6 6 6 6" /></svg
+              >Back to session setup</a
+            >
+            <div class="page-head">
+              <h1>Sticker and QR</h1>
+              <p>
+                One check-in link for Riverside Pickleball Club. Players scan
+                the QR code or tap a sticker to check in to whichever session is
+                open. It stays the same for every session.
+              </p>
+            </div>
+            <div class="columns">
+              <section
+                class="card"
+                style="flex: 999 1 520px"
+                aria-labelledby="link-title"
+              >
+                <h2 id="link-title">Check-in link</h2>
+                <div class="field">
+                  <label for="checkin-link">Link</label>
+                  <div class="link-row">
+                    <input
+                      class="input"
+                      id="checkin-link"
+                      readonly
+                      value="https://pickleball.example/t/k7Qm2xPa"
+                    />
+                    <button
+                      class="btn btn-outline"
+                      type="button"
+                      style="height: 48px"
+                    >
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect x="8" y="8" width="12" height="12" rx="2" />
+                        <path
+                          d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"
+                        /></svg
+                      >Copy link
+                    </button>
+                  </div>
+                  <span class="copied" role="status"
+                    ><span class="badge-check"
+                      ><svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M5 12l5 5L20 7" /></svg></span
+                    >Copied</span
+                  >
+                </div>
+                <div class="note">
+                  <span class="badge-i" aria-hidden="true">i</span
+                  ><span
+                    >NFC stickers: write this same link to the sticker. Every
+                    sticker and QR code for this social uses it.</span
+                  >
+                </div>
+                <div class="button-row">
+                  <button class="btn btn-secondary" type="button">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg
+                    >Show full screen
+                  </button>
+                  <button class="btn btn-outline" type="button">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 9V3h12v6M6 18H4v-7h16v7h-2" />
+                      <rect x="6" y="14" width="12" height="7" /></svg
+                    >Print stickers
+                  </button>
+                </div>
+                <p class="muted">
+                  Only a manager can issue a new link (Hosts page). When they
+                  do, this link, the QR code and printed stickers stop working.
+                </p>
+              </section>
+              <section
+                class="card"
+                style="flex: 1 1 360px; align-items: center"
+                aria-labelledby="qr-title"
+              >
+                <h2 id="qr-title" style="align-self: flex-start">QR code</h2>
+                <div class="qr-panel">
+                  <svg
+                    class="qr"
+                    data-qr
+                    width="260"
+                    height="260"
+                    role="img"
+                    aria-label="QR code for the check-in link pickleball.example/t/k7Qm2xPa"
+                  ></svg>
+                </div>
+                <p class="muted">
+                  Scan to check in · pickleball.example/t/k7Qm2xPa
+                </p>
+              </section>
+            </div>
+          </main>
+        </div>
+      </figure>
+
+      <!-- S2 -->
+      <figure class="frame" data-shot="S02-qr-full-screen">
+        <figcaption>
+          <b>S2 · Full-screen QR (tablet, 820 px).</b> A host turns the screen
+          to the player. Esc or Close returns to S1.
+        </figcaption>
+        <div
+          class="screen fullscreen"
+          data-screen
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fs-title"
+        >
+          <button
+            class="btn btn-outline close"
+            type="button"
+            aria-label="Close full screen"
+            style="width: 44px; padding: 0; font-size: 22px"
+          >
+            ×
+          </button>
+          <div class="social">
+            <span data-include="tpl-logo"></span>Riverside Pickleball Club
+          </div>
+          <h1 id="fs-title">Scan to check in</h1>
+          <div class="qr-panel" style="padding: 28px; border-radius: 28px">
+            <svg
+              class="qr"
+              data-qr
+              width="520"
+              height="520"
+              role="img"
+              aria-label="QR code for the check-in link pickleball.example/t/k7Qm2xPa"
+            ></svg>
+          </div>
+          <div class="url">pickleball.example/t/k7Qm2xPa</div>
+        </div>
+      </figure>
+
+      <!-- S3 -->
+      <figure class="frame" data-shot="S03-print-layout">
+        <figcaption>
+          <b>S3 · Print layout (A4 preview).</b> 12 stickers per page (3 × 4,
+          about 63 × 67 mm), dashed cut lines, black on white. The toolbar
+          doesn't print.
+        </figcaption>
+        <div class="screen" data-screen style="width: 850px">
+          <div class="print-toolbar">
+            <a class="btn btn-outline" href="#">Back</a>
+            <p>
+              12 stickers per A4 page. Print on sticker sheets or plain paper
+              and cut along the dashed lines.
+            </p>
+            <button class="btn btn-secondary" type="button">Print</button>
+          </div>
+          <div class="paper-wrap">
+            <div class="paper" id="paper"></div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- S4a -->
+      <figure class="frame" data-shot="S04a-hosts-issue-new-link">
+        <figcaption>
+          <b
+            >S4a · Hosts page, manager view: Check-in link card with "Issue new
+            link".</b
+          >
+          Hosts (non-managers) see the card without the issue section.
+        </figcaption>
+        <div class="screen w1280" data-screen>
+          <div data-include="tpl-hosts-page"></div>
+        </div>
+      </figure>
+
+      <!-- S4b -->
+      <figure class="frame" data-shot="S04b-issue-new-link-confirm">
+        <figcaption>
+          <b>S4b · Confirmation dialog.</b> Focus starts on Cancel. After
+          confirming, the card shows the new link.
+        </figcaption>
+        <div class="screen w1280" data-screen>
+          <div data-include="tpl-hosts-page"></div>
+          <div class="backdrop">
+            <div
+              class="dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="issue-title"
+              aria-describedby="issue-warning"
+            >
+              <div>
+                <h2 id="issue-title">Issue a new check-in link?</h2>
+                <p class="muted" style="margin: 4px 0 0">
+                  Riverside Pickleball Club
+                </p>
+              </div>
+              <div class="warning" id="issue-warning">
+                <span class="badge-bang" aria-hidden="true">!</span
+                ><span
+                  >The current link and QR code stop working immediately,
+                  including every printed and NFC sticker. Anyone who uses them
+                  sees “This check-in link isn't active”.</span
+                >
+              </div>
+              <p style="margin: 0; color: var(--text-soft)">
+                Afterwards, print new stickers from the Sticker and QR page and
+                replace the old ones. Check-ins already sent are not affected.
+              </p>
+              <div class="dialog-actions">
+                <button class="btn btn-outline btn-lg" type="button">
+                  Cancel
+                </button>
+                <button class="btn btn-orange-solid" type="button">
+                  Issue new link
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <script>
+      // Clone shared fragments.
+      let placeholder;
+      while ((placeholder = document.querySelector("[data-include]"))) {
+        const fragment = document
+          .getElementById(placeholder.dataset.include)
+          .content.cloneNode(true);
+        placeholder.replaceWith(fragment);
+      }
+
+      // Placeholder QR: 29x29 modules with three finder squares and a seeded pattern. Not a real QR code.
+      function drawPlaceholderQr(svgElement) {
+        const moduleCount = 29;
+        let seed = 20261110;
+        const nextRandom = () => {
+          seed = (seed * 1664525 + 1013904223) % 4294967296;
+          return seed / 4294967296;
+        };
+        const isInFinder = (row, column) =>
+          [
+            [0, 0],
+            [0, moduleCount - 7],
+            [moduleCount - 7, 0],
+          ].some(
+            ([top, left]) =>
+              row >= top - 1 &&
+              row <= top + 7 &&
+              column >= left - 1 &&
+              column <= left + 7,
+          );
+        const rects = [];
+        for (let row = 0; row < moduleCount; row += 1) {
+          for (let column = 0; column < moduleCount; column += 1) {
+            if (isInFinder(row, column)) continue;
+            const isTiming =
+              (row === 6 || column === 6) && (row + column) % 2 === 0;
+            if (isTiming || nextRandom() < 0.47)
+              rects.push(
+                `<rect x="${column}" y="${row}" width="1.02" height="1.02"/>`,
+              );
+          }
+        }
+        for (const [top, left] of [
+          [0, 0],
+          [0, moduleCount - 7],
+          [moduleCount - 7, 0],
+        ]) {
+          rects.push(
+            `<rect x="${left}" y="${top}" width="7" height="7"/><rect x="${left + 1}" y="${top + 1}" width="5" height="5" fill="#fff"/><rect x="${left + 2}" y="${top + 2}" width="3" height="3"/>`,
+          );
+        }
+        svgElement.setAttribute("viewBox", `0 0 ${moduleCount} ${moduleCount}`);
+        svgElement.innerHTML = `<g fill="#0F1419">${rects.join("")}</g>`;
+      }
+
+      const paper = document.getElementById("paper");
+      for (let stickerIndex = 0; stickerIndex < 12; stickerIndex += 1) {
+        paper.insertAdjacentHTML(
+          "beforeend",
+          `<div class="sticker"><svg class="qr" data-qr width="150" height="150" role="img" aria-label="QR code"></svg><div class="s-name">Riverside Pickleball Club</div><div class="s-cta">Scan to check in</div><div class="s-url">pickleball.example/t/k7Qm2xPa</div></div>`,
+        );
+      }
+      for (const svgElement of document.querySelectorAll("[data-qr]"))
+        drawPlaceholderQr(svgElement);
+    </script>
+  </body>
+</html>

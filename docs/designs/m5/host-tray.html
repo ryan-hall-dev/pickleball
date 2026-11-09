@@ -1,0 +1,1340 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>M5 · Host pending check-in tray · design drafts</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Tokens: mirror DESIGN.md / src/app/globals.css @theme. */
+      :root {
+        --bg: #0f1419;
+        --bg-header: #121a21;
+        --bg-backdrop: #080b0e;
+        --card: #182028;
+        --card-border: #24303b;
+        --inner: #1c2630;
+        --inner-border: #2a3642;
+        --nav-active: #222d37;
+        --text: #f1f5f9;
+        --text-muted: #9aa8b6;
+        --text-soft: #d5dee7;
+        --text-row: #c3cdd8;
+        --placeholder: #7d8b99;
+        --outline: #3a4856;
+        --outline-blue: #2f4a68;
+        --drag-handle: #5b6b7a;
+        --link: #8cc4ff;
+        --link-hover: #bfdfff;
+        --lime: #d4f23a;
+        --lime-surface: #1f2a14;
+        --lime-edge: #4c5f14;
+        --on-lime: #18200a;
+        --lime-soft: #e3fa7a;
+        --lime-caption: #c9d6a0;
+        --lime-status: #c9e86a;
+        --lime-avatar: #2b3a12;
+        --blue: #5aa9ff;
+        --blue-surface: #13263c;
+        --blue-edge: #2f5e8f;
+        --on-blue: #06182b;
+        --blue-soft: #cfe6ff;
+        --blue-avatar: #1d3550;
+        --orange: #ff9f43;
+        --orange-surface: #22201a;
+        --orange-surface-row: #251c12;
+        --orange-surface-strong: #2b2114;
+        --orange-edge: #5a4220;
+        --on-orange: #2a1606;
+        --orange-soft: #ffb877;
+        --orange-text: #ffd6ae;
+        --orange-avatar: #3a2612;
+        --orange-avatar-text: #ffc48f;
+        --modal-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+        --font: Outfit, system-ui, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #05080a;
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 15px;
+        line-height: 1.4;
+      }
+      a {
+        color: var(--link);
+      }
+      a:hover {
+        color: var(--link-hover);
+      }
+      button,
+      input {
+        font-family: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      :focus-visible {
+        outline: 2px solid var(--lime);
+        outline-offset: 2px;
+      }
+      .tabular {
+        font-variant-numeric: tabular-nums;
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      /* Gallery (review page only) */
+      .gallery-intro {
+        padding: 32px 40px 0;
+      }
+      .gallery-intro h1 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 800;
+      }
+      .gallery-intro p {
+        margin: 6px 0 0;
+        color: var(--text-muted);
+        max-width: 900px;
+      }
+      .gallery {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 40px 32px;
+        padding: 32px 40px 64px;
+        align-items: flex-start;
+      }
+      .frame {
+        margin: 0;
+        padding: 12px;
+        background: #05080a;
+      }
+      .frame figcaption {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin: 0 0 10px;
+      }
+      .frame figcaption b {
+        color: var(--text);
+      }
+      .screen {
+        background: var(--bg);
+        border: 1px solid var(--card-border);
+        border-radius: 20px;
+        overflow: hidden;
+      }
+      .screen.w1280 {
+        width: 1280px;
+      }
+      .screen.w820 {
+        width: 820px;
+      }
+      .screen.w390 {
+        width: 390px;
+      }
+      .screen.w760 {
+        width: 760px;
+      }
+
+      /* Host header */
+      .host-header {
+        border-bottom: 1px solid var(--card-border);
+        background: var(--bg-header);
+      }
+      .host-header-inner {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 12px 28px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px 24px;
+      }
+      .w390 .host-header-inner,
+      .w390 main {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 44px;
+        font-size: 19px;
+        font-weight: 700;
+      }
+      .nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .nav a {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 16px;
+        border-radius: 12px;
+        color: var(--text-muted);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .nav a[aria-current="page"] {
+        background: var(--nav-active);
+        color: var(--text);
+        font-weight: 600;
+      }
+      .host-me {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .host-me .who {
+        font-size: 14px;
+        color: var(--text-muted);
+      }
+
+      main {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 24px 28px 48px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .page-head h1 {
+        margin: 0;
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+      .page-head p {
+        margin: 4px 0 0;
+        color: var(--text-muted);
+      }
+      .page-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .saved {
+        font-size: 14px;
+        color: var(--text-muted);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-right: 6px;
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 0;
+        font-family: inherit;
+        white-space: nowrap;
+      }
+      .btn-outline {
+        height: 44px;
+        padding: 0 16px;
+        border-radius: 14px;
+        border: 1px solid var(--outline);
+        background: transparent;
+        color: var(--text);
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .btn-secondary {
+        height: 44px;
+        padding: 0 16px;
+        border-radius: 14px;
+        background: var(--blue);
+        color: var(--on-blue);
+        font-size: 15px;
+        font-weight: 700;
+      }
+      .btn-disabled {
+        height: 44px;
+        padding: 0 16px;
+        border-radius: 14px;
+        border: 1px solid var(--inner-border);
+        background: transparent;
+        color: var(--placeholder);
+        font-size: 15px;
+        font-weight: 600;
+        cursor: not-allowed;
+      }
+      .btn-primary {
+        height: 64px;
+        width: 100%;
+        border-radius: 18px;
+        background: var(--lime);
+        color: var(--on-lime);
+        font-size: 19px;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+
+      /* Stepper */
+      .stepper {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .stepper li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px 8px 8px;
+        border-radius: 999px;
+        background: var(--inner);
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .step-done {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--lime);
+        color: var(--on-lime);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .step-up {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 2px solid var(--outline);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      /* Cards */
+      .card {
+        background: var(--card);
+        border: 1px solid var(--card-border);
+        border-radius: 24px;
+        padding: 22px;
+      }
+      .card-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .card-head h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .num-badge {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        background: #2a3642;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .columns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        align-items: flex-start;
+      }
+      .col-main {
+        flex: 999 1 640px;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .col-aside {
+        flex: 1 1 360px;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .abbreviated {
+        opacity: 0.5;
+      }
+      .skeleton {
+        height: 48px;
+        border-radius: 14px;
+        background: var(--inner);
+        border: 1px solid var(--inner-border);
+      }
+      .skeleton-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 14px;
+      }
+      .member-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 10px;
+      }
+      .member-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 16px;
+        background: var(--lime-surface);
+        border: 1px solid var(--lime-edge);
+      }
+      .member-row b {
+        display: block;
+        font-size: 15px;
+      }
+      .member-row small {
+        display: block;
+        font-size: 12px;
+        color: var(--lime-status);
+      }
+      .member-row.new {
+        box-shadow: 0 0 0 2px var(--lime);
+      }
+      .counter-chips {
+        display: flex;
+        gap: 8px;
+        margin-left: auto;
+        flex-wrap: wrap;
+      }
+      .counter-chip {
+        padding: 8px 14px;
+        border-radius: 14px;
+        background: var(--inner);
+        font-size: 14px;
+        color: var(--text-muted);
+      }
+      .counter-chip b {
+        font-size: 18px;
+        color: var(--text);
+      }
+      .counter-chip.lime {
+        background: var(--lime-surface);
+        color: var(--lime-caption);
+      }
+      .counter-chip.lime b {
+        color: var(--lime-soft);
+      }
+      .summary-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 0;
+        font-size: 14px;
+        color: var(--text-muted);
+      }
+      .summary-row b {
+        color: var(--text);
+      }
+
+      /* Avatars & chips */
+      .avatar {
+        flex: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        background: #2a3642;
+        color: var(--text-soft);
+      }
+      .avatar.lime {
+        background: var(--lime-avatar);
+        color: var(--lime-soft);
+      }
+      .avatar.orange {
+        background: var(--orange-avatar);
+        color: var(--orange-avatar-text);
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: #2a3642;
+        color: var(--text-soft);
+        white-space: nowrap;
+      }
+      .chip.new-player {
+        background: var(--blue-surface);
+        border: 1px solid var(--blue-edge);
+        color: var(--link);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 2px 8px;
+      }
+
+      /* ---------- Pending check-in tray ---------- */
+      .tray {
+        background: var(--card);
+        border: 1px solid var(--blue-edge);
+        border-radius: 24px;
+        padding: 20px 22px;
+      }
+      .tray.empty {
+        border-color: var(--card-border);
+      }
+      .tray-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+      }
+      .tray-count {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        background: var(--blue);
+        color: var(--on-blue);
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        font-variant-numeric: tabular-nums;
+      }
+      .tray.empty .tray-count {
+        background: #2a3642;
+        color: var(--text-soft);
+      }
+      .tray-title {
+        flex: 1 1 240px;
+        min-width: 0;
+      }
+      .tray-title h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .tray-title p {
+        margin: 2px 0 0;
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .tray-list {
+        list-style: none;
+        margin: 16px 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .tray-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 14px;
+        padding: 10px 12px;
+        border-radius: 18px;
+        background: var(--inner);
+        border: 1px solid var(--inner-border);
+      }
+      .tray-row.attention {
+        background: var(--orange-surface-row);
+        border-color: var(--orange-edge);
+      }
+      .tray-row.lime {
+        background: var(--lime-surface);
+        border-color: var(--lime-edge);
+      }
+      .row-who {
+        flex: 999 1 260px;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .row-text {
+        min-width: 0;
+      }
+      .row-name {
+        font-size: 15px;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .row-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-top: 3px;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .row-flag {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin-top: 6px;
+        font-size: 13px;
+        color: var(--orange-soft);
+        font-weight: 600;
+      }
+      .row-flag span.sub {
+        color: var(--orange-text);
+        font-weight: 400;
+      }
+      .badge-bang {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--orange);
+        color: var(--on-orange);
+        font-size: 11px;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1px;
+      }
+      .badge-i {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--inner-border);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .badge-check {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--lime);
+        color: var(--on-lime);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .row-actions {
+        flex: 1 1 236px;
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+      .row-actions .btn {
+        flex: 1 1 0;
+        max-width: 140px;
+      }
+      .row-message {
+        flex: 1 1 100%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+      }
+      .spin {
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spin {
+          animation: none;
+        }
+      }
+      .empty-body {
+        margin-top: 14px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        border: 1px dashed var(--outline);
+        color: var(--text-soft);
+        font-size: 14px;
+      }
+
+      /* Narrow frames: actions fill the row once they wrap. */
+      .w390 .row-actions .btn {
+        max-width: none;
+      }
+      .w390 .tray {
+        padding: 16px;
+      }
+      .w390 .row-actions {
+        flex-basis: 100%;
+      }
+      .state-label {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--text-muted);
+        margin: 14px 0 6px;
+      }
+      .state-label:first-child {
+        margin-top: 0;
+      }
+      .placement-note {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 13px;
+        color: var(--link);
+      }
+    </style>
+  </head>
+  <body>
+    <template id="tpl-icon-check"
+      ><svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M5 12l5 5L20 7" /></svg
+    ></template>
+
+    <template id="tpl-host-header">
+      <header class="host-header">
+        <div class="host-header-inner">
+          <div class="brand">
+            <svg width="40" height="40" viewBox="0 0 52 52" aria-hidden="true">
+              <circle cx="26" cy="26" r="24" fill="#D4F23A" />
+              <circle cx="18" cy="18" r="3" fill="#0F1419" />
+              <circle cx="30" cy="15" r="3" fill="#0F1419" />
+              <circle cx="36" cy="27" r="3" fill="#0F1419" />
+              <circle cx="25" cy="34" r="3" fill="#0F1419" />
+              <circle cx="15" cy="29" r="3" fill="#0F1419" />
+              <circle cx="26" cy="24" r="3" fill="#0F1419" />
+            </svg>
+            Riverside Pickleball Club
+          </div>
+          <nav class="nav" aria-label="Host">
+            <a href="#" aria-current="page">Session setup</a
+            ><a href="#">Members</a><a href="#">Hosts</a>
+          </nav>
+          <div class="host-me">
+            <span class="avatar">RH</span><span class="who">Host · Ryan H.</span
+            ><button class="btn btn-outline" type="button">Sign out</button>
+          </div>
+        </div>
+      </header>
+    </template>
+
+    <template id="tpl-page-head">
+      <div class="page-head">
+        <div>
+          <h1>Set up a session</h1>
+          <p>Saturday Social Pickleball · Sat 7 Nov · 18:00 – 20:00</p>
+        </div>
+        <div class="page-actions">
+          <span class="saved"
+            ><span data-include="tpl-icon-check"></span>Saved</span
+          >
+          <button class="btn btn-outline" type="button">Saved setups</button>
+          <button class="btn btn-outline" type="button">Save this setup</button>
+        </div>
+      </div>
+    </template>
+
+    <template id="tpl-qr-button">
+      <a
+        class="btn btn-outline"
+        href="#sticker-and-qr"
+        style="text-decoration: none"
+        ><svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <path d="M14 14h3v3h-3zM18 18h3v3h-3zM14 20h2M20 14v2" /></svg
+        >Show QR code</a
+      >
+    </template>
+
+    <!-- The tray with three pending requests (H1); reused in H0 and H4. -->
+    <template id="tpl-tray-three">
+      <section class="tray" aria-labelledby="tray-title" data-tray>
+        <div class="tray-head">
+          <span class="tray-count" aria-hidden="true">3</span>
+          <div class="tray-title">
+            <h2 id="tray-title">
+              Check-ins waiting <span class="visually-hidden">(3)</span>
+            </h2>
+            <p>Approve to add them to Who's playing. Oldest first.</p>
+          </div>
+          <div data-include="tpl-qr-button"></div>
+        </div>
+        <ul class="tray-list" aria-live="polite">
+          <li class="tray-row attention">
+            <div class="row-who">
+              <span class="avatar orange" aria-hidden="true">GK</span>
+              <div class="row-text">
+                <div class="row-name">Grace Kim</div>
+                <div class="row-meta">
+                  <span class="chip">Member</span
+                  ><span class="chip">Beginner</span
+                  ><span class="tabular">4 min ago</span>
+                </div>
+                <div class="row-flag">
+                  <span class="badge-bang" aria-hidden="true">!</span
+                  ><span
+                    >Already in this session.
+                    <span class="sub"
+                      >Check with the player before approving.</span
+                    ></span
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="row-actions">
+              <button
+                class="btn btn-secondary"
+                type="button"
+                aria-label="Approve Grace Kim"
+              >
+                <span data-include="tpl-icon-check"></span>Approve
+              </button>
+              <button
+                class="btn btn-outline"
+                type="button"
+                aria-label="Reject Grace Kim"
+              >
+                Reject
+              </button>
+            </div>
+          </li>
+          <li class="tray-row">
+            <div class="row-who">
+              <span class="avatar" aria-hidden="true">PL</span>
+              <div class="row-text">
+                <div class="row-name">Peter Lindqvist</div>
+                <div class="row-meta">
+                  <span class="chip">Member</span
+                  ><span class="chip">Intermediate</span
+                  ><span>level changed from Advanced</span
+                  ><span aria-hidden="true">·</span
+                  ><span class="tabular">2 min ago</span>
+                </div>
+              </div>
+            </div>
+            <div class="row-actions">
+              <button
+                class="btn btn-secondary"
+                type="button"
+                aria-label="Approve Peter Lindqvist"
+              >
+                <span data-include="tpl-icon-check"></span>Approve
+              </button>
+              <button
+                class="btn btn-outline"
+                type="button"
+                aria-label="Reject Peter Lindqvist"
+              >
+                Reject
+              </button>
+            </div>
+          </li>
+          <li class="tray-row">
+            <div class="row-who">
+              <span class="avatar" aria-hidden="true">KM</span>
+              <div class="row-text">
+                <div class="row-name">Kai Moreno</div>
+                <div class="row-meta">
+                  <span class="chip new-player">New player</span
+                  ><span class="chip">Beginner</span
+                  ><span class="tabular">1 min ago</span>
+                </div>
+              </div>
+            </div>
+            <div class="row-actions">
+              <button
+                class="btn btn-secondary"
+                type="button"
+                aria-label="Approve Kai Moreno"
+              >
+                <span data-include="tpl-icon-check"></span>Approve
+              </button>
+              <button
+                class="btn btn-outline"
+                type="button"
+                aria-label="Reject Kai Moreno"
+              >
+                Reject
+              </button>
+            </div>
+          </li>
+        </ul>
+      </section>
+    </template>
+
+    <template id="tpl-tray-empty">
+      <section class="tray empty" aria-labelledby="tray-empty-title">
+        <div class="tray-head">
+          <span class="tray-count" aria-hidden="true">0</span>
+          <div class="tray-title">
+            <h2 id="tray-empty-title">Check-ins waiting</h2>
+          </div>
+          <div data-include="tpl-qr-button"></div>
+        </div>
+        <div class="empty-body" role="status">
+          <span class="badge-i" aria-hidden="true">i</span>
+          <span
+            >No check-ins waiting. Players scan the social's QR code or tap the
+            sticker to check in.</span
+          >
+        </div>
+      </section>
+    </template>
+
+    <div class="gallery-intro">
+      <h1>M5 · Host pending check-in tray (Setup screen)</h1>
+      <p>
+        Proposed placement: a full-width card directly under the setup stepper,
+        above both columns, so it's visible without scrolling on desktop, tablet
+        and phone (the summary aside drops below the main column on narrow
+        screens). It polls every 5 s. M7 reuses it on Live courts.
+      </p>
+    </div>
+
+    <div class="gallery">
+      <!-- H0 -->
+      <figure class="frame" data-shot="H00-setup-with-tray">
+        <figcaption>
+          <b>H0 · Setup page with the tray placed (1280 px).</b> Sections below
+          are abbreviated and dimmed for this review only. Grace Kim, approved
+          earlier, shows in Who's playing.
+        </figcaption>
+        <div class="screen w1280" data-screen>
+          <div data-include="tpl-host-header"></div>
+          <main>
+            <div data-include="tpl-page-head"></div>
+            <ol class="stepper" aria-label="Setup steps">
+              <li>
+                <span class="step-done" data-include="tpl-icon-check"></span
+                >Details
+              </li>
+              <li>
+                <span class="step-done" data-include="tpl-icon-check"></span
+                >Courts
+              </li>
+              <li>
+                <span class="step-done" data-include="tpl-icon-check"></span
+                >Players
+              </li>
+              <li>
+                <span class="step-done" data-include="tpl-icon-check"></span
+                >Rotation
+              </li>
+              <li style="color: var(--text-muted)">
+                <span class="step-up">5</span>Review &amp; start
+              </li>
+            </ol>
+            <div data-include="tpl-tray-three"></div>
+            <div class="columns">
+              <div class="col-main">
+                <section
+                  class="card abbreviated"
+                  aria-label="Session details (abbreviated)"
+                >
+                  <div class="card-head">
+                    <span class="num-badge">1</span>
+                    <h2>Session details</h2>
+                  </div>
+                  <div class="skeleton-grid">
+                    <div class="skeleton" style="grid-column: 1/-1"></div>
+                    <div class="skeleton"></div>
+                    <div class="skeleton"></div>
+                    <div class="skeleton"></div>
+                  </div>
+                </section>
+                <section
+                  class="card abbreviated"
+                  aria-label="Courts (abbreviated)"
+                >
+                  <div class="card-head">
+                    <span class="num-badge">2</span>
+                    <h2>Courts</h2>
+                  </div>
+                  <div class="skeleton-grid">
+                    <div class="skeleton" style="height: 90px"></div>
+                    <div class="skeleton" style="height: 90px"></div>
+                    <div class="skeleton" style="height: 90px"></div>
+                    <div class="skeleton" style="height: 90px"></div>
+                  </div>
+                </section>
+                <section class="card" aria-label="Who's playing (abbreviated)">
+                  <div class="card-head">
+                    <span class="num-badge">3</span>
+                    <h2>Who's playing?</h2>
+                    <div class="counter-chips">
+                      <span class="counter-chip"><b>30</b> registered</span
+                      ><span class="counter-chip lime"
+                        ><b>27</b> attending</span
+                      >
+                    </div>
+                  </div>
+                  <div class="member-grid">
+                    <div class="member-row">
+                      <span class="avatar lime">GK</span>
+                      <div style="flex: 1">
+                        <b>Grace Kim</b><small>Attending</small>
+                      </div>
+                      <span class="chip">Beginner</span>
+                    </div>
+                    <div class="member-row abbreviated">
+                      <span class="avatar lime">SC</span>
+                      <div style="flex: 1">
+                        <b>Sarah Chen</b><small>Attending</small>
+                      </div>
+                      <span class="chip">Advanced</span>
+                    </div>
+                    <div class="member-row abbreviated">
+                      <span class="avatar lime">MR</span>
+                      <div style="flex: 1">
+                        <b>Marcus Reid</b><small>Attending</small>
+                      </div>
+                      <span class="chip">Intermediate</span>
+                    </div>
+                  </div>
+                </section>
+              </div>
+              <aside class="col-aside">
+                <section
+                  class="card abbreviated"
+                  aria-label="Session summary (abbreviated)"
+                >
+                  <div class="card-head">
+                    <span class="num-badge">5</span>
+                    <h2>Session summary</h2>
+                  </div>
+                  <div class="summary-row"><span>Players</span><b>27</b></div>
+                  <div class="summary-row">
+                    <span>Courts</span><b>4 · doubles</b>
+                  </div>
+                  <div
+                    class="skeleton"
+                    style="height: 110px; margin-top: 12px"
+                  ></div>
+                </section>
+                <section class="card abbreviated">
+                  <button class="btn btn-primary" type="button">
+                    Start pickleball session
+                  </button>
+                </section>
+              </aside>
+            </div>
+          </main>
+        </div>
+      </figure>
+
+      <!-- H1 -->
+      <figure class="frame" data-shot="H01-tray-three-pending">
+        <figcaption>
+          <b
+            >H1 · Tray with 3 pending requests (close-up, 1280 px page
+            width).</b
+          >
+          Grace Kim is already in this session (request from a phone not linked
+          to her), so the row is marked in orange with words and "!".
+        </figcaption>
+        <div class="screen w1280" data-screen style="padding: 24px 28px">
+          <div data-include="tpl-tray-three"></div>
+        </div>
+      </figure>
+
+      <!-- H2 -->
+      <figure class="frame" data-shot="H02-tray-empty">
+        <figcaption>
+          <b>H2 · Empty state.</b> "Show QR code" opens the Sticker and QR page
+          (always in the tray header).
+        </figcaption>
+        <div class="screen w1280" data-screen style="padding: 24px 28px">
+          <div data-include="tpl-tray-empty"></div>
+        </div>
+      </figure>
+
+      <!-- H3 -->
+      <figure class="frame" data-shot="H03-row-states">
+        <figcaption>
+          <b>H3 · Row states.</b> Decided rows (approved, rejected, decided
+          elsewhere) show their message for about 4 s, then leave the list.
+        </figcaption>
+        <div class="screen w760" data-screen style="padding: 22px">
+          <section
+            class="tray"
+            aria-label="Row states"
+            style="border-color: var(--card-border)"
+          >
+            <div class="state-label">Approving (pending)</div>
+            <ul class="tray-list" style="margin: 0">
+              <li class="tray-row" aria-busy="true">
+                <div class="row-who">
+                  <span class="avatar" aria-hidden="true">KM</span>
+                  <div class="row-text">
+                    <div class="row-name">Kai Moreno</div>
+                    <div class="row-meta">
+                      <span class="chip new-player">New player</span
+                      ><span class="chip">Beginner</span><span>1 min ago</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="row-actions">
+                  <button class="btn btn-disabled" type="button" disabled>
+                    <svg
+                      class="spin"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M21 12a9 9 0 1 1-6.2-8.6" /></svg
+                    >Approving…
+                  </button>
+                  <button class="btn btn-disabled" type="button" disabled>
+                    Reject
+                  </button>
+                </div>
+              </li>
+            </ul>
+            <div class="state-label">Failed, with Retry</div>
+            <ul class="tray-list" style="margin: 0">
+              <li class="tray-row attention">
+                <div class="row-who">
+                  <span class="avatar" aria-hidden="true">KM</span>
+                  <div class="row-text">
+                    <div class="row-name">Kai Moreno</div>
+                    <div class="row-meta">
+                      <span class="chip new-player">New player</span
+                      ><span class="chip">Beginner</span><span>1 min ago</span>
+                    </div>
+                    <div class="row-flag" role="alert">
+                      <span class="badge-bang" aria-hidden="true">!</span
+                      ><span
+                        >Couldn't approve.
+                        <span class="sub"
+                          >Check your connection and retry.</span
+                        ></span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <div class="row-actions">
+                  <button
+                    class="btn btn-secondary"
+                    type="button"
+                    aria-label="Retry approving Kai Moreno"
+                  >
+                    Retry
+                  </button>
+                  <button
+                    class="btn btn-outline"
+                    type="button"
+                    aria-label="Reject Kai Moreno"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </li>
+            </ul>
+            <div class="state-label">Already decided by another host</div>
+            <ul class="tray-list" style="margin: 0">
+              <li class="tray-row" role="status">
+                <div class="row-who">
+                  <span class="avatar" aria-hidden="true">PL</span>
+                  <div class="row-text">
+                    <div class="row-name" style="color: var(--text-muted)">
+                      Peter Lindqvist
+                    </div>
+                    <div class="row-meta">
+                      <span class="badge-i" aria-hidden="true">i</span
+                      ><span style="font-size: 13px; color: var(--text-soft)"
+                        >Already decided by another host</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </li>
+            </ul>
+            <div class="state-label">Approved</div>
+            <ul class="tray-list" style="margin: 0">
+              <li class="tray-row lime" role="status">
+                <div class="row-who">
+                  <span class="avatar lime" aria-hidden="true">KM</span>
+                  <div class="row-text">
+                    <div class="row-name">Kai Moreno</div>
+                    <div class="row-meta">
+                      <span
+                        class="badge-check"
+                        data-include="tpl-icon-check"
+                      ></span
+                      ><span style="font-size: 13px; color: var(--lime-soft)"
+                        >Added to Who's playing</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </li>
+            </ul>
+            <div class="state-label">Rejected</div>
+            <ul class="tray-list" style="margin: 0">
+              <li class="tray-row" role="status">
+                <div class="row-who">
+                  <span class="avatar" aria-hidden="true">PL</span>
+                  <div class="row-text">
+                    <div class="row-name">Peter Lindqvist</div>
+                    <div class="row-meta">
+                      <span class="badge-i" aria-hidden="true">i</span
+                      ><span style="font-size: 13px; color: var(--text-soft)"
+                        >Check-in rejected. The player sees "Please speak to the
+                        host".</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </section>
+        </div>
+      </figure>
+
+      <!-- H4a -->
+      <figure class="frame" data-shot="H04a-tablet-820">
+        <figcaption>
+          <b>H4a · Tablet (820 px).</b> Header and actions wrap; the tray stays
+          first under the stepper (omitted in this frame).
+        </figcaption>
+        <div class="screen w820" data-screen>
+          <div data-include="tpl-host-header"></div>
+          <main>
+            <div data-include="tpl-page-head"></div>
+            <div data-include="tpl-tray-three"></div>
+            <section
+              class="card abbreviated"
+              aria-label="Session details (abbreviated)"
+            >
+              <div class="card-head">
+                <span class="num-badge">1</span>
+                <h2>Session details</h2>
+              </div>
+              <div class="skeleton-grid">
+                <div class="skeleton" style="grid-column: 1/-1"></div>
+                <div class="skeleton"></div>
+              </div>
+            </section>
+          </main>
+        </div>
+      </figure>
+
+      <!-- H4b -->
+      <figure class="frame" data-shot="H04b-phone-390">
+        <figcaption>
+          <b>H4b · Phone (390 px).</b> Approve and Reject fill the row width
+          under each name.
+        </figcaption>
+        <div class="screen w390" data-screen>
+          <div data-include="tpl-host-header"></div>
+          <main>
+            <div data-include="tpl-page-head"></div>
+            <div data-include="tpl-tray-three"></div>
+          </main>
+        </div>
+      </figure>
+    </div>
+
+    <script>
+      // Clone shared fragments (nested includes resolve because clones are processed in turn).
+      let includeCounter = 0;
+      let placeholder;
+      while ((placeholder = document.querySelector("[data-include]"))) {
+        const fragment = document
+          .getElementById(placeholder.dataset.include)
+          .content.cloneNode(true);
+        includeCounter += 1;
+        for (const element of fragment.querySelectorAll("[id]"))
+          element.id += "-" + includeCounter;
+        for (const element of fragment.querySelectorAll("[aria-labelledby]"))
+          element.setAttribute(
+            "aria-labelledby",
+            element.getAttribute("aria-labelledby") + "-" + includeCounter,
+          );
+        if (
+          placeholder.children.length === 0 &&
+          placeholder.tagName === "DIV" &&
+          !placeholder.className
+        )
+          placeholder.replaceWith(fragment);
+        else {
+          placeholder.removeAttribute("data-include");
+          placeholder.append(fragment);
+        }
+      }
+    </script>
+  </body>
+</html>

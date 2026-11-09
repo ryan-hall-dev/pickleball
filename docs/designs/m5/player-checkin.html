@@ -1,0 +1,1969 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>M5 · Player check-in (/t/&lt;tag&gt;) · design drafts</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Tokens: mirror DESIGN.md / src/app/globals.css @theme. */
+      :root {
+        --bg: #0f1419;
+        --bg-header: #121a21;
+        --bg-backdrop: #080b0e;
+        --card: #182028;
+        --card-border: #24303b;
+        --inner: #1c2630;
+        --inner-border: #2a3642;
+        --nav-active: #222d37;
+        --text: #f1f5f9;
+        --text-muted: #9aa8b6;
+        --text-soft: #d5dee7;
+        --text-row: #c3cdd8;
+        --placeholder: #7d8b99;
+        --outline: #3a4856;
+        --outline-blue: #2f4a68;
+        --drag-handle: #5b6b7a;
+        --link: #8cc4ff;
+        --link-hover: #bfdfff;
+        --lime: #d4f23a;
+        --lime-surface: #1f2a14;
+        --lime-edge: #4c5f14;
+        --on-lime: #18200a;
+        --lime-soft: #e3fa7a;
+        --lime-caption: #c9d6a0;
+        --lime-avatar: #2b3a12;
+        --blue: #5aa9ff;
+        --blue-surface: #13263c;
+        --blue-edge: #2f5e8f;
+        --on-blue: #06182b;
+        --blue-soft: #cfe6ff;
+        --blue-avatar: #1d3550;
+        --grey-dot: #64748b;
+        --orange: #ff9f43;
+        --orange-surface: #22201a;
+        --orange-surface-row: #251c12;
+        --orange-surface-strong: #2b2114;
+        --orange-edge: #5a4220;
+        --on-orange: #2a1606;
+        --orange-soft: #ffb877;
+        --orange-text: #ffd6ae;
+        --modal-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+        --font: Outfit, system-ui, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #05080a;
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 15px;
+        line-height: 1.4;
+      }
+      a {
+        color: var(--link);
+      }
+      a:hover {
+        color: var(--link-hover);
+      }
+      button,
+      input {
+        font-family: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      input::placeholder {
+        color: var(--placeholder);
+      }
+      :focus-visible {
+        outline: 2px solid var(--lime);
+        outline-offset: 2px;
+      }
+      .tabular {
+        font-variant-numeric: tabular-nums;
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      /* Gallery (review page only) */
+      .gallery-intro {
+        padding: 32px 40px 0;
+        max-width: 1400px;
+      }
+      .gallery-intro h1 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 800;
+      }
+      .gallery-intro p {
+        margin: 6px 0 0;
+        color: var(--text-muted);
+      }
+      .gallery {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 40px 32px;
+        padding: 32px 40px 64px;
+        align-items: flex-start;
+      }
+      .frame {
+        margin: 0;
+        padding: 12px;
+        background: #05080a;
+      }
+      .frame figcaption {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin: 0 0 10px;
+        max-width: 390px;
+      }
+      .frame figcaption b {
+        color: var(--text);
+      }
+
+      /* Phone frame: 390 x 844 */
+      .phone {
+        width: 390px;
+        min-height: 844px;
+        background: var(--bg);
+        border: 1px solid var(--card-border);
+        border-radius: 28px;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        padding: 20px 20px 0;
+      }
+      .phone-content {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        flex: 1;
+      }
+      .cta-bar {
+        margin-top: auto;
+        padding: 16px 0 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      /* Brand line */
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 44px;
+      }
+      .brand span {
+        font-size: 17px;
+        font-weight: 700;
+      }
+
+      /* Live card */
+      .live-card {
+        background: var(--card);
+        border: 1px solid var(--card-border);
+        border-radius: 24px;
+        padding: 18px;
+      }
+      .live-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        color: var(--lime);
+        text-transform: uppercase;
+      }
+      .live-label::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--lime);
+      }
+      .live-card h1 {
+        margin: 8px 0 2px;
+        font-size: 26px;
+        font-weight: 800;
+        line-height: 1.12;
+        letter-spacing: -0.01em;
+      }
+      .live-when {
+        font-size: 14px;
+        color: var(--text-muted);
+      }
+      .mini-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .mini-stat {
+        background: var(--inner);
+        border-radius: 14px;
+        padding: 10px 12px;
+      }
+      .mini-stat b {
+        display: block;
+        font-size: 20px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .mini-stat span {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      h2.section {
+        margin: 4px 0 0;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      /* Avatars */
+      .avatar {
+        flex: none;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        background: #2a3642;
+        color: var(--text-soft);
+        width: 36px;
+        height: 36px;
+        font-size: 12px;
+      }
+      .avatar.lg {
+        width: 44px;
+        height: 44px;
+        font-size: 14px;
+      }
+      .avatar.xl {
+        width: 52px;
+        height: 52px;
+        font-size: 16px;
+      }
+      .avatar.blue {
+        background: var(--blue-avatar);
+        color: var(--blue-soft);
+      }
+
+      /* Recognised phone card */
+      .recognised {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: 20px;
+        background: var(--blue-surface);
+        border: 1px solid var(--blue-edge);
+        min-height: 72px;
+      }
+      .recognised .who {
+        flex: 1;
+        min-width: 0;
+      }
+      .recognised small {
+        display: block;
+        font-size: 13px;
+        color: var(--link);
+        font-weight: 500;
+      }
+      .recognised strong {
+        display: block;
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .check-disc {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--blue);
+        color: var(--on-blue);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+
+      /* Search */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field label,
+      .field .label {
+        font-size: 13px;
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+      .not-you {
+        text-align: center;
+        font-size: 14px;
+        color: var(--text-muted);
+      }
+      .search {
+        position: relative;
+      }
+      .search svg {
+        position: absolute;
+        left: 14px;
+        top: 15px;
+        color: var(--text-muted);
+      }
+      .input {
+        width: 100%;
+        height: 48px;
+        border-radius: 14px;
+        border: 1px solid var(--inner-border);
+        background: var(--inner);
+        color: var(--text);
+        padding: 0 14px;
+        font-size: 16px;
+      }
+      .search .input {
+        padding-left: 42px;
+      }
+      .input.invalid {
+        border: 2px solid var(--orange);
+      }
+      .hint {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+
+      .name-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .name-row {
+        width: 100%;
+        min-height: 52px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px;
+        border-radius: 16px;
+        border: 1px solid var(--inner-border);
+        background: var(--inner);
+        color: var(--text);
+        font-size: 15px;
+        font-weight: 600;
+        text-align: left;
+      }
+      .name-row .chev {
+        margin-left: auto;
+        color: var(--text-muted);
+      }
+      .name-row mark {
+        background: none;
+        color: var(--lime-soft);
+      }
+
+      .guest-link {
+        display: flex;
+        justify-content: center;
+      }
+      .link-button {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        background: none;
+        border: 0;
+        color: var(--link);
+        font-size: 15px;
+        font-weight: 600;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        padding: 0 4px;
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        border: 0;
+        font-family: inherit;
+      }
+      .btn-primary {
+        height: 56px;
+        width: 100%;
+        border-radius: 16px;
+        background: var(--lime);
+        color: var(--on-lime);
+        font-size: 17px;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+      .btn-outline {
+        height: 52px;
+        width: 100%;
+        border-radius: 16px;
+        background: transparent;
+        border: 1px solid var(--outline);
+        color: var(--text);
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .btn-secondary {
+        height: 52px;
+        width: 100%;
+        border-radius: 16px;
+        background: var(--blue);
+        color: var(--on-blue);
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      /* Notices */
+      .notice {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: 16px;
+        padding: 12px 14px;
+        font-size: 14px;
+      }
+      .notice.no-match {
+        background: var(--inner);
+        border: 1px solid var(--inner-border);
+        color: var(--text-soft);
+      }
+      .notice.info {
+        background: var(--inner);
+        border: 1px solid var(--inner-border);
+        color: var(--text-soft);
+      }
+      .badge-i {
+        flex: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--inner-border);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1px;
+      }
+      .badge-bang {
+        flex: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--orange);
+        color: var(--on-orange);
+        font-size: 12px;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Skill option buttons */
+      .options {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        border-radius: 14px;
+      }
+      .options.invalid {
+        outline: 2px solid var(--orange);
+        outline-offset: 4px;
+      }
+      .option {
+        height: 44px;
+        border-radius: 12px;
+        background: var(--inner);
+        border: 1px solid var(--inner-border);
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 600;
+        padding: 0 6px;
+      }
+      .option[aria-pressed="true"] {
+        background: var(--lime);
+        color: var(--on-lime);
+        border-color: var(--lime);
+        font-weight: 700;
+      }
+      .field-error {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--orange-soft);
+        font-weight: 500;
+      }
+      .field-error .badge-bang {
+        width: 16px;
+        height: 16px;
+        font-size: 10px;
+      }
+
+      .skill-chip {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: #2a3642;
+        color: var(--text-soft);
+      }
+
+      /* Bottom sheet */
+      .backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(8, 11, 14, 0.78);
+      }
+      .sheet {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--card);
+        border-top: 1px solid var(--inner-border);
+        border-radius: 28px 28px 0 0;
+        box-shadow: var(--modal-shadow);
+        padding: 24px 20px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .sheet h2 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 800;
+        line-height: 1.15;
+      }
+      .sheet .sub {
+        margin: 4px 0 0;
+        color: var(--text-muted);
+        font-size: 14px;
+      }
+      .identity {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px;
+        border-radius: 18px;
+        background: var(--inner);
+        border: 1px solid var(--inner-border);
+      }
+      .identity strong {
+        display: block;
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .identity small {
+        display: block;
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+      .identity .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+      }
+      .disclosure {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        min-height: 48px;
+        padding: 0 14px;
+        border-radius: 14px;
+        background: transparent;
+        border: 1px solid var(--outline);
+        color: var(--text);
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .disclosure span small {
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+
+      /* State screens */
+      .state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 14px;
+        padding: 36px 4px 0;
+      }
+      .state-icon {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .state-icon.blue {
+        background: var(--blue-surface);
+        border: 2px solid var(--blue-edge);
+        color: var(--link);
+      }
+      .state-icon.lime {
+        background: var(--lime);
+        color: var(--on-lime);
+      }
+      .state-icon.neutral {
+        background: var(--inner);
+        border: 2px solid var(--outline);
+        color: var(--text-soft);
+      }
+      .state-icon.orange {
+        background: var(--orange-surface-strong);
+        border: 2px solid var(--orange-edge);
+        color: var(--orange);
+      }
+      .state h1 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 800;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+      }
+      .state p {
+        margin: 0;
+        color: var(--text-soft);
+        font-size: 16px;
+      }
+      .state p.muted {
+        color: var(--text-muted);
+        font-size: 14px;
+      }
+      .panel {
+        width: 100%;
+        text-align: left;
+        background: var(--card);
+        border: 1px solid var(--card-border);
+        border-radius: 20px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panel h2 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 700;
+      }
+      .panel ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--text-soft);
+        font-size: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .person {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .person strong {
+        display: block;
+        font-size: 17px;
+        font-weight: 700;
+      }
+      .person small {
+        display: block;
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .poll-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--link);
+        font-weight: 600;
+      }
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .status-pill.blue {
+        background: var(--blue-surface);
+        color: var(--blue-soft);
+        border: 1px solid var(--blue-edge);
+      }
+      .status-pill.lime {
+        background: var(--lime-surface);
+        color: var(--lime-soft);
+        border: 1px solid var(--lime-edge);
+      }
+      .back-row {
+        display: flex;
+        align-items: center;
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 44px;
+        background: none;
+        border: 0;
+        color: var(--link);
+        font-size: 15px;
+        font-weight: 600;
+        padding: 0;
+      }
+      .page-title {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 800;
+        line-height: 1.15;
+      }
+      .lede {
+        margin: 4px 0 0;
+        color: var(--text-muted);
+        font-size: 14px;
+      }
+      .form-card {
+        background: var(--card);
+        border: 1px solid var(--card-border);
+        border-radius: 24px;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .error-summary {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        background: var(--orange-surface);
+        border: 1px solid var(--orange-edge);
+        border-radius: 14px;
+        padding: 10px 14px;
+        color: var(--orange-text);
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Shared fragments, cloned into frames by the script at the bottom. -->
+    <template id="tpl-brand">
+      <div class="brand">
+        <svg width="40" height="40" viewBox="0 0 52 52" aria-hidden="true">
+          <circle cx="26" cy="26" r="24" fill="#D4F23A" />
+          <circle cx="18" cy="18" r="3" fill="#0F1419" />
+          <circle cx="30" cy="15" r="3" fill="#0F1419" />
+          <circle cx="36" cy="27" r="3" fill="#0F1419" />
+          <circle cx="25" cy="34" r="3" fill="#0F1419" />
+          <circle cx="15" cy="29" r="3" fill="#0F1419" />
+          <circle cx="26" cy="24" r="3" fill="#0F1419" />
+        </svg>
+        <span>Riverside Pickleball Club</span>
+      </div>
+    </template>
+    <template id="tpl-live-card">
+      <section class="live-card" aria-labelledby="session-title">
+        <div class="live-label">Live now</div>
+        <h1 id="session-title">Saturday Social Pickleball</h1>
+        <div class="live-when tabular">
+          Sat 7 Nov · 18:00 – 20:00 · 80 min left
+        </div>
+        <div class="mini-stats">
+          <div class="mini-stat"><b>4</b><span>courts</span></div>
+          <div class="mini-stat"><b>26</b><span>checked in</span></div>
+          <div class="mini-stat"><b>~6m</b><span>to first game</span></div>
+        </div>
+      </section>
+    </template>
+    <template id="tpl-search-empty">
+      <div class="field">
+        <label for="name-search" class="visually-hidden">Find your name</label>
+        <div class="search">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-3.5-3.5" />
+          </svg>
+          <input
+            class="input"
+            id="name-search"
+            type="search"
+            autocomplete="off"
+            placeholder="Type your name"
+            aria-describedby="name-search-hint"
+          />
+        </div>
+        <div class="hint" id="name-search-hint">
+          Type at least 2 letters of your name
+        </div>
+      </div>
+    </template>
+    <template id="tpl-guest-link">
+      <div class="guest-link">
+        <button class="link-button" type="button">
+          Not a member? Check in as a guest
+        </button>
+      </div>
+    </template>
+
+    <div class="gallery-intro">
+      <h1>M5 · Player check-in at /t/&lt;tag&gt; (390 px)</h1>
+      <p>
+        Draft screens for review. Public page, no login. Names never appear
+        before 2 typed letters, at most 5, names only, never anyone's check-in
+        status.
+      </p>
+    </div>
+
+    <div class="gallery">
+      <!-- P1 -->
+      <figure class="frame" data-shot="P01-welcome-recognised">
+        <figcaption>
+          <b>P1 · Welcome, recognised phone.</b> This phone is linked to a
+          member of this social. Only that member is shown.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div data-include="tpl-live-card"></div>
+            <h2 class="section">Who's checking in?</h2>
+            <div class="recognised">
+              <span class="avatar lg blue" aria-hidden="true">GK</span>
+              <div class="who">
+                <small>This phone was used by</small><strong>Grace Kim</strong>
+              </div>
+              <span class="check-disc" aria-hidden="true"
+                ><svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12l5 5L20 7" /></svg
+              ></span>
+            </div>
+            <div class="not-you">Not you? Find your name</div>
+            <div data-include="tpl-search-empty"></div>
+            <div data-include="tpl-guest-link"></div>
+            <div class="cta-bar">
+              <button class="btn btn-primary" type="button">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12l5 5L20 7" /></svg
+                >Check in as Grace
+              </button>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P2 -->
+      <figure class="frame" data-shot="P02-welcome-new-phone">
+        <figcaption>
+          <b>P2 · Welcome, new phone.</b> No recognised card and no check-in
+          button until a name is chosen.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div data-include="tpl-live-card"></div>
+            <h2 class="section">Who's checking in?</h2>
+            <div class="not-you" style="text-align: left">Find your name</div>
+            <div data-include="tpl-search-empty"></div>
+            <div data-include="tpl-guest-link"></div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P3a -->
+      <figure class="frame" data-shot="P03a-search-results">
+        <figcaption>
+          <b>P3a · Search, 2+ letters.</b> At most 5 names, initials and name
+          only. Tapping a name opens the confirm pop-up (P4b).
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div data-include="tpl-live-card"></div>
+            <h2 class="section">Who's checking in?</h2>
+            <div class="field">
+              <label for="search-pe" class="visually-hidden"
+                >Find your name</label
+              >
+              <div class="search">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M20 20l-3.5-3.5" />
+                </svg>
+                <input
+                  class="input"
+                  id="search-pe"
+                  type="search"
+                  value="Pe"
+                  aria-describedby="search-pe-status"
+                />
+              </div>
+            </div>
+            <p
+              class="hint"
+              id="search-pe-status"
+              role="status"
+              style="margin: 0"
+            >
+              5 names shown. Not listed? Type more of your name.
+            </p>
+            <ul class="name-list" aria-label="Matching names">
+              <li>
+                <button class="name-row" type="button">
+                  <span class="avatar" aria-hidden="true">PL</span>Peter
+                  Lindqvist<svg
+                    class="chev"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </button>
+              </li>
+              <li>
+                <button class="name-row" type="button">
+                  <span class="avatar" aria-hidden="true">PA</span>Pedro
+                  Alves<svg
+                    class="chev"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </button>
+              </li>
+              <li>
+                <button class="name-row" type="button">
+                  <span class="avatar" aria-hidden="true">PW</span>Penny
+                  Ward<svg
+                    class="chev"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </button>
+              </li>
+              <li>
+                <button class="name-row" type="button">
+                  <span class="avatar" aria-hidden="true">PN</span>Petra
+                  Novák<svg
+                    class="chev"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </button>
+              </li>
+              <li>
+                <button class="name-row" type="button">
+                  <span class="avatar" aria-hidden="true">SP</span>Sam
+                  Pereira<svg
+                    class="chev"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </button>
+              </li>
+            </ul>
+            <div data-include="tpl-guest-link"></div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P3b -->
+      <figure class="frame" data-shot="P03b-search-no-match">
+        <figcaption>
+          <b>P3b · Search, no match.</b> Words and an icon; points to the guest
+          path.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div data-include="tpl-live-card"></div>
+            <h2 class="section">Who's checking in?</h2>
+            <div class="field">
+              <label for="search-xy" class="visually-hidden"
+                >Find your name</label
+              >
+              <div class="search">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M20 20l-3.5-3.5" />
+                </svg>
+                <input
+                  class="input"
+                  id="search-xy"
+                  type="search"
+                  value="Xy"
+                  aria-describedby="search-xy-status"
+                />
+              </div>
+            </div>
+            <div class="notice no-match" id="search-xy-status" role="status">
+              <span class="badge-i" aria-hidden="true">i</span>
+              <span
+                >No one matches “Xy”. Check the spelling, or check in as a
+                guest.</span
+              >
+            </div>
+            <div data-include="tpl-guest-link"></div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P4a -->
+      <figure class="frame" data-shot="P04a-confirm-recognised">
+        <figcaption>
+          <b>P4a · Confirm pop-up, recognised phone.</b> Bottom sheet. Shows the
+          phone's own member with their saved level.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div data-include="tpl-live-card"></div>
+            <h2 class="section">Who's checking in?</h2>
+          </div>
+          <div class="backdrop" aria-hidden="true"></div>
+          <div
+            class="sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="p4a-title"
+          >
+            <div>
+              <h2 id="p4a-title">Check in as Grace Kim?</h2>
+              <p class="sub">
+                Saturday Social Pickleball · Sat 7 Nov · 18:00 – 20:00
+              </p>
+            </div>
+            <div class="identity">
+              <span class="avatar xl blue" aria-hidden="true">GK</span>
+              <div>
+                <strong>Grace Kim</strong>
+                <div class="row">
+                  <span class="skill-chip">Beginner</span
+                  ><small style="margin: 0">Your saved level</small>
+                </div>
+              </div>
+            </div>
+            <div class="notice info">
+              <span class="badge-i" aria-hidden="true">i</span
+              ><span
+                >A host approves each check-in before you're added to today's
+                players.</span
+              >
+            </div>
+            <button class="btn btn-primary" type="button">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 12l5 5L20 7" /></svg
+              >Check in
+            </button>
+            <button class="btn btn-outline" type="button">Back</button>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P4b -->
+      <figure class="frame" data-shot="P04b-confirm-picked-from-search">
+        <figcaption>
+          <b>P4b · Confirm pop-up, picked from search.</b> Name only (no saved
+          level shown). "Update your level" is optional and collapsed.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div data-include="tpl-live-card"></div>
+            <h2 class="section">Who's checking in?</h2>
+          </div>
+          <div class="backdrop" aria-hidden="true"></div>
+          <div
+            class="sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="p4b-title"
+          >
+            <div>
+              <h2 id="p4b-title">Check in as Peter Lindqvist?</h2>
+              <p class="sub">
+                Saturday Social Pickleball · Sat 7 Nov · 18:00 – 20:00
+              </p>
+            </div>
+            <div class="identity">
+              <span class="avatar xl" aria-hidden="true">PL</span>
+              <div><strong>Peter Lindqvist</strong></div>
+            </div>
+            <button
+              class="disclosure"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p4b-level"
+            >
+              <span>Update your level <small>(optional)</small></span
+              ><svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                aria-hidden="true"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            <div class="notice info">
+              <span class="badge-i" aria-hidden="true">i</span
+              ><span
+                >A host approves each check-in before you're added to today's
+                players.</span
+              >
+            </div>
+            <button class="btn btn-primary" type="button">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 12l5 5L20 7" /></svg
+              >Check in
+            </button>
+            <button class="btn btn-outline" type="button">Back</button>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P4c -->
+      <figure class="frame" data-shot="P04c-confirm-update-level-open">
+        <figcaption>
+          <b>P4c · Picked from search, "Update your level" opened.</b> Nothing
+          is preselected (the saved level stays private); here the player has
+          chosen Intermediate.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div data-include="tpl-live-card"></div>
+          </div>
+          <div class="backdrop" aria-hidden="true"></div>
+          <div
+            class="sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="p4c-title"
+          >
+            <div>
+              <h2 id="p4c-title">Check in as Peter Lindqvist?</h2>
+              <p class="sub">
+                Saturday Social Pickleball · Sat 7 Nov · 18:00 – 20:00
+              </p>
+            </div>
+            <div class="identity">
+              <span class="avatar xl" aria-hidden="true">PL</span>
+              <div><strong>Peter Lindqvist</strong></div>
+            </div>
+            <button
+              class="disclosure"
+              type="button"
+              aria-expanded="true"
+              aria-controls="p4c-level"
+            >
+              <span>Update your level <small>(optional)</small></span
+              ><svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                aria-hidden="true"
+              >
+                <path d="M6 15l6-6 6 6" />
+              </svg>
+            </button>
+            <div id="p4c-level" class="field" style="margin-top: -6px">
+              <div class="options" role="group" aria-label="Your level">
+                <button class="option" type="button" aria-pressed="false">
+                  Beginner
+                </button>
+                <button class="option" type="button" aria-pressed="true">
+                  Intermediate
+                </button>
+                <button class="option" type="button" aria-pressed="false">
+                  Advanced
+                </button>
+              </div>
+              <div class="hint">
+                Skip this to keep your saved level. Tap a selected level again
+                to clear it.
+              </div>
+            </div>
+            <button class="btn btn-primary" type="button">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 12l5 5L20 7" /></svg
+              >Check in
+            </button>
+            <button class="btn btn-outline" type="button">Back</button>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P5a -->
+      <figure class="frame" data-shot="P05a-guest-form">
+        <figcaption>
+          <b>P5a · First-time guest form.</b> All three fields required.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div class="back-row">
+              <button class="back-link" type="button">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M15 6l-6 6 6 6" /></svg
+                >Back to find your name
+              </button>
+            </div>
+            <div>
+              <h1 class="page-title">Check in as a guest</h1>
+              <p class="lede">
+                Saturday Social Pickleball · Sat 7 Nov · 18:00 – 20:00
+              </p>
+            </div>
+            <form class="form-card" novalidate>
+              <div class="field">
+                <label for="g-first">First name</label
+                ><input
+                  class="input"
+                  id="g-first"
+                  autocomplete="given-name"
+                  value="Kai"
+                />
+              </div>
+              <div class="field">
+                <label for="g-last">Last name</label
+                ><input
+                  class="input"
+                  id="g-last"
+                  autocomplete="family-name"
+                  value="Moreno"
+                />
+              </div>
+              <div class="field">
+                <span class="label" id="g-skill-label">Your level</span>
+                <div
+                  class="options"
+                  role="group"
+                  aria-labelledby="g-skill-label"
+                >
+                  <button class="option" type="button" aria-pressed="true">
+                    Beginner
+                  </button>
+                  <button class="option" type="button" aria-pressed="false">
+                    Intermediate
+                  </button>
+                  <button class="option" type="button" aria-pressed="false">
+                    Advanced
+                  </button>
+                </div>
+              </div>
+            </form>
+            <div class="notice info">
+              <span class="badge-i" aria-hidden="true">i</span
+              ><span
+                >A host approves each check-in before you're added to today's
+                players.</span
+              >
+            </div>
+            <div class="cta-bar">
+              <button class="btn btn-primary" type="button">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12l5 5L20 7" /></svg
+                >Check in
+              </button>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P5b -->
+      <figure class="frame" data-shot="P05b-guest-form-errors">
+        <figcaption>
+          <b>P5b · Guest form, errors.</b> Shown after pressing Check in: 2px
+          orange border, "!" plus words, linked with aria-describedby.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div class="back-row">
+              <button class="back-link" type="button">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M15 6l-6 6 6 6" /></svg
+                >Back to find your name
+              </button>
+            </div>
+            <div>
+              <h1 class="page-title">Check in as a guest</h1>
+              <p class="lede">
+                Saturday Social Pickleball · Sat 7 Nov · 18:00 – 20:00
+              </p>
+            </div>
+            <form class="form-card" novalidate>
+              <div class="field">
+                <label for="ge-first">First name</label
+                ><input class="input" id="ge-first" value="Kai" />
+              </div>
+              <div class="field">
+                <label for="ge-last">Last name</label>
+                <input
+                  class="input invalid"
+                  id="ge-last"
+                  aria-invalid="true"
+                  aria-describedby="ge-last-error"
+                  placeholder="Required"
+                />
+                <div class="field-error" id="ge-last-error">
+                  <span class="badge-bang" aria-hidden="true">!</span>Enter your
+                  last name
+                </div>
+              </div>
+              <div class="field">
+                <span class="label" id="ge-skill-label">Your level</span>
+                <div
+                  class="options invalid"
+                  role="group"
+                  aria-labelledby="ge-skill-label"
+                  aria-describedby="ge-skill-error"
+                >
+                  <button class="option" type="button" aria-pressed="false">
+                    Beginner
+                  </button>
+                  <button class="option" type="button" aria-pressed="false">
+                    Intermediate
+                  </button>
+                  <button class="option" type="button" aria-pressed="false">
+                    Advanced
+                  </button>
+                </div>
+                <div
+                  class="field-error"
+                  id="ge-skill-error"
+                  style="margin-top: 4px"
+                >
+                  <span class="badge-bang" aria-hidden="true">!</span>Choose
+                  your level
+                </div>
+              </div>
+            </form>
+            <div class="cta-bar">
+              <button class="btn btn-primary" type="button">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12l5 5L20 7" /></svg
+                >Check in
+              </button>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P6 -->
+      <figure class="frame" data-shot="P06-waiting-for-approval">
+        <figcaption>
+          <b>P6 · Waiting for the host to approve.</b> Polls every 5 s;
+          reloading returns here. The poll line is a polite live region.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div class="state">
+              <div class="state-icon blue" aria-hidden="true">
+                <svg
+                  width="34"
+                  height="34"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+              </div>
+              <h1>Waiting for the host to approve</h1>
+              <p>Your check-in for Saturday Social Pickleball has been sent.</p>
+            </div>
+            <div class="panel">
+              <div class="person">
+                <span class="avatar lg blue" aria-hidden="true">GK</span>
+                <div style="flex: 1">
+                  <strong>Grace Kim</strong
+                  ><small>Saturday Social Pickleball</small>
+                </div>
+                <span class="status-pill blue"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5" /></svg
+                  >Waiting</span
+                >
+              </div>
+              <div class="poll-line" role="status">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+                  <path d="M21 3v5h-5" /></svg
+                >This page updates by itself every few seconds.
+              </div>
+            </div>
+            <div class="panel">
+              <h2>While you wait</h2>
+              <ul>
+                <li>
+                  Keep this page open, or come back to the same link later. Your
+                  request stays here.
+                </li>
+                <li>Taking a while? Let a host know you've arrived.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P7 -->
+      <figure class="frame" data-shot="P07-approved">
+        <figcaption>
+          <b>P7 · Approved, "You're in".</b> Replaces P6 automatically.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div class="state" role="status">
+              <div class="state-icon lime" aria-hidden="true">
+                <svg
+                  width="36"
+                  height="36"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12l5 5L20 7" />
+                </svg>
+              </div>
+              <h1>You're in, Grace</h1>
+              <p>You're checked in to Saturday Social Pickleball.</p>
+            </div>
+            <div class="panel">
+              <div class="person">
+                <span class="avatar lg blue" aria-hidden="true">GK</span>
+                <div style="flex: 1">
+                  <strong>Grace Kim</strong
+                  ><small>Sat 7 Nov · 18:00 – 20:00</small>
+                </div>
+                <span class="status-pill lime"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 12l5 5L20 7" /></svg
+                  >Checked in</span
+                >
+              </div>
+            </div>
+            <div class="panel">
+              <h2>What happens next</h2>
+              <ul>
+                <li>The hosts put you on a court when it's your turn.</li>
+                <li>Stay near the courts and listen for your name.</li>
+                <li>You can close this page.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P8 -->
+      <figure class="frame" data-shot="P08-rejected">
+        <figcaption>
+          <b>P8 · Rejected.</b> Neutral wording and icon. "Try again" sends a
+          new request (counts towards the rate limits).
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div class="state" role="status">
+              <div class="state-icon neutral" aria-hidden="true">
+                <svg
+                  width="34"
+                  height="34"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+                </svg>
+              </div>
+              <h1>Check-in not approved</h1>
+              <p>
+                The host didn't approve this check-in. Please speak to the host.
+              </p>
+            </div>
+            <div class="cta-bar">
+              <button class="btn btn-outline" type="button">Try again</button>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P9 -->
+      <figure class="frame" data-shot="P09-already-checked-in">
+        <figcaption>
+          <b>P9 · Already checked in.</b> Only on the member's own linked phone;
+          any other phone gets P6.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div class="state" role="status">
+              <div class="state-icon lime" aria-hidden="true">
+                <svg
+                  width="36"
+                  height="36"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12l5 5L20 7" />
+                </svg>
+              </div>
+              <h1>You're already checked in to Saturday Social Pickleball</h1>
+              <p>
+                Nothing more to do, Grace. Stay near the courts and listen for
+                your name.
+              </p>
+            </div>
+            <div class="panel">
+              <div class="person">
+                <span class="avatar lg blue" aria-hidden="true">GK</span>
+                <div style="flex: 1">
+                  <strong>Grace Kim</strong
+                  ><small>Sat 7 Nov · 18:00 – 20:00</small>
+                </div>
+                <span class="status-pill lime"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 12l5 5L20 7" /></svg
+                  >Checked in</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P10 -->
+      <figure class="frame" data-shot="P10-too-many-attempts">
+        <figcaption>
+          <b>P10 · Too many attempts.</b> Rate limit hit on a search or submit.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div class="state" role="alert">
+              <div class="state-icon orange" aria-hidden="true">
+                <span style="font-size: 34px; font-weight: 800; line-height: 1"
+                  >!</span
+                >
+              </div>
+              <h1>Too many attempts</h1>
+              <p>Too many attempts. Wait a few minutes and try again.</p>
+            </div>
+            <div class="cta-bar">
+              <button class="btn btn-outline" type="button">Try again</button>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P11 -->
+      <figure class="frame" data-shot="P11-link-not-active">
+        <figcaption>
+          <b>P11 · Link not active.</b> Unknown or reissued tag. No social name,
+          no host or session details.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div class="brand">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 52 52"
+                aria-hidden="true"
+              >
+                <circle cx="26" cy="26" r="24" fill="#D4F23A" />
+                <circle cx="18" cy="18" r="3" fill="#0F1419" />
+                <circle cx="30" cy="15" r="3" fill="#0F1419" />
+                <circle cx="36" cy="27" r="3" fill="#0F1419" />
+                <circle cx="25" cy="34" r="3" fill="#0F1419" />
+                <circle cx="15" cy="29" r="3" fill="#0F1419" />
+                <circle cx="26" cy="24" r="3" fill="#0F1419" />
+              </svg>
+              <span>Pickleball Social Manager</span>
+            </div>
+            <div class="state">
+              <div class="state-icon neutral" aria-hidden="true">
+                <svg
+                  width="34"
+                  height="34"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+                  <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+                  <path d="M3 3l18 18" />
+                </svg>
+              </div>
+              <h1>This check-in link isn't active</h1>
+              <p>Ask a host at the courts for the current QR code.</p>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P12 -->
+      <figure class="frame" data-shot="P12-no-social-open">
+        <figcaption>
+          <b>P12 · No social open right now.</b> Valid tag, but the social has
+          no draft or live session.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div class="state">
+              <div class="state-icon neutral" aria-hidden="true">
+                <svg
+                  width="34"
+                  height="34"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="5" width="18" height="16" rx="3" />
+                  <path d="M3 10h18M8 3v4M16 3v4" />
+                </svg>
+              </div>
+              <h1>No social open right now</h1>
+              <p>Check back when your host opens the session.</p>
+            </div>
+            <div class="cta-bar">
+              <button class="btn btn-outline" type="button">Check again</button>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <!-- P13 -->
+      <figure class="frame" data-shot="P13-something-went-wrong">
+        <figcaption>
+          <b>P13 · Something went wrong / offline.</b> Same screen for network
+          failures and server errors. A retried submit can't create a second
+          request.
+        </figcaption>
+        <div class="phone">
+          <div class="phone-content">
+            <div data-include="tpl-brand"></div>
+            <div class="state" role="alert">
+              <div class="state-icon orange" aria-hidden="true">
+                <svg
+                  width="34"
+                  height="34"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 9-2.6M8.5 15.5a5 5 0 0 1 4-1.4"
+                  />
+                  <path d="M3 3l18 18" />
+                  <circle cx="12" cy="19" r="1" fill="currentColor" />
+                </svg>
+              </div>
+              <h1>Something went wrong</h1>
+              <p>
+                We couldn't reach the check-in. Check your connection and try
+                again.
+              </p>
+              <p class="muted">
+                If you'd already pressed Check in, trying again won't send a
+                second request.
+              </p>
+            </div>
+            <div class="cta-bar">
+              <button class="btn btn-primary" type="button">Try again</button>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <script>
+      // Clone shared fragments (keeps the mockup DRY). Duplicate ids inside clones get a suffix.
+      let includeCounter = 0;
+      for (const placeholder of document.querySelectorAll("[data-include]")) {
+        const fragment = document
+          .getElementById(placeholder.dataset.include)
+          .content.cloneNode(true);
+        includeCounter += 1;
+        for (const element of fragment.querySelectorAll("[id]"))
+          element.id += "-" + includeCounter;
+        for (const element of fragment.querySelectorAll("[for]"))
+          element.htmlFor += "-" + includeCounter;
+        for (const element of fragment.querySelectorAll("[aria-describedby]"))
+          element.setAttribute(
+            "aria-describedby",
+            element.getAttribute("aria-describedby") + "-" + includeCounter,
+          );
+        for (const element of fragment.querySelectorAll("[aria-labelledby]"))
+          element.setAttribute(
+            "aria-labelledby",
+            element.getAttribute("aria-labelledby") + "-" + includeCounter,
+          );
+        placeholder.replaceWith(fragment);
+      }
+    </script>
+  </body>
+</html>
