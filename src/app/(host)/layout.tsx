@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { ClubLogo } from "@/components/ClubLogo";
@@ -45,12 +46,15 @@ async function HostGate({ children }: { children: ReactNode }) {
     <>
       <header className="border-b border-card-border bg-bg-header">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-6 gap-y-3 px-7 py-3">
-          <div className="flex items-center gap-3">
+          <Link
+            href="/setup"
+            className="flex min-h-11 items-center gap-3 rounded-xl"
+          >
             <ClubLogo />
             <span className="text-[19px] font-bold">
               Pickleball Social Manager
             </span>
-          </div>
+          </Link>
           <HostNav />
           <div className="ml-auto flex items-center gap-3">
             <InitialsAvatar name={host.displayName} />

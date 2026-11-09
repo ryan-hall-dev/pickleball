@@ -301,6 +301,9 @@ isOneToOne: false
 "remove_draft_participant":
 { Args: { "p_actor_user_id": string,"p_session_participant_id": string }; Returns: Json
                            },
+"save_session_draft":
+{ Args: { "p_actor_user_id": string,"p_config_patch": Json,"p_host_name": string,"p_location": string,"p_name": string,"p_planned_end": string,"p_planned_start": string,"p_session_id": string }; Returns: Json
+                           },
 "search_checkin_names":
 { Args: { "p_checkin_tag": string,"p_device_token_hash": string,"p_ip_hash": string,"p_name_query": string }; Returns: {
               "first_name": string,"last_name": string,"member_id": string

@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
   // Agent guidance lives in CLAUDE.md; stop `next dev` from writing AGENTS.md.
   agentRules: false,
   cacheComponents: true,
+  // The host area starts at Session setup; "/" (old links, typed URLs) goes there.
+  async redirects() {
+    return [{ source: "/", destination: "/setup", permanent: false }];
+  },
   partialPrefetching: true,
   turbopack: {
     rules: {

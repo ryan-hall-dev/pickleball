@@ -313,6 +313,11 @@ Carried into M5/M8 from M3:
 - M5: "a player can be in only one live session at a time" is checked when approving (it needs a replay of the other live session, so it isn't a database constraint). M5 also needs a server-side read for the check-in page header, phone recognition and request status.
 - M8: `end_session` takes `p_final_stats` (jsonb) for the final report; M3 passes nothing yet.
 
+Carried into M6 from M4:
+
+- Start must re-read the selected courts by id (active, supporting the format, current names) rather than trust the draft's `config_snapshot.courts`, which can hold a court deactivated or renamed after the last save. `matchFormat` in the draft snapshot is draft-only; `start_session` replaces the snapshot with the `SessionStarted` config.
+- Sessions may run past midnight: an end time at or before the start time means the next day (2026-11-09).
+
 ## 8. Interpretations of the brief (no decision needed unless you disagree)
 
 1. "Skip temporarily": the player stays skipped until the host un-skips them. Skipped and away time doesn't count as presence. Players who leave and return keep their stats.

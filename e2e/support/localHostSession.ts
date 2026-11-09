@@ -139,7 +139,8 @@ export async function signIn(page: Page, email: string) {
   await requestCode(page, email);
   await page.getByLabel("6-digit code").fill(await readNewestSignInCode(email));
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL((url) => url.pathname === "/");
+  // "/" redirects to Session setup, where the host area starts.
+  await page.waitForURL((url) => url.pathname === "/setup");
 }
 
 export async function signOut(page: Page) {

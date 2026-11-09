@@ -50,7 +50,9 @@ test("the seeded admin signs in with an emailed code", async ({
 
   await signIn(page, SEEDED_ADMIN_EMAIL);
 
-  await expect(page.getByRole("heading", { name: /^Welcome,/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Set up a session" }),
+  ).toBeVisible();
   await page.getByRole("link", { name: "Hosts", exact: true }).first().click();
   await expect(
     page.getByRole("heading", { name: "Invite a host" }),
@@ -142,9 +144,7 @@ test("an admin invites a host, who can then sign in, and removes them", async ({
   await signOut(page);
 
   await signIn(page, inviteeEmail);
-  await expect(
-    page.getByRole("heading", { name: `Welcome, ${inviteeName}` }),
-  ).toBeVisible();
+  await expect(page.getByRole("banner")).toContainText(`Host · ${inviteeName}`);
   await page.goto("/hosts");
   await expect(
     page.getByText("Only admins can invite or remove hosts."),

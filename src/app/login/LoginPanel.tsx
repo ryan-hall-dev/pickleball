@@ -8,7 +8,7 @@ export async function LoginPanel() {
   // Anyone already signed in goes to the host area, which shows "not a host
   // here" to signed-in non-hosts.
   const hostAccess = await readHostAccess();
-  if (hostAccess.status !== "signed_out") redirect("/");
+  if (hostAccess.status !== "signed_out") redirect("/setup");
 
   return (await clubHasAnyHost()) ? <LoginForm /> : <NoHostsYet />;
 }

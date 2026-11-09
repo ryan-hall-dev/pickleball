@@ -94,8 +94,9 @@ export async function verifyLoginCode(
     }
     return { ok: false, reason };
   }
-  // The host layout decides between the host area and "not a host here".
-  redirect("/");
+  // The host layout decides between the host area (it starts at Session
+  // setup) and "not a host here".
+  redirect("/setup");
 }
 
 export async function signOut(): Promise<never> {

@@ -35,3 +35,17 @@ export const LINK_BUTTON_CLASS_NAME =
 
 export const CARD_CLASS_NAME =
   "rounded-card border border-card-border bg-card p-[22px]";
+
+// Selectable option buttons (duration, match format): 44px, use aria-pressed.
+const OPTION_BUTTON_SHAPE_CLASS_NAME =
+  "inline-flex h-11 items-center justify-center rounded-xl px-[18px] text-[15px] disabled:cursor-not-allowed";
+
+/** Selected option: lime fill, weight 700. */
+export const SELECTED_OPTION_BUTTON_CLASS_NAME = `${OPTION_BUTTON_SHAPE_CLASS_NAME} bg-lime font-bold text-on-lime`;
+
+/** Unselected option: inner fill and border. Disabled per DESIGN.md: transparent, placeholder text. */
+export const UNSELECTED_OPTION_BUTTON_CLASS_NAME = `${OPTION_BUTTON_SHAPE_CLASS_NAME} border border-inner-border bg-inner font-semibold text-text hover:bg-nav-active disabled:bg-transparent disabled:text-placeholder disabled:hover:bg-transparent`;
+
+/** 44x44 outline icon button (court −/+, close). Needs an aria-label. */
+export const ICON_BUTTON_CLASS_NAME =
+  "inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-outline text-[22px] font-semibold text-text hover:bg-inner disabled:cursor-not-allowed disabled:border-inner-border disabled:text-placeholder disabled:hover:bg-transparent";

@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 // Design order: Session setup, Live courts, Members, History. Later milestones
-// add the others; Hosts (admin tools) stays last.
+// add Live courts and History; Hosts (admin tools) stays last.
 const HOST_NAV_ITEMS = [
-  { href: "/", label: "Home" },
+  { href: "/setup", label: "Session setup" },
   { href: "/members", label: "Members" },
   { href: "/hosts", label: "Hosts" },
 ] as const;
