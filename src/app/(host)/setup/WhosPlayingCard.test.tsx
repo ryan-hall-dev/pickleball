@@ -212,6 +212,69 @@ describe("WhosPlayingCard", () => {
     ).toBeInTheDocument();
   });
 
+  it("lists attending members first, even past the first page", () => {
+    const manyMembers = Array.from({ length: 300 }, (_, index) =>
+      member(index + 10, `Player${String(index).padStart(3, "0")}`, "Test"),
+    );
+    // Player299 is last alphabetically, far beyond the first page.
+    renderCard(manyMembers, [attendee(manyMembers[299])]);
+    const list = screen.getByRole("list", { name: "Who's playing?" });
+    const rowButtons = within(list).getAllByRole("button");
+    expect(rowButtons).toHaveLength(MEMBER_DIRECTORY_PAGE_SIZE);
+    expect(rowButtons[0]).toHaveAccessibleName(/^Player299 Test/);
+    expect(rowButtons[1]).toHaveAccessibleName(/^Player000 Test/);
+    expect(
+      screen.getByText(`Showing ${MEMBER_DIRECTORY_PAGE_SIZE} of 300 members`),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps rows in place while tapping, and re-sorts on the next search", async () => {
+    const manyMembers = Array.from({ length: 300 }, (_, index) =>
+      member(index + 10, `Player${String(index).padStart(3, "0")}`, "Test"),
+    );
+    const [player010, player299] = [manyMembers[10], manyMembers[299]];
+    setAttendanceMock
+      .mockResolvedValueOnce({
+        ok: true,
+        participants: [attendee(player299), attendee(player010)],
+      })
+      .mockResolvedValueOnce({ ok: true, participants: [attendee(player010)] });
+    renderCard(manyMembers, [attendee(player299)]);
+    const list = screen.getByRole("list", { name: "Who's playing?" });
+    const rowNames = () =>
+      within(list)
+        .getAllByRole("button")
+        .map((button) => /Player\d+/.exec(button.textContent ?? "")?.[0]);
+    const namesBefore = rowNames();
+    expect(namesBefore.slice(0, 3)).toEqual([
+      "Player299",
+      "Player000",
+      "Player001",
+    ]);
+
+    // Adding a mid-list member doesn't move them to the top.
+    fireEvent.click(memberButton("Player010 Test"));
+    await waitFor(() => expect(setAttendanceMock).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(memberButton("Player010 Test")).toHaveTextContent("Attending"),
+    );
+    expect(rowNames()).toEqual(namesBefore);
+
+    // Removing the first member keeps them on the visible page, in place.
+    fireEvent.click(memberButton("Player299 Test"));
+    await waitFor(() => expect(setAttendanceMock).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(memberButton("Player299 Test")).toHaveTextContent("Not attending"),
+    );
+    expect(rowNames()).toEqual(namesBefore);
+
+    // A new search arranges the list again: attending first.
+    fireEvent.change(screen.getByLabelText("Search members by name"), {
+      target: { value: "player0" },
+    });
+    expect(rowNames().slice(0, 2)).toEqual(["Player010", "Player000"]);
+  });
+
   it("pages a large club and searches and filters every member", () => {
     const manyMembers = Array.from({ length: 300 }, (_, index) =>
       member(

@@ -18,19 +18,22 @@ export const metadata: Metadata = {
 
 export default function SessionSetupPage() {
   return (
-    // Per-user data streams in behind its own boundary (cacheComponents).
-    <Suspense
-      fallback={
-        <>
-          <SetupPageHeader />
-          <p className="text-muted" aria-live="polite">
-            Loading your session…
-          </p>
-        </>
-      }
-    >
-      <SessionSetupContent />
-    </Suspense>
+    // The design's setup page ends 56px down; the host layout gives 48px.
+    <div className="flex flex-col gap-4 pb-2">
+      {/* Per-user data streams in behind its own boundary (cacheComponents). */}
+      <Suspense
+        fallback={
+          <>
+            <SetupPageHeader />
+            <p className="text-muted" aria-live="polite">
+              Loading your session…
+            </p>
+          </>
+        }
+      >
+        <SessionSetupContent />
+      </Suspense>
+    </div>
   );
 }
 

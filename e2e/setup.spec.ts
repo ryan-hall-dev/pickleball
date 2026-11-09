@@ -487,10 +487,15 @@ test("a host reorders the rotation and switches rules; it persists across naviga
     await expect(
       page.getByText("Mix up partners is over position 6 of 6."),
     ).toBeAttached();
-    await page.keyboard.press("ArrowUp");
-    await expect(
-      page.getByText("Mix up partners is over position 5 of 6."),
-    ).toBeAttached();
+    // dnd-kit starts listening for arrow keys a tick after the pick-up is
+    // announced, so a very quick first ArrowUp can be missed: press again
+    // until it lands (a press that lands is announced well within 500ms).
+    await expect(async () => {
+      await page.keyboard.press("ArrowUp");
+      await expect(
+        page.getByText("Mix up partners is over position 5 of 6."),
+      ).toBeAttached({ timeout: 500 });
+    }).toPass({ timeout: 5_000 });
     await page.keyboard.press("Space");
   }
   const reorderedLabels = [
@@ -810,4 +815,70 @@ test("a stale tab can't overwrite newer settings: it says so, and saves again af
     tabB.getByRole("region", { name: "Setup changed elsewhere" }),
   ).toHaveCount(0);
   await tabB.close();
+});
+
+// A truly fresh editor after leaving (Setup evicted from Next's <Activity>
+// cache) can't be forced here: Next keeps 3 routes per layout level and the
+// host area has only 3 sections (Setup, Members, Hosts; /members/new is under
+// Members). The component tests cover that path (SessionSetupEditor.test.tsx,
+// "after the editor truly unmounts"). This covers coming back to the cached
+// Setup while the save made on leaving is still on its way.
+test("coming back while the save made on leaving is still on its way: it lands, then the next edit saves", async ({
+  page,
+}) => {
+  const email = await signInAsNewAdmin(page, "setup-slow-leave");
+  const hostUserId = (await findUserIdByEmail(email))!;
+  testHostUserIds.push(hostUserId);
+  await startNewDraft(page);
+  await expectSaved(page);
+
+  // Hold the next server action (the save on leaving) until the test lets it go.
+  let releaseHeldSave!: () => Promise<void>;
+  const saveIsHeld = new Promise<void>((resolveSaveIsHeld) => {
+    let isHolding = false;
+    void page.route("**/*", async (route) => {
+      const request = route.request();
+      const isServerAction =
+        request.method() === "POST" && !!request.headers()["next-action"];
+      if (isHolding || !isServerAction) {
+        await route.fallback();
+        return;
+      }
+      isHolding = true;
+      releaseHeldSave = () => route.continue();
+      resolveSaveIsHeld();
+    });
+  });
+
+  // An edit, then away within the autosave delay, and straight back.
+  await page.getByLabel("Session name").fill("Saved on the way out");
+  const nav = page.getByRole("navigation", { name: "Host" });
+  await nav.getByRole("link", { name: "Members" }).click();
+  await saveIsHeld;
+  await expect(page).toHaveURL(/\/members$/);
+  await nav.getByRole("link", { name: "Session setup" }).click();
+  await expect(page).toHaveURL(/\/setup$/);
+  await expect(saveStatus(page)).toHaveText("Saving…");
+  await releaseHeldSave();
+
+  await expectSaved(page);
+  await expect(page.getByLabel("Session name")).toHaveValue(
+    "Saved on the way out",
+  );
+  await page.getByLabel("Location (optional)").fill("After coming back");
+  await expectSaved(page);
+  await expect(
+    page.getByRole("region", { name: "Setup changed elsewhere" }),
+  ).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const { data } = await adminClient
+        .from("sessions")
+        .select("name, location")
+        .eq("host_id", hostUserId)
+        .eq("status", "draft")
+        .single();
+      return data;
+    })
+    .toEqual({ name: "Saved on the way out", location: "After coming back" });
 });

@@ -26,6 +26,7 @@ import {
   type ApplySavedSetupResult,
   type DraftAttendanceResult,
   discardSessionDraft,
+  readSessionDraft,
   removeDraftGuest,
   saveSessionDraft,
   saveSetup,
@@ -396,6 +397,9 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
             setupId: randomUUID(),
           }),
         ).toEqual(expected);
+        expect(await readSessionDraft(aliceDraftBefore[0].id)).toEqual(
+          expected,
+        );
         const { count: sneakySetupCount } = await admin
           .from("saved_setups")
           .select("id", { count: "exact", head: true })
@@ -1515,6 +1519,42 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           reloaded.draftRevision,
         ),
       ).toEqual({ ok: true, draftRevision: 2 });
+    });
+
+    it("re-reads only the host's own open draft, at its current revision", async () => {
+      const loaded = await openDraftFor(hostFrank);
+      actingClient = hostFrank.client;
+      const saved = await saveSessionDraft(
+        saveInputFor(loaded.sessionId, { name: "Flushed from tab" }),
+        loaded.draftRevision,
+      );
+      expect(saved).toEqual({
+        ok: true,
+        draftRevision: loaded.draftRevision + 1,
+      });
+      expect(await readSessionDraft(loaded.sessionId)).toEqual({
+        ok: true,
+        draft: {
+          ...(await openDraftFor(hostFrank)),
+          name: "Flushed from tab",
+          draftRevision: loaded.draftRevision + 1,
+        },
+      });
+
+      actingClient = hostBob.client;
+      expect(await readSessionDraft(loaded.sessionId)).toEqual({
+        ok: false,
+        message: DRAFT_NOT_OPEN,
+      });
+      actingClient = hostFrank.client;
+      expect(await readSessionDraft(randomUUID())).toEqual({
+        ok: false,
+        message: DRAFT_NOT_OPEN,
+      });
+      expect(await readSessionDraft("not-a-uuid")).toEqual({
+        ok: false,
+        message: "Something went wrong. Try again in a moment.",
+      });
     });
 
     it("doesn't bump the revision for attendance", async () => {

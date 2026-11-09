@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -12,8 +13,10 @@ import {
   addClubCourt,
   applySavedSetup,
   discardSessionDraft,
+  readSessionDraft,
   saveSessionDraft,
   saveSetup,
+  type SaveSessionDraftResult,
 } from "@/server/setup/setupActions";
 import type {
   ClubCourt,
@@ -23,6 +26,7 @@ import type {
 } from "@/server/setup/setupDraft";
 import type { RotationObjective } from "@/engine";
 import { recommendedRotationPreferences } from "@/server/setup/setupRules";
+import { forgetOwnDraftWrites } from "./ownDraftWrites";
 import { SessionSetupEditor } from "./SessionSetupEditor";
 
 vi.mock("@/server/setup/setupActions", () => ({
@@ -35,6 +39,7 @@ vi.mock("@/server/setup/setupActions", () => ({
   removeDraftGuest: vi.fn(),
   saveSetup: vi.fn(),
   applySavedSetup: vi.fn(),
+  readSessionDraft: vi.fn(),
 }));
 
 const saveSessionDraftMock = vi.mocked(saveSessionDraft);
@@ -42,6 +47,7 @@ const discardSessionDraftMock = vi.mocked(discardSessionDraft);
 const addClubCourtMock = vi.mocked(addClubCourt);
 const saveSetupMock = vi.mocked(saveSetup);
 const applySavedSetupMock = vi.mocked(applySavedSetup);
+const readSessionDraftMock = vi.mocked(readSessionDraft);
 
 const SESSION_ID = "d0000000-0000-4000-8000-000000000001";
 const clubCourts: ClubCourt[] = [
@@ -147,6 +153,9 @@ describe("SessionSetupEditor", () => {
     addClubCourtMock.mockReset();
     saveSetupMock.mockReset();
     applySavedSetupMock.mockReset();
+    readSessionDraftMock.mockReset();
+    // This tab's own writes are module state: each test starts fresh.
+    forgetOwnDraftWrites();
   });
 
   afterEach(cleanup);
@@ -805,6 +814,347 @@ describe("SessionSetupEditor", () => {
       expect(
         screen.queryByRole("region", { name: "Setup changed elsewhere" }),
       ).not.toBeInTheDocument();
+    });
+
+    describe("after the editor truly unmounts with a save on its way", () => {
+      /** A save that resolves when the test says so. */
+      function deferredSave() {
+        let resolveSave!: (result: SaveSessionDraftResult) => void;
+        saveSessionDraftMock.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveSave = resolve;
+            }),
+        );
+        return (result: SaveSessionDraftResult) => resolveSave(result);
+      }
+
+      /** Editor A: an edit, then leaving within the autosave delay. */
+      function editThenLeave(sessionName: string) {
+        const editorA = renderEditor(draftWith({ draftRevision: 3 }));
+        fireEvent.change(screen.getByLabelText("Session name"), {
+          target: { value: sessionName },
+        });
+        editorA.unmount();
+        // Gone from the page, so saveStatus() finds editor B's.
+        editorA.container.remove();
+        expect(saveSessionDraftMock).toHaveBeenCalledTimes(1);
+        expect(saveSessionDraftMock.mock.calls[0]).toEqual([
+          expect.objectContaining({ name: sessionName }),
+          3,
+        ]);
+      }
+
+      it("waits for it, re-reads the draft, then saves on the new revision", async () => {
+        const resolveFlush = deferredSave();
+        editThenLeave("Flushed on leaving");
+        readSessionDraftMock.mockResolvedValue({
+          ok: true,
+          draft: draftWith({ name: "Flushed on leaving", draftRevision: 4 }),
+        });
+
+        // Editor B was rendered from page data read before the flush landed.
+        renderEditor(draftWith({ draftRevision: 3 }));
+        expect(saveStatus()).toHaveTextContent("Saving…");
+        expect(screen.getByLabelText("Session name")).toBeDisabled();
+        expect(screen.getByLabelText("Session name")).toHaveValue(
+          "Saturday social",
+        );
+        expect(readSessionDraftMock).not.toHaveBeenCalled();
+
+        resolveFlush({ ok: true, draftRevision: 4 });
+        await waitFor(() =>
+          expect(screen.getByLabelText("Session name")).toBeEnabled(),
+        );
+        expect(readSessionDraftMock).toHaveBeenCalledWith(SESSION_ID);
+        expect(screen.getByLabelText("Session name")).toHaveValue(
+          "Flushed on leaving",
+        );
+        expect(saveStatus()).toHaveTextContent("Saved");
+
+        saveSessionDraftMock.mockResolvedValue({ ok: true, draftRevision: 5 });
+        fireEvent.change(screen.getByLabelText("Location (optional)"), {
+          target: { value: "After coming back" },
+        });
+        await waitFor(
+          () => expect(saveSessionDraftMock).toHaveBeenCalledTimes(2),
+          SAVE_WAIT,
+        );
+        expect(saveSessionDraftMock.mock.calls[1]).toEqual([
+          expect.objectContaining({
+            name: "Flushed on leaving",
+            location: "After coming back",
+          }),
+          4,
+        ]);
+        await waitFor(() => expect(saveStatus()).toHaveTextContent("Saved"));
+        expect(
+          screen.queryByRole("region", { name: "Setup changed elsewhere" }),
+        ).not.toBeInTheDocument();
+      });
+
+      it("waits in the same commit as the unmount (a remount)", async () => {
+        const resolveFlush = deferredSave();
+        readSessionDraftMock.mockResolvedValue({
+          ok: true,
+          draft: draftWith({ name: "Remounted edit", draftRevision: 1 }),
+        });
+        const editor = (instance: string) => (
+          <SessionSetupEditor
+            key={instance}
+            draft={draftWith()}
+            initialClubCourts={clubCourts}
+            activeMembers={[]}
+            canAddCourts
+            initialSavedSetups={[]}
+          />
+        );
+        const { rerender } = render(editor("A"));
+        fireEvent.change(screen.getByLabelText("Session name"), {
+          target: { value: "Remounted edit" },
+        });
+        // A unmounts and B mounts in one commit: B renders before A's
+        // cleanup starts the flush.
+        rerender(editor("B"));
+        expect(saveSessionDraftMock).toHaveBeenCalledTimes(1);
+        await waitFor(() =>
+          expect(screen.getByLabelText("Session name")).toBeDisabled(),
+        );
+        expect(saveStatus()).toHaveTextContent("Saving…");
+
+        resolveFlush({ ok: true, draftRevision: 1 });
+        await waitFor(() =>
+          expect(screen.getByLabelText("Session name")).toHaveValue(
+            "Remounted edit",
+          ),
+        );
+        expect(screen.getByLabelText("Session name")).toBeEnabled();
+        expect(saveStatus()).toHaveTextContent("Saved");
+      });
+
+      it("re-reads when the flush already landed but the page data predates it", async () => {
+        saveSessionDraftMock.mockResolvedValueOnce({
+          ok: true,
+          draftRevision: 4,
+        });
+        editThenLeave("Landed first");
+        // The flush's response arrives before editor B's page data.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        readSessionDraftMock.mockResolvedValue({
+          ok: true,
+          draft: draftWith({ name: "Landed first", draftRevision: 4 }),
+        });
+        renderEditor(draftWith({ draftRevision: 3 }));
+        await waitFor(() =>
+          expect(screen.getByLabelText("Session name")).toHaveValue(
+            "Landed first",
+          ),
+        );
+        expect(screen.getByLabelText("Session name")).toBeEnabled();
+        expect(readSessionDraftMock).toHaveBeenCalledTimes(1);
+      });
+
+      it("uses the page data as is when it already includes this tab's writes", async () => {
+        saveSessionDraftMock.mockResolvedValueOnce({
+          ok: true,
+          draftRevision: 4,
+        });
+        editThenLeave("Already loaded");
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        renderEditor(draftWith({ name: "Already loaded", draftRevision: 4 }));
+        expect(saveStatus()).toHaveTextContent("Saved");
+        expect(screen.getByLabelText("Session name")).toBeEnabled();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(readSessionDraftMock).not.toHaveBeenCalled();
+      });
+
+      it("shows the conflict banner when the flush was refused", async () => {
+        const resolveFlush = deferredSave();
+        editThenLeave("Refused on leaving");
+        renderEditor(draftWith({ draftRevision: 3 }));
+        expect(saveStatus()).toHaveTextContent("Saving…");
+
+        resolveFlush(CONFLICT);
+        expect(
+          await screen.findByRole("region", {
+            name: "Setup changed elsewhere",
+          }),
+        ).toBeInTheDocument();
+        expect(saveStatus()).toHaveTextContent(
+          "! Not saved: changed elsewhere",
+        );
+        expect(readSessionDraftMock).not.toHaveBeenCalled();
+        // Like any conflict: nothing more is written from here.
+        fireEvent.change(screen.getByLabelText("Session name"), {
+          target: { value: "Edit after conflict" },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 900));
+        expect(saveSessionDraftMock).toHaveBeenCalledTimes(1);
+      });
+
+      it("shows a conflict once: coming back later re-reads fresh data with no banner", async () => {
+        const resolveFlush = deferredSave();
+        editThenLeave("Refused on leaving");
+        const editorB = renderEditor(draftWith({ draftRevision: 3 }));
+        resolveFlush(CONFLICT);
+        await screen.findByRole("region", { name: "Setup changed elsewhere" });
+        editorB.unmount();
+        editorB.container.remove();
+
+        // Back again (client navigation): the other device's draft, fresh.
+        readSessionDraftMock.mockResolvedValue({
+          ok: true,
+          draft: draftWith({ name: "From the other device", draftRevision: 9 }),
+        });
+        const editorC = renderEditor(
+          draftWith({ name: "From the other device", draftRevision: 9 }),
+        );
+        await waitFor(() =>
+          expect(screen.getByLabelText("Session name")).toBeEnabled(),
+        );
+        expect(readSessionDraftMock).toHaveBeenCalledTimes(1);
+        expect(
+          screen.queryByRole("region", { name: "Setup changed elsewhere" }),
+        ).not.toBeInTheDocument();
+        expect(saveStatus()).toHaveTextContent("Saved");
+        saveSessionDraftMock.mockResolvedValue({ ok: true, draftRevision: 10 });
+        fireEvent.change(screen.getByLabelText("Location (optional)"), {
+          target: { value: "Editing again" },
+        });
+        await waitFor(
+          () => expect(saveSessionDraftMock).toHaveBeenCalledTimes(2),
+          SAVE_WAIT,
+        );
+        expect(saveSessionDraftMock.mock.calls[1][1]).toBe(9);
+        await waitFor(() => expect(saveStatus()).toHaveTextContent("Saved"));
+        editorC.unmount();
+        editorC.container.remove();
+
+        // The conflict is over: the next visit with current data just loads.
+        renderEditor(
+          draftWith({
+            name: "From the other device",
+            location: "Editing again",
+            draftRevision: 10,
+          }),
+        );
+        expect(saveStatus()).toHaveTextContent("Saved");
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(readSessionDraftMock).toHaveBeenCalledTimes(1);
+        expect(
+          screen.queryByRole("region", { name: "Setup changed elsewhere" }),
+        ).not.toBeInTheDocument();
+      });
+
+      it("stops waiting after 15 s and asks for a reload", async () => {
+        deferredSave(); // Never answers.
+        editThenLeave("Never answered");
+        vi.useFakeTimers();
+        try {
+          renderEditor(draftWith({ draftRevision: 3 }));
+          expect(saveStatus()).toHaveTextContent("Saving…");
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(14_900);
+          });
+          expect(saveStatus()).toHaveTextContent("Saving…");
+          expect(screen.getByLabelText("Session name")).toBeDisabled();
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(200);
+          });
+          expect(saveStatus()).toHaveTextContent(
+            "! Not saved: reload the page",
+          );
+          expect(screen.getByLabelText("Session name")).toBeEnabled();
+          expect(readSessionDraftMock).not.toHaveBeenCalled();
+          // Nothing is written from the stale screen.
+          fireEvent.change(screen.getByLabelText("Session name"), {
+            target: { value: "Edit on a stale screen" },
+          });
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(2_000);
+          });
+          expect(saveSessionDraftMock).toHaveBeenCalledTimes(1);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("asks for a reload when the draft can't be re-read", async () => {
+        const resolveFlush = deferredSave();
+        editThenLeave("Unreadable after");
+        readSessionDraftMock.mockRejectedValue(new Error("offline"));
+        renderEditor(draftWith({ draftRevision: 3 }));
+
+        resolveFlush({ ok: true, draftRevision: 4 });
+        await waitFor(() =>
+          expect(saveStatus()).toHaveTextContent(
+            "! Not saved: reload the page",
+          ),
+        );
+        fireEvent.change(screen.getByLabelText("Session name"), {
+          target: { value: "Edit on a stale screen" },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 900));
+        expect(saveSessionDraftMock).toHaveBeenCalledTimes(1);
+      });
+
+      it("waits for a saved setup that was still being applied", async () => {
+        let resolveApply!: (
+          result: Awaited<ReturnType<typeof applySavedSetup>>,
+        ) => void;
+        applySavedSetupMock.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveApply = resolve;
+            }),
+        );
+        const appliedDraft = draftWith({
+          location: "From the saved setup",
+          draftRevision: 6,
+        });
+        const editorA = renderEditor(draftWith({ draftRevision: 5 }), [
+          {
+            setupId: "f0000000-0000-4000-8000-000000000001",
+            name: "Saturday Social",
+            lastUsedAt: new Date(2026, 9, 31, 20, 0).toISOString(),
+            courtCount: 2,
+            topObjective: "shortestWaits",
+          },
+        ]);
+        fireEvent.click(screen.getByRole("button", { name: "Use this setup" }));
+        await waitFor(() => expect(applySavedSetupMock).toHaveBeenCalled());
+        editorA.unmount();
+        editorA.container.remove();
+        readSessionDraftMock.mockResolvedValue({
+          ok: true,
+          draft: appliedDraft,
+        });
+
+        renderEditor(draftWith({ draftRevision: 5 }));
+        expect(saveStatus()).toHaveTextContent("Saving…");
+        resolveApply({
+          ok: true,
+          draft: appliedDraft,
+          notice: null,
+          savedSetups: [],
+        });
+        await waitFor(() =>
+          expect(screen.getByLabelText("Location (optional)")).toHaveValue(
+            "From the saved setup",
+          ),
+        );
+        expect(saveStatus()).toHaveTextContent("Saved");
+
+        saveSessionDraftMock.mockResolvedValue({ ok: true, draftRevision: 7 });
+        fireEvent.change(screen.getByLabelText("Session name"), {
+          target: { value: "After the apply" },
+        });
+        await waitFor(
+          () => expect(saveSessionDraftMock).toHaveBeenCalledTimes(1),
+          SAVE_WAIT,
+        );
+        expect(saveSessionDraftMock.mock.calls[0][1]).toBe(6);
+      });
     });
 
     it("offers no saved-setup actions after a conflict", async () => {

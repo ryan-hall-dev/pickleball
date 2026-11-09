@@ -56,9 +56,12 @@
   color-scheme: dark;
 }
 
+/* DESIGN.md Typography: base 15px / 1.4. */
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
+  font-size: 15px;
+  line-height: 1.4;
 }
 
 /* Visible focus ring on every interactive element (DESIGN.md States: decision to confirm). */

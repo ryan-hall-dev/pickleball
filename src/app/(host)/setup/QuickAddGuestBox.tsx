@@ -215,10 +215,10 @@ function GuestChip({
     ? `Guest · ${SKILL_LEVEL_LABELS[guest.skillLevel]}`
     : "Guest";
   return (
-    <li className="flex items-center gap-2 rounded-full border border-blue-edge bg-blue-surface p-1">
+    <li className="flex max-w-full min-w-0 items-center gap-2 rounded-full border border-blue-edge bg-blue-surface p-1">
       <InitialsAvatar name={fullName} tone="next" size="chip" />
-      <span className="text-sm font-semibold">{fullName}</span>
-      <span className="text-[11px] font-bold tracking-[0.08em] text-link uppercase">
+      <span className="min-w-0 truncate text-sm font-semibold">{fullName}</span>
+      <span className="shrink-0 text-[11px] font-bold tracking-[0.08em] text-link uppercase">
         {isPending ? "Adding…" : label}
       </span>
       <button
@@ -227,7 +227,7 @@ function GuestChip({
         disabled={isPending}
         onClick={onRemove}
         // 30px in the design; 44px where the pointer is a finger.
-        className="flex size-[30px] items-center justify-center rounded-full text-base text-muted hover:text-text disabled:cursor-not-allowed disabled:text-placeholder pointer-coarse:size-11"
+        className="flex size-[30px] shrink-0 items-center justify-center rounded-full text-base text-muted hover:text-text disabled:cursor-not-allowed disabled:text-placeholder pointer-coarse:size-11"
       >
         <span aria-hidden="true">×</span>
       </button>

@@ -4,6 +4,7 @@ import type { ActiveMemberChoice } from "@/server/members/memberDirectory";
 import type { DraftParticipant } from "@/server/setup/setupDraft";
 import {
   applyAttendanceChange,
+  attendingMemberIds,
   buildMemberRows,
   filterMemberRows,
   memberIdsInChanges,
@@ -13,6 +14,18 @@ import {
   validateGuestForm,
   type AttendanceFailure,
 } from "./whosPlaying";
+
+/** Rows arranged with today's attendance listed first (as at load). */
+function rowsAsLoaded(
+  activeMembers: readonly ActiveMemberChoice[],
+  participants: readonly DraftParticipant[],
+) {
+  return buildMemberRows(
+    activeMembers,
+    participants,
+    attendingMemberIds(participants),
+  );
+}
 
 function member(
   id: string,
@@ -63,22 +76,34 @@ const guestKai: DraftParticipant = {
 };
 
 describe("buildMemberRows", () => {
-  it("lists every active member and marks who is attending", () => {
-    const rows = buildMemberRows(activeMembers, [
-      attendingMember("m-grace"),
+  it("lists every active member, attending first, and marks who is attending", () => {
+    const rows = rowsAsLoaded(activeMembers, [
+      attendingMember("m-kofi"),
       guestKai,
     ]);
     expect(
       rows.map((row) => [row.firstName, row.isAttending, row.isActive]),
     ).toEqual([
+      ["Kofi", true, true],
       ["Élodie", false, true],
-      ["Grace", true, true],
-      ["Kofi", false, true],
+      ["Grace", false, true],
+    ]);
+  });
+
+  it("keeps the directory's alphabetical order within each group", () => {
+    const rows = rowsAsLoaded(activeMembers, [
+      attendingMember("m-kofi"),
+      attendingMember("m-elodie"),
+    ]);
+    expect(rows.map((row) => row.firstName)).toEqual([
+      "Élodie",
+      "Kofi",
+      "Grace",
     ]);
   });
 
   it("keeps a deactivated member who is still attending, first, from the snapshot", () => {
-    const rows = buildMemberRows(activeMembers, [
+    const rows = rowsAsLoaded(activeMembers, [
       attendingMember("m-gone", {
         firstName: "Ina",
         lastName: "Gone",
@@ -95,20 +120,35 @@ describe("buildMemberRows", () => {
   });
 
   it("treats a member added in another tab since the page loaded as active", () => {
-    const [row] = buildMemberRows(
+    const [row] = rowsAsLoaded(
       [],
       [attendingMember("m-new", { isMemberActive: true })],
     );
     expect(row).toMatchObject({ isActive: true, isAttending: true });
   });
 
+  it("orders by the snapshot, not live attendance, so rows stay put while tapping", () => {
+    // Kofi was attending when the list was arranged; since then Grace was
+    // added and Kofi removed.
+    const rows = buildMemberRows(
+      activeMembers,
+      [attendingMember("m-grace")],
+      new Set(["m-kofi"]),
+    );
+    expect(rows.map((row) => [row.firstName, row.isAttending])).toEqual([
+      ["Kofi", false],
+      ["Élodie", false],
+      ["Grace", true],
+    ]);
+  });
+
   it("is empty for a club with no members", () => {
-    expect(buildMemberRows([], [guestKai])).toEqual([]);
+    expect(rowsAsLoaded([], [guestKai])).toEqual([]);
   });
 });
 
 describe("filterMemberRows", () => {
-  const rows = buildMemberRows(activeMembers, []);
+  const rows = rowsAsLoaded(activeMembers, []);
   const names = (filtered: typeof rows) => filtered.map((row) => row.firstName);
 
   it("matches any part of the full name, ignoring case, accents and spacing", () => {
@@ -147,7 +187,7 @@ describe("filterMemberRows", () => {
     const manyMembers = Array.from({ length: 2000 }, (_, index) =>
       member(`m-${index}`, `Player${index}`, "Test"),
     );
-    const manyRows = buildMemberRows(manyMembers, []);
+    const manyRows = rowsAsLoaded(manyMembers, []);
     expect(
       filterMemberRows(manyRows, { searchText: "player19", skillLevel: null }),
     ).toHaveLength(111);
@@ -156,7 +196,7 @@ describe("filterMemberRows", () => {
 
 describe("Select all", () => {
   it("selects only the matching members who aren't attending yet, never deactivated ones", () => {
-    const rows = buildMemberRows(activeMembers, [
+    const rows = rowsAsLoaded(activeMembers, [
       attendingMember("m-grace"),
       attendingMember("m-gone", { isMemberActive: false }),
     ]);

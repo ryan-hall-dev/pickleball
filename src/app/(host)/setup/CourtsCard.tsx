@@ -165,7 +165,8 @@ export function CourtsCard({
       )}
 
       <div className="mt-4 flex flex-wrap gap-3">
-        <div className="flex-[1_1_200px] rounded-2xl bg-inner px-3.5 py-3">
+        {/* Wide enough that Doubles and Singles share a row on a tablet. */}
+        <div className="flex-[1_1_300px] rounded-2xl bg-inner px-3.5 py-3">
           <span id="match-format-label" className={FIELD_LABEL_CLASS_NAME}>
             Match format
           </span>
@@ -204,7 +205,7 @@ export function CourtsCard({
             })}
           </div>
         </div>
-        <div className="flex flex-[2_1_360px] flex-wrap items-center gap-x-[18px] gap-y-2 rounded-2xl bg-inner px-4 py-3">
+        <div className="flex flex-[2_1_360px] flex-col justify-center gap-1 rounded-2xl bg-inner px-4 py-3">
           <p className="text-[22px] font-bold tabular-nums">
             {selectedCourts.length}{" "}
             <span className="font-medium text-muted">

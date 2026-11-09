@@ -349,44 +349,52 @@ function PriorityRow({
         {rank}
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="font-semibold">
-          <span className="sr-only">{rank}. </span>
-          {label}
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="font-semibold">
+            <span className="sr-only">{rank}. </span>
+            {label}
+          </span>
+          {isTop && objective === RECOMMENDED_TOP_OBJECTIVE && (
+            <span className="rounded-full bg-lime px-2 py-[3px] text-[11px] font-bold text-on-lime">
+              DEFAULT
+            </span>
+          )}
         </span>
         <span className="text-xs text-muted">{hint}</span>
       </span>
-      {isTop && objective === RECOMMENDED_TOP_OBJECTIVE && (
-        <span className="shrink-0 rounded-full bg-lime px-2 py-[3px] text-[11px] font-bold text-on-lime">
-          DEFAULT
-        </span>
-      )}
-      {moveButtons.map(({ direction, isDisabled }) => (
-        <button
-          key={direction}
-          type="button"
-          ref={(element) =>
-            registerMoveButton(`${objective}-${direction}`, element)
-          }
-          aria-label={`Move ${label} ${direction}`}
-          disabled={isDisabled}
-          onClick={() => onMove(direction)}
-          className={ICON_BUTTON_CLASS_NAME}
-        >
-          <svg
-            aria-hidden="true"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+      {/* Stacked below xl: the list column stays narrow there (phone, or the
+          card's two columns on a tablet or beside the summary), and the text
+          needs the row's width. Side by side on wide screens, so rows stay
+          short. */}
+      <span className="flex shrink-0 flex-col gap-1 xl:flex-row">
+        {moveButtons.map(({ direction, isDisabled }) => (
+          <button
+            key={direction}
+            type="button"
+            ref={(element) =>
+              registerMoveButton(`${objective}-${direction}`, element)
+            }
+            aria-label={`Move ${label} ${direction}`}
+            disabled={isDisabled}
+            onClick={() => onMove(direction)}
+            className={ICON_BUTTON_CLASS_NAME}
           >
-            <path d={direction === "up" ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6"} />
-          </svg>
-        </button>
-      ))}
+            <svg
+              aria-hidden="true"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d={direction === "up" ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6"} />
+            </svg>
+          </button>
+        ))}
+      </span>
     </li>
   );
 }

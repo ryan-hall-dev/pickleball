@@ -79,11 +79,15 @@ export function guestParticipants(
  * Every active member, plus anyone attending who isn't in that list (a member
  * deactivated after being added, so the host can still remove them; they
  * come first so they're seen). Names for those come from the attendee
- * snapshot.
+ * snapshot. Then `memberIdsListedFirst` (who was attending when the list was
+ * last arranged; as in the design), then everyone else, each group in the
+ * directory's alphabetical order. A snapshot, not live attendance, so rows
+ * stay put while the host taps them.
  */
 export function buildMemberRows(
   activeMembers: readonly ActiveMemberChoice[],
   participants: readonly DraftParticipant[],
+  memberIdsListedFirst: ReadonlySet<string>,
 ): WhosPlayingMemberRow[] {
   const attendingIds = attendingMemberIds(participants);
   const activeMemberIds = new Set(activeMembers.map((member) => member.id));
@@ -115,7 +119,11 @@ export function buildMemberRows(
     isAttending: attendingIds.has(member.id),
     searchKey: memberFullNameKey(member),
   }));
-  return [...attendingOutsideList, ...activeRows];
+  return [
+    ...attendingOutsideList,
+    ...activeRows.filter((row) => memberIdsListedFirst.has(row.memberId)),
+    ...activeRows.filter((row) => !memberIdsListedFirst.has(row.memberId)),
+  ];
 }
 
 /** Rows matching a "contains" name search and the skill filter. */

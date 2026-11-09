@@ -72,10 +72,14 @@ export function WhosPlayingCard({
     MEMBER_DIRECTORY_PAGE_SIZE,
   );
   const showingLineId = useId();
+  /** Listed first: who was attending at load or the last search/filter change. */
+  const [memberIdsListedFirst, setMemberIdsListedFirst] = useState(() =>
+    attendingMemberIds(participants),
+  );
 
   const memberRows = useMemo(
-    () => buildMemberRows(activeMembers, participants),
-    [activeMembers, participants],
+    () => buildMemberRows(activeMembers, participants, memberIdsListedFirst),
+    [activeMembers, participants, memberIdsListedFirst],
   );
   const matchingRows = useMemo(
     () => filterMemberRows(memberRows, { searchText, skillLevel }),
@@ -107,8 +111,9 @@ export function WhosPlayingCard({
   }) {
     if (patch.searchText !== undefined) setSearchText(patch.searchText);
     if (patch.skillLevel !== undefined) setSkillLevel(patch.skillLevel);
-    // A new filter starts from the first page again.
+    // A new filter starts from the first page again, attending members first.
     setVisibleRowCount(MEMBER_DIRECTORY_PAGE_SIZE);
+    setMemberIdsListedFirst(attendingIdSet);
   }
 
   function toggleMember(row: WhosPlayingMemberRow) {

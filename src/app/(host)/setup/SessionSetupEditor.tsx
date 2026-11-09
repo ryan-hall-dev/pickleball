@@ -16,8 +16,10 @@ import {
 import type { ActiveMemberChoice } from "@/server/members/memberDirectory";
 import {
   applySavedSetup,
+  readSessionDraft,
   saveSessionDraft,
   saveSetup,
+  type ApplySavedSetupResult,
   type SaveSessionDraftResult,
 } from "@/server/setup/setupActions";
 import type {
@@ -28,6 +30,11 @@ import type {
 import type { SaveSessionDraftInput } from "@/server/setup/setupRules";
 import { CourtsCard } from "./CourtsCard";
 import { DiscardDraftButton } from "./DiscardDraftButton";
+import {
+  forgetShownConflict,
+  ownDraftWritesNotYetLoaded,
+  trackOwnDraftWrite,
+} from "./ownDraftWrites";
 import { RotationCard } from "./RotationCard";
 import {
   ReuseSetupBanner,
@@ -53,6 +60,8 @@ import { WhosPlayingCard } from "./WhosPlayingCard";
 
 /** Edits settle for this long before they are saved. */
 const AUTOSAVE_DELAY_MS = 700;
+/** How long a new editor waits for this tab's earlier writes before asking for a reload. */
+const EARLIER_WRITES_WAIT_LIMIT_MS = 15_000;
 const OFFLINE_MESSAGE = "Couldn't reach the server. Check your connection.";
 
 function subscribeToNothing() {
@@ -80,7 +89,122 @@ export function SessionSetupEditor(props: SessionSetupFormProps) {
       </>
     );
   }
-  return <SessionSetupForm {...props} />;
+  return <SessionSetupAfterOwnWrites {...props} />;
+}
+
+/**
+ * How this editor starts, given this tab's own earlier writes to the draft
+ * (see ownDraftWrites.ts): `pending` waits for them (inputs disabled,
+ * "Saving…"), `conflict` one was refused, `unreadable` the re-read failed.
+ */
+type EarlierOwnWrites = "settled" | "pending" | "conflict" | "unreadable";
+
+type EditorStart =
+  | { earlierOwnWrites: "settled"; draft: SessionDraft }
+  | { earlierOwnWrites: Exclude<EarlierOwnWrites, "settled"> };
+
+/**
+ * Starts the form from a draft that includes this tab's own earlier writes.
+ * A previous editor for this draft may have unmounted with a save on its
+ * way, and the page data may have been read before it landed: then wait for
+ * it and re-read the draft, so the form shows its values and builds on its
+ * revision (not a false "changed elsewhere").
+ */
+function SessionSetupAfterOwnWrites(props: SessionSetupFormProps) {
+  const loadedDraft = props.draft;
+  const [editorStart, setEditorStart] = useState<EditorStart>(() =>
+    ownDraftWritesNotYetLoaded(loadedDraft.sessionId, loadedDraft.draftRevision)
+      ? { earlierOwnWrites: "pending" }
+      : { earlierOwnWrites: "settled", draft: loadedDraft },
+  );
+  /**
+   * Set once this mount's start is settled. Next's hidden <Activity> re-runs
+   * effects but keeps refs, so coming back doesn't check again (the form's
+   * own saves while hidden are its own business).
+   */
+  const isStartDecidedRef = useRef(false);
+  useEffect(() => {
+    if (isStartDecidedRef.current) return;
+    // Checked again here, not just while rendering: a previous editor
+    // unmounting in this same commit records its last save in its cleanup,
+    // which runs after this render but before this effect.
+    const { sessionId } = loadedDraft;
+    const ownWrites = ownDraftWritesNotYetLoaded(
+      sessionId,
+      loadedDraft.draftRevision,
+    );
+    // The registry is outside React and only complete now (see above).
+    setEditorStart((current) =>
+      ownWrites
+        ? { earlierOwnWrites: "pending" }
+        : current.earlierOwnWrites === "pending"
+          ? // They landed (or failed) without changing what was loaded.
+            { earlierOwnWrites: "settled", draft: loadedDraft }
+          : current,
+    );
+    if (!ownWrites) {
+      isStartDecidedRef.current = true;
+      return;
+    }
+    let isCurrent = true;
+    let waitLimitTimeout: ReturnType<typeof setTimeout> | undefined;
+    const waitLimitReached = new Promise<null>((resolve) => {
+      waitLimitTimeout = setTimeout(
+        () => resolve(null),
+        EARLIER_WRITES_WAIT_LIMIT_MS,
+      );
+    });
+    void (async () => {
+      const outcome = await Promise.race([ownWrites.landed, waitLimitReached]);
+      clearTimeout(waitLimitTimeout);
+      if (outcome === null) {
+        // A save that never answers: don't wait forever with inputs locked.
+        if (!isCurrent) return;
+        isStartDecidedRef.current = true;
+        setEditorStart({ earlierOwnWrites: "unreadable" });
+        return;
+      }
+      // A conflict not shown yet (it came with a save made while leaving) is
+      // shown now; one already shown ends with a fresh read of the draft.
+      const reread =
+        outcome.isConflict && ownWrites.wasStillLanding
+          ? null
+          : await readSessionDraft(sessionId).catch(() => ({
+              ok: false as const,
+              message: OFFLINE_MESSAGE,
+            }));
+      // Hidden or unmounted meanwhile: the next effect run starts over.
+      if (!isCurrent) return;
+      isStartDecidedRef.current = true;
+      if (reread?.ok)
+        forgetShownConflict(sessionId, reread.draft.draftRevision);
+      setEditorStart(
+        reread === null
+          ? { earlierOwnWrites: "conflict" }
+          : reread.ok
+            ? { earlierOwnWrites: "settled", draft: reread.draft }
+            : { earlierOwnWrites: "unreadable" },
+      );
+    })();
+    return () => {
+      isCurrent = false;
+      clearTimeout(waitLimitTimeout);
+    };
+  }, [loadedDraft]);
+
+  const draft =
+    editorStart.earlierOwnWrites === "settled"
+      ? editorStart.draft
+      : props.draft;
+  return (
+    <SessionSetupForm
+      // Each start is a fresh form: its state comes from that draft.
+      key={`${editorStart.earlierOwnWrites}:${draft.draftRevision}`}
+      {...props}
+      draft={draft}
+      earlierOwnWrites={editorStart.earlierOwnWrites}
+    />
+  );
 }
 
 type SaveFailure = { saveInputKey: string; message: string };
@@ -98,12 +222,24 @@ type SaveFailure = { saveInputKey: string; message: string };
  * Every save names the draft's settings revision it builds on. If another
  * tab or device saved in between, the server refuses (a conflict): autosave
  * then stops for good, the edits stay on screen, and only a reload goes on.
+ * `startsInConflict`: an earlier editor in this tab already got that refusal.
+ *
+ * Every save is also recorded in ownDraftWrites.ts, so an editor mounted
+ * after this one unmounts waits for it.
  */
-function useDraftAutosave(
-  saveInput: SaveSessionDraftInput | null,
-  isPaused: boolean,
-  initialDraftRevision: number,
-) {
+function useDraftAutosave({
+  sessionId,
+  saveInput,
+  isPaused,
+  initialDraftRevision,
+  startsInConflict,
+}: {
+  sessionId: string;
+  saveInput: SaveSessionDraftInput | null;
+  isPaused: boolean;
+  initialDraftRevision: number;
+  startsInConflict: boolean;
+}) {
   const saveInputKey = useMemo(
     () => (saveInput ? JSON.stringify(saveInput) : null),
     [saveInput],
@@ -113,12 +249,12 @@ function useDraftAutosave(
   const lastSavedKeyRef = useRef(saveInputKey);
   const [isSaving, setIsSaving] = useState(false);
   const [failure, setFailure] = useState<SaveFailure | null>(null);
-  const [isHeld, setIsHeld] = useState(false);
-  const isHeldRef = useRef(false);
+  const [isHeld, setIsHeld] = useState(startsInConflict);
+  const isHeldRef = useRef(startsInConflict);
   /** The settings revision the next write builds on (from the load, then each write). */
   const draftRevisionRef = useRef(initialDraftRevision);
-  const [isConflict, setIsConflict] = useState(false);
-  const isConflictRef = useRef(false);
+  const [isConflict, setIsConflict] = useState(startsInConflict);
+  const isConflictRef = useRef(startsInConflict);
   /** Set by the Reload button so its own reload doesn't ask "leave page?". */
   const isReloadingDeliberatelyRef = useRef(false);
   const isSavingRef = useRef(false);
@@ -187,9 +323,10 @@ function useDraftAutosave(
         return result;
       })();
       saveLoopRef.current = saveLoop;
+      trackOwnDraftWrite(sessionId, saveLoop);
       return saveLoop;
     },
-    [markSaved, markConflict],
+    [sessionId, markSaved, markConflict],
   );
 
   const isAutosavePaused = isPaused || isHeld;
@@ -220,7 +357,10 @@ function useDraftAutosave(
   // recent routes in a hidden <Activity>, which runs this cleanup but keeps
   // state and refs. So the flush goes through runSave: it records the new
   // revision and marks the edits saved, so coming back doesn't re-save with
-  // a stale revision (a false "changed elsewhere").
+  // a stale revision (a false "changed elsewhere"). After a true unmount,
+  // runSave's record in ownDraftWrites.ts makes the next editor wait for this
+  // save and re-read the draft. A full reload or closing the tab can't wait
+  // for it: the "leave page?" prompt below covers that.
   useEffect(
     () => () => {
       const latest = latestRef.current;
@@ -401,13 +541,35 @@ interface SessionSetupFormProps {
 /** What happened after saving or applying a setup (shown under the header). */
 type SavedSetupMessage = { tone: "info" | "attention"; text: string };
 
+/** Saving the latest edits, then applying a saved setup: where it stopped. */
+type SavedSetupApplication =
+  | {
+      stoppedAt: "savingLatestEdits";
+      result: Extract<SaveSessionDraftResult, { ok: false }>;
+    }
+  | { stoppedAt: "applying"; result: ApplySavedSetupResult };
+
+/** The applying step as a settings write, for ownDraftWrites.ts. */
+function draftWriteResultOf(
+  application: SavedSetupApplication,
+): SaveSessionDraftResult {
+  if (application.stoppedAt === "savingLatestEdits") return application.result;
+  const { result } = application;
+  if (result.ok) return { ok: true, draftRevision: result.draft.draftRevision };
+  return result.isConflict
+    ? { ok: false, message: result.message, isConflict: true }
+    : { ok: false, message: result.message };
+}
+
 function SessionSetupForm({
   draft,
   initialClubCourts,
   activeMembers,
   canAddCourts,
   initialSavedSetups,
-}: SessionSetupFormProps) {
+  earlierOwnWrites,
+}: SessionSetupFormProps & { earlierOwnWrites: EarlierOwnWrites }) {
+  const isWaitingForEarlierWrites = earlierOwnWrites === "pending";
   const [clubCourts, setClubCourts] = useState(initialClubCourts);
   const [form, setForm] = useState<SetupForm>(() =>
     setupFormFromDraft(
@@ -440,14 +602,21 @@ function SessionSetupForm({
     markConflict,
     draftRevisionRef,
     reloadDiscardingEdits,
-  } = useDraftAutosave(
-    validation.saveInput,
-    isAutosavePaused,
-    draft.draftRevision,
-  );
-  const status: SaveStatus = isReloadRequired
-    ? { kind: "reloadRequired" }
-    : autosaveStatus;
+  } = useDraftAutosave({
+    sessionId: draft.sessionId,
+    saveInput: validation.saveInput,
+    isPaused:
+      isAutosavePaused ||
+      isWaitingForEarlierWrites ||
+      earlierOwnWrites === "unreadable",
+    initialDraftRevision: draft.draftRevision,
+    startsInConflict: earlierOwnWrites === "conflict",
+  });
+  const status: SaveStatus = isWaitingForEarlierWrites
+    ? { kind: "saving" }
+    : isReloadRequired || earlierOwnWrites === "unreadable"
+      ? { kind: "reloadRequired" }
+      : autosaveStatus;
   const { fieldErrors, durationMinutes } = validation;
   const attendance = useDraftAttendance(
     draft.sessionId,
@@ -527,27 +696,23 @@ function SessionSetupForm({
       return;
     }
     setIsApplyingSetup(true);
-    // The server applies on top of the saved draft, so save the latest
-    // edits first and keep autosave from writing stale values meanwhile.
-    const flushed = await holdAndSaveLatest();
-    if (!flushed.ok && flushed.isConflict) {
+    const application = saveLatestEditsThenApply(setup.setupId);
+    // Recorded from the start, as one write: an editor mounted after leaving
+    // mid-apply waits for all of it.
+    trackOwnDraftWrite(draft.sessionId, application.then(draftWriteResultOf));
+    const applied = await application;
+    if (applied.stoppedAt === "savingLatestEdits") {
+      const flushed = applied.result;
       setIsApplyingSetup(false);
-      return;
-    }
-    if (!flushed.ok) {
+      if (flushed.isConflict) return;
       release(null);
-      setIsApplyingSetup(false);
       setSavedSetupMessage({
         tone: "attention",
         text: `Your latest edits couldn't be saved, so \u201c${setup.name}\u201d wasn't applied. ${flushed.message}`,
       });
       return;
     }
-    const result = await applySavedSetup({
-      sessionId: draft.sessionId,
-      setupId: setup.setupId,
-      expectedDraftRevision: draftRevisionRef.current,
-    }).catch(() => ({ ok: false as const, message: OFFLINE_MESSAGE }));
+    const result = applied.result;
     setIsApplyingSetup(false);
     if (!result.ok) {
       // Applied but not read back: keep autosave held so the stale screen
@@ -596,13 +761,35 @@ function SessionSetupForm({
     });
   }
 
+  /**
+   * The server applies on top of the saved draft, so the latest edits are
+   * saved first, with autosave held so it can't write stale values meanwhile.
+   */
+  async function saveLatestEditsThenApply(
+    setupId: string,
+  ): Promise<SavedSetupApplication> {
+    const flushed = await holdAndSaveLatest();
+    if (!flushed.ok) return { stoppedAt: "savingLatestEdits", result: flushed };
+    const result = await applySavedSetup({
+      sessionId: draft.sessionId,
+      setupId,
+      expectedDraftRevision: draftRevisionRef.current,
+    }).catch(() => ({ ok: false as const, message: OFFLINE_MESSAGE }));
+    return { stoppedAt: "applying", result };
+  }
+
   const reuseCandidate =
     savedSetups.length > 0 && !appliedSavedSetupId && !isReuseBannerDismissed
       ? savedSetups[0]
       : null;
 
   return (
-    <>
+    // Nothing is editable until this tab's earlier writes have landed.
+    <fieldset
+      disabled={isWaitingForEarlierWrites}
+      aria-busy={isWaitingForEarlierWrites}
+      className="contents"
+    >
       <SetupPageHeader
         actions={
           <>
@@ -704,7 +891,7 @@ function SessionSetupForm({
           readiness={readiness}
         />
       </div>
-    </>
+    </fieldset>
   );
 }
 

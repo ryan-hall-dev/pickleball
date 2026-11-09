@@ -141,7 +141,7 @@ type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 /** What the details autosave writes: every draft config key but the applied setup. */
 type SessionDraftConfigPatch = Omit<SessionDraftConfig, "appliedSavedSetupId">;
 
-function logWriteFailure(label: string, host: SignedInHost, error: unknown) {
+function logActionFailure(label: string, host: SignedInHost, error: unknown) {
   // Ids only: no names or other personal data in logs.
   console.error(label, {
     actorUserId: host.userId,
@@ -255,7 +255,7 @@ export async function startSessionDraft(
       throw new Error(`Creating the draft failed: ${error.message}`);
     }
   } catch (error) {
-    logWriteFailure("Starting a session draft failed", host, error);
+    logActionFailure("Starting a session draft failed", host, error);
     return { ok: false, message: SOMETHING_WENT_WRONG };
   }
 
@@ -339,7 +339,7 @@ export async function saveSessionDraft(
     if (error) throw new Error(`Saving the draft failed: ${error.message}`);
     return { ok: true, draftRevision: draftRevisionFrom(data) };
   } catch (error) {
-    logWriteFailure("Saving a session draft failed", host, error);
+    logActionFailure("Saving a session draft failed", host, error);
     return { ok: false, message: SOMETHING_WENT_WRONG };
   }
 }
@@ -375,7 +375,7 @@ export async function discardSessionDraft(
     });
     if (error) throw new Error(`Discarding the draft failed: ${error.message}`);
   } catch (error) {
-    logWriteFailure("Discarding a session draft failed", host, error);
+    logActionFailure("Discarding a session draft failed", host, error);
     return { ok: false, message: SOMETHING_WENT_WRONG };
   }
 
@@ -443,7 +443,7 @@ export async function addClubCourt(
       },
     };
   } catch (error) {
-    logWriteFailure("Adding a club court failed", host, error);
+    logActionFailure("Adding a club court failed", host, error);
     return { ok: false, message: SOMETHING_WENT_WRONG };
   }
 }
@@ -471,7 +471,7 @@ async function writeDraftAttendance(
     }
     if (error) throw new Error(`${failureLabel}: ${error.message}`);
   } catch (error) {
-    logWriteFailure(failureLabel, host, error);
+    logActionFailure(failureLabel, host, error);
     return { ok: false, message: SOMETHING_WENT_WRONG };
   }
   try {
@@ -480,7 +480,7 @@ async function writeDraftAttendance(
       participants: await listDraftParticipants(adminClient, sessionId),
     };
   } catch (error) {
-    logWriteFailure(
+    logActionFailure(
       "Reading the draft's players after a write failed",
       host,
       error,
@@ -678,7 +678,7 @@ export async function saveSetup(
       savedSetups: await listSavedSetups(adminClient, host.userId),
     };
   } catch (error) {
-    logWriteFailure("Saving a setup failed", host, error);
+    logActionFailure("Saving a setup failed", host, error);
     return { ok: false, message: SOMETHING_WENT_WRONG };
   }
 }
@@ -760,7 +760,7 @@ export async function applySavedSetup(
     }
     if (error) throw new Error(`Applying the setup failed: ${error.message}`);
   } catch (error) {
-    logWriteFailure("Applying a saved setup failed", host, error);
+    logActionFailure("Applying a saved setup failed", host, error);
     return { ok: false, message: SOMETHING_WENT_WRONG };
   }
 
@@ -779,7 +779,7 @@ export async function applySavedSetup(
       ),
     };
   } catch (error) {
-    logWriteFailure(
+    logActionFailure(
       "Reading the draft after applying a setup failed",
       host,
       error,
@@ -790,5 +790,44 @@ export async function applySavedSetup(
         "The setup was applied, but the page couldn't refresh. Reload the page.",
       requiresReload: true,
     };
+  }
+}
+
+export type ReadSessionDraftResult =
+  { ok: true; draft: SessionDraft } | { ok: false; message: string };
+
+/**
+ * The host's own draft as the database has it now. The editor re-reads it
+ * after its own earlier writes land, when the page it was rendered from was
+ * read before them. Reads under the host's session (RLS).
+ */
+export async function readSessionDraft(
+  sessionId: string,
+): Promise<ReadSessionDraftResult> {
+  const authorization = await authorizeCurrentHost("host");
+  if (!authorization.ok) {
+    return {
+      ok: false,
+      message: HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
+    };
+  }
+  const { host } = authorization;
+  const parsedSessionId = z.uuid().safeParse(sessionId);
+  if (!parsedSessionId.success) {
+    return { ok: false, message: SOMETHING_WENT_WRONG };
+  }
+
+  try {
+    const openSession = await readHostOpenSession(host.userId);
+    if (
+      openSession.status !== "draft" ||
+      openSession.draft.sessionId !== parsedSessionId.data
+    ) {
+      return { ok: false, message: DRAFT_NOT_OPEN };
+    }
+    return { ok: true, draft: openSession.draft };
+  } catch (error) {
+    logActionFailure("Re-reading a session draft failed", host, error);
+    return { ok: false, message: SOMETHING_WENT_WRONG };
   }
 }
