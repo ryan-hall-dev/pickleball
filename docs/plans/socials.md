@@ -1,6 +1,6 @@
 # M4.5 — Socials and data isolation
 
-Status: **awaiting Ryan's approval** (2026-11-09). Runs before M5. Implements `docs/decisions/0003-socials-and-data-isolation.md` with Ryan's answers and clarification of 2026-11-09. Nothing is in production; local and dev data move into one default social.
+Status: **approved by Ryan 2026-11-09; in progress**. Runs before M5. Implements `docs/decisions/0003-socials-and-data-isolation.md` with Ryan's answers and clarification of 2026-11-09. Nothing is in production; local and dev data move into one default social.
 
 ## 0. Decisions this plan rests on
 
@@ -173,4 +173,4 @@ Split vertically (review), so every increment has its own migration, pgTAP, serv
 - **D4 Members:** any host (and the manager) can add, edit and deactivate the social's members.
 - Decided on review (technical, no product change): leftover open sessions are closed through the log (`SessionEnded` / cancel), not silently; increments split A1–A4; the cross-social invite message is neutral and reveals nothing.
 
-Status: ready for Ryan's approval. Implementation starts only after approval.
+Status: approved 2026-11-09.
