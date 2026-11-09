@@ -6,17 +6,23 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { Activity } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   addClubCourt,
+  applySavedSetup,
   discardSessionDraft,
   saveSessionDraft,
+  saveSetup,
 } from "@/server/setup/setupActions";
 import type {
   ClubCourt,
   DraftParticipant,
+  SavedSetupSummary,
   SessionDraft,
 } from "@/server/setup/setupDraft";
+import type { RotationObjective } from "@/engine";
+import { recommendedRotationPreferences } from "@/server/setup/setupRules";
 import { SessionSetupEditor } from "./SessionSetupEditor";
 
 vi.mock("@/server/setup/setupActions", () => ({
@@ -27,11 +33,15 @@ vi.mock("@/server/setup/setupActions", () => ({
   setDraftMemberAttendance: vi.fn(),
   addDraftGuest: vi.fn(),
   removeDraftGuest: vi.fn(),
+  saveSetup: vi.fn(),
+  applySavedSetup: vi.fn(),
 }));
 
 const saveSessionDraftMock = vi.mocked(saveSessionDraft);
 const discardSessionDraftMock = vi.mocked(discardSessionDraft);
 const addClubCourtMock = vi.mocked(addClubCourt);
+const saveSetupMock = vi.mocked(saveSetup);
+const applySavedSetupMock = vi.mocked(applySavedSetup);
 
 const SESSION_ID = "d0000000-0000-4000-8000-000000000001";
 const clubCourts: ClubCourt[] = [
@@ -91,19 +101,37 @@ function draftWith(overrides: Partial<SessionDraft> = {}): SessionDraft {
       matchFormat: "doubles",
       targetMatchMinutes: 15,
       changeoverMinutes: 2,
+      rotation: recommendedRotationPreferences(),
+      appliedSavedSetupId: null,
     },
     participants: [],
+    draftRevision: 0,
     ...overrides,
   };
 }
 
-function renderEditor(draft = draftWith()) {
+/**
+ * The autosave status. Scoped to the rendered editor: dnd-kit's drag
+ * announcements are another (visually hidden) status region, portalled to
+ * the end of <body>.
+ */
+function saveStatus() {
+  return within(document.body.firstElementChild as HTMLElement).getByRole(
+    "status",
+  );
+}
+
+function renderEditor(
+  draft = draftWith(),
+  savedSetups: SavedSetupSummary[] = [],
+) {
   return render(
     <SessionSetupEditor
       draft={draft}
       initialClubCourts={clubCourts}
       activeMembers={[]}
       canAddCourts
+      initialSavedSetups={savedSetups}
     />,
   );
 }
@@ -114,22 +142,24 @@ describe("SessionSetupEditor", () => {
   beforeEach(() => {
     saveSessionDraftMock.mockReset();
     // Leaving with unsaved edits saves once more on unmount (cleanup).
-    saveSessionDraftMock.mockResolvedValue({ ok: true });
+    saveSessionDraftMock.mockResolvedValue({ ok: true, draftRevision: 1 });
     discardSessionDraftMock.mockReset();
     addClubCourtMock.mockReset();
+    saveSetupMock.mockReset();
+    applySavedSetupMock.mockReset();
   });
 
   afterEach(cleanup);
 
   it("starts as saved without saving again", async () => {
     renderEditor();
-    expect(screen.getByRole("status")).toHaveTextContent("Saved");
+    expect(saveStatus()).toHaveTextContent("Saved");
     await new Promise((resolve) => setTimeout(resolve, 900));
     expect(saveSessionDraftMock).not.toHaveBeenCalled();
   });
 
   it("sets the end time from a duration chip and saves after edits settle", async () => {
-    saveSessionDraftMock.mockResolvedValue({ ok: true });
+    saveSessionDraftMock.mockResolvedValue({ ok: true, draftRevision: 1 });
     renderEditor();
 
     const chip90 = screen.getByRole("button", { name: "90 min" });
@@ -143,10 +173,10 @@ describe("SessionSetupEditor", () => {
     expect(
       screen.getByText(/90 minutes, calculated from start and end/),
     ).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Saving…");
+    expect(saveStatus()).toHaveTextContent("Saving…");
 
     await waitFor(
-      () => expect(screen.getByRole("status")).toHaveTextContent("Saved"),
+      () => expect(saveStatus()).toHaveTextContent("Saved"),
       SAVE_WAIT,
     );
     expect(saveSessionDraftMock).toHaveBeenCalledTimes(1);
@@ -178,7 +208,7 @@ describe("SessionSetupEditor", () => {
   });
 
   it("reads an earlier end time as the next day and saves it", async () => {
-    saveSessionDraftMock.mockResolvedValue({ ok: true });
+    saveSessionDraftMock.mockResolvedValue({ ok: true, draftRevision: 1 });
     renderEditor();
     fireEvent.change(screen.getByLabelText("End time"), {
       target: { value: "01:00" },
@@ -191,7 +221,7 @@ describe("SessionSetupEditor", () => {
       screen.getByText(/420 minutes, calculated from start and end/),
     ).toBeInTheDocument();
     await waitFor(
-      () => expect(screen.getByRole("status")).toHaveTextContent("Saved"),
+      () => expect(saveStatus()).toHaveTextContent("Saved"),
       SAVE_WAIT,
     );
     expect(saveSessionDraftMock.mock.calls[0][0]).toMatchObject({
@@ -207,7 +237,7 @@ describe("SessionSetupEditor", () => {
       }),
     );
     // A draft ending after midnight loads as valid.
-    expect(screen.getByRole("status")).toHaveTextContent("Saved");
+    expect(saveStatus()).toHaveTextContent("Saved");
     expect(screen.getByText("(next day)")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "120 min" }));
     expect(screen.getByLabelText("End time")).toHaveValue("01:00");
@@ -242,7 +272,7 @@ describe("SessionSetupEditor", () => {
     expect(
       screen.getByText("A session can last at most 12 hours."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(
+    expect(saveStatus()).toHaveTextContent(
       "Not saved: fix the highlighted fields",
     );
     await new Promise((resolve) => setTimeout(resolve, 900));
@@ -268,6 +298,8 @@ describe("SessionSetupEditor", () => {
           matchFormat: "doubles",
           targetMatchMinutes: 15,
           changeoverMinutes: 2,
+          rotation: recommendedRotationPreferences(),
+          appliedSavedSetupId: null,
         },
       }),
     );
@@ -290,7 +322,10 @@ describe("SessionSetupEditor", () => {
           resolveFirstSave = resolve;
         }),
     );
-    let resolveSecondSave!: (result: { ok: true }) => void;
+    let resolveSecondSave!: (result: {
+      ok: true;
+      draftRevision: number;
+    }) => void;
     saveSessionDraftMock.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -319,18 +354,16 @@ describe("SessionSetupEditor", () => {
     expect(saveSessionDraftMock.mock.calls[1][0]).toMatchObject({
       name: "Second edit",
     });
-    expect(screen.getByRole("status")).toHaveTextContent("Saving…");
+    expect(saveStatus()).toHaveTextContent("Saving…");
     expect(screen.queryByText(/Stale failure/)).not.toBeInTheDocument();
 
-    resolveSecondSave({ ok: true });
-    await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent("Saved"),
-    );
+    resolveSecondSave({ ok: true, draftRevision: 2 });
+    await waitFor(() => expect(saveStatus()).toHaveTextContent("Saved"));
     expect(saveSessionDraftMock).toHaveBeenCalledTimes(2);
   });
 
   it("still saves an edit made just before leaving the page", () => {
-    saveSessionDraftMock.mockResolvedValue({ ok: true });
+    saveSessionDraftMock.mockResolvedValue({ ok: true, draftRevision: 1 });
     const { unmount } = renderEditor();
     fireEvent.change(screen.getByLabelText("Session name"), {
       target: { value: "Last-second edit" },
@@ -354,7 +387,7 @@ describe("SessionSetupEditor", () => {
   });
 
   it("asks before closing the tab only while there are unsaved edits", async () => {
-    saveSessionDraftMock.mockResolvedValue({ ok: true });
+    saveSessionDraftMock.mockResolvedValue({ ok: true, draftRevision: 1 });
     renderEditor();
     const fireBeforeUnload = () => {
       const event = new Event("beforeunload", { cancelable: true });
@@ -367,7 +400,7 @@ describe("SessionSetupEditor", () => {
     });
     expect(fireBeforeUnload()).toBe(true);
     await waitFor(
-      () => expect(screen.getByRole("status")).toHaveTextContent("Saved"),
+      () => expect(saveStatus()).toHaveTextContent("Saved"),
       SAVE_WAIT,
     );
     // The listener is removed by an effect after the "Saved" render.
@@ -385,16 +418,16 @@ describe("SessionSetupEditor", () => {
     });
     await waitFor(
       () =>
-        expect(screen.getByRole("status")).toHaveTextContent(
+        expect(saveStatus()).toHaveTextContent(
           "Not saved. Something went wrong.",
         ),
       SAVE_WAIT,
     );
 
-    saveSessionDraftMock.mockResolvedValueOnce({ ok: true });
+    saveSessionDraftMock.mockResolvedValueOnce({ ok: true, draftRevision: 1 });
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(
-      () => expect(screen.getByRole("status")).toHaveTextContent("Saved"),
+      () => expect(saveStatus()).toHaveTextContent("Saved"),
       SAVE_WAIT,
     );
     expect(saveSessionDraftMock).toHaveBeenCalledTimes(2);
@@ -452,6 +485,8 @@ describe("SessionSetupEditor", () => {
           matchFormat: "doubles",
           targetMatchMinutes: 15,
           changeoverMinutes: 2,
+          rotation: recommendedRotationPreferences(),
+          appliedSavedSetupId: null,
         },
       }),
     );
@@ -483,9 +518,29 @@ describe("SessionSetupEditor", () => {
     ).toHaveTextContent(
       "About 7 rounds fit in 120 min, so expect 3–4 games per player.",
     );
+    // Ready: the stepper, checklist and START agree.
+    expect(
+      within(summary.getByRole("list", { name: "Setup checklist" }))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "Done: Session details complete",
+      "Done: Enough players for all 2 courts",
+    ]);
     expect(
       summary.getByRole("button", { name: /Start pickleball session/i }),
-    ).toBeDisabled();
+    ).toBeEnabled();
+    expect(
+      within(screen.getByRole("list", { name: "Setup steps" }))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "Details, done",
+      "Courts, done",
+      "Players, done",
+      "Rotation, done",
+      "5Review & start, ready",
+    ]);
   });
 
   it("says when there are not enough players", () => {
@@ -498,6 +553,8 @@ describe("SessionSetupEditor", () => {
           matchFormat: "doubles",
           targetMatchMinutes: 15,
           changeoverMinutes: 2,
+          rotation: recommendedRotationPreferences(),
+          appliedSavedSetupId: null,
         },
       }),
     );
@@ -510,7 +567,7 @@ describe("SessionSetupEditor", () => {
   });
 
   it("adds a club court and selects it", async () => {
-    saveSessionDraftMock.mockResolvedValue({ ok: true });
+    saveSessionDraftMock.mockResolvedValue({ ok: true, draftRevision: 1 });
     addClubCourtMock.mockResolvedValue({
       ok: true,
       court: {
@@ -554,6 +611,73 @@ describe("SessionSetupEditor", () => {
     ).toBeInTheDocument();
   });
 
+  it("autosaves rotation changes with the draft and shows the top priority in the summary", async () => {
+    saveSessionDraftMock.mockResolvedValue({ ok: true, draftRevision: 1 });
+    renderEditor();
+    const summary = within(
+      screen.getByRole("complementary", { name: "Session summary and start" }),
+    );
+    expect(summary.getByText("Equal games first")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Move Shortest waits up" }),
+    );
+    fireEvent.click(
+      screen.getByRole("switch", { name: "Allow manual assignments" }),
+    );
+    expect(summary.getByText("Shortest waits first")).toBeInTheDocument();
+    await waitFor(
+      () => expect(saveStatus()).toHaveTextContent("Saved"),
+      SAVE_WAIT,
+    );
+    expect(saveSessionDraftMock).toHaveBeenCalledTimes(1);
+    expect(saveSessionDraftMock.mock.calls[0][0].rotation).toEqual({
+      objectiveOrder: [
+        "shortestWaits",
+        "equalGames",
+        "playingTime",
+        "fullCourts",
+        "noBackToBack",
+        "mixPartners",
+      ],
+      rules: {
+        ...recommendedRotationPreferences().rules,
+        allowManualAssignments: false,
+      },
+    });
+  });
+
+  it("loads a draft's saved rotation", () => {
+    renderEditor(
+      draftWith({
+        config: {
+          ...draftWith().config,
+          rotation: {
+            objectiveOrder: [
+              "mixPartners",
+              "equalGames",
+              "shortestWaits",
+              "playingTime",
+              "fullCourts",
+              "noBackToBack",
+            ],
+            rules: {
+              ...recommendedRotationPreferences().rules,
+              longestWaitFirst: false,
+            },
+          },
+        },
+      }),
+    );
+    expect(saveStatus()).toHaveTextContent("Saved");
+    expect(
+      screen.getByRole("button", { name: "Move Mix up partners up" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("switch", { name: "Favour longer waits" }),
+    ).toHaveAttribute("aria-checked", "false");
+  });
+
   it("discards only after confirming", async () => {
     discardSessionDraftMock.mockResolvedValue({ ok: true });
     renderEditor();
@@ -565,5 +689,651 @@ describe("SessionSetupEditor", () => {
     await waitFor(() =>
       expect(discardSessionDraftMock).toHaveBeenCalledWith(SESSION_ID),
     );
+  });
+
+  describe("changes made in another tab or device", () => {
+    const CONFLICT = {
+      ok: false as const,
+      message:
+        "Setup was changed in another tab or by another device. Reload to see the latest \u2014 your unsaved changes here will be lost.",
+      isConflict: true as const,
+    };
+
+    it("builds each save on the revision the last one returned", async () => {
+      saveSessionDraftMock
+        .mockResolvedValueOnce({ ok: true, draftRevision: 8 })
+        .mockResolvedValueOnce({ ok: true, draftRevision: 9 });
+      renderEditor(draftWith({ draftRevision: 7 }));
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "First" },
+      });
+      await waitFor(
+        () => expect(saveStatus()).toHaveTextContent("Saved"),
+        SAVE_WAIT,
+      );
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "Second" },
+      });
+      await waitFor(
+        () => expect(saveSessionDraftMock).toHaveBeenCalledTimes(2),
+        SAVE_WAIT,
+      );
+      expect(saveSessionDraftMock.mock.calls.map((call) => call[1])).toEqual([
+        7, 8,
+      ]);
+    });
+
+    it("stops autosaving, keeps the edits and offers a reload", async () => {
+      saveSessionDraftMock.mockResolvedValue(CONFLICT);
+      const { unmount } = renderEditor();
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "Stale tab edit" },
+      });
+      const banner = await screen.findByRole(
+        "region",
+        { name: "Setup changed elsewhere" },
+        SAVE_WAIT,
+      );
+      expect(banner).toHaveTextContent(
+        "Setup was changed in another tab or by another device. Reload to see the latest \u2014 your unsaved changes here will be lost.",
+      );
+      expect(
+        within(banner).getByRole("button", { name: "Reload" }),
+      ).toBeInTheDocument();
+      expect(saveStatus()).toHaveTextContent("! Not saved: changed elsewhere");
+      expect(screen.getByLabelText("Session name")).toHaveValue(
+        "Stale tab edit",
+      );
+
+      // No more writes: not on further edits, not on leaving the page.
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "Another edit" },
+      });
+      fireEvent.click(
+        screen.getByRole("switch", { name: "Allow manual assignments" }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      const beforeUnload = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(beforeUnload);
+      expect(beforeUnload.defaultPrevented).toBe(true);
+      unmount();
+      expect(saveSessionDraftMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("saves on being hidden (cached route) and keeps the new revision on return", async () => {
+      saveSessionDraftMock
+        .mockResolvedValueOnce({ ok: true, draftRevision: 1 })
+        .mockResolvedValueOnce({ ok: true, draftRevision: 2 });
+      const editor = (mode: "visible" | "hidden") => (
+        <Activity mode={mode}>
+          <SessionSetupEditor
+            draft={draftWith()}
+            initialClubCourts={clubCourts}
+            activeMembers={[]}
+            canAddCourts
+            initialSavedSetups={[]}
+          />
+        </Activity>
+      );
+      const { rerender } = render(editor("visible"));
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "Before hiding" },
+      });
+      // Navigating away within the autosave delay: Next hides the route.
+      rerender(editor("hidden"));
+      await waitFor(() =>
+        expect(saveSessionDraftMock).toHaveBeenCalledTimes(1),
+      );
+      expect(saveSessionDraftMock.mock.calls[0]).toEqual([
+        expect.objectContaining({ name: "Before hiding" }),
+        0,
+      ]);
+
+      rerender(editor("visible"));
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      // Nothing re-saved on return: the hidden flush counted as saved.
+      expect(saveSessionDraftMock).toHaveBeenCalledTimes(1);
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "After return" },
+      });
+      await waitFor(
+        () => expect(saveSessionDraftMock).toHaveBeenCalledTimes(2),
+        SAVE_WAIT,
+      );
+      expect(saveSessionDraftMock.mock.calls[1][1]).toBe(1);
+      await waitFor(() => expect(saveStatus()).toHaveTextContent("Saved"));
+      expect(
+        screen.queryByRole("region", { name: "Setup changed elsewhere" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("offers no saved-setup actions after a conflict", async () => {
+      saveSessionDraftMock.mockResolvedValue(CONFLICT);
+      renderEditor(draftWith(), [
+        {
+          setupId: "f0000000-0000-4000-8000-000000000001",
+          name: "Saturday Social",
+          lastUsedAt: new Date(2026, 9, 31, 20, 0).toISOString(),
+          courtCount: 2,
+          topObjective: "shortestWaits",
+        },
+      ]);
+      fireEvent.click(screen.getByRole("button", { name: "Saved setups" }));
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "Stale edit" },
+      });
+      await screen.findByRole(
+        "region",
+        { name: "Setup changed elsewhere" },
+        SAVE_WAIT,
+      );
+      expect(
+        screen.getByRole("button", { name: "Save this setup" }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "Saved setups" }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "Use Saturday Social" }),
+      ).toBeDisabled();
+      expect(
+        screen.queryByRole("region", { name: "Reuse a saved setup" }),
+      ).not.toBeInTheDocument();
+      expect(applySavedSetupMock).not.toHaveBeenCalled();
+    });
+
+    it("applies nothing when the draft changed elsewhere", async () => {
+      applySavedSetupMock.mockResolvedValue(CONFLICT);
+      renderEditor(draftWith({ draftRevision: 4 }), [
+        {
+          setupId: "f0000000-0000-4000-8000-000000000001",
+          name: "Saturday Social",
+          lastUsedAt: new Date(2026, 9, 31, 20, 0).toISOString(),
+          courtCount: 2,
+          topObjective: "shortestWaits",
+        },
+      ]);
+      fireEvent.click(screen.getByRole("button", { name: "Use this setup" }));
+      expect(
+        await screen.findByRole("region", { name: "Setup changed elsewhere" }),
+      ).toBeInTheDocument();
+      expect(applySavedSetupMock).toHaveBeenCalledWith(
+        expect.objectContaining({ expectedDraftRevision: 4 }),
+      );
+      expect(screen.getByLabelText("Session name")).toHaveValue(
+        "Saturday social",
+      );
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "Edit after conflict" },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      expect(saveSessionDraftMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("stepper and checklist", () => {
+    it("shows Players · 1 to fix for a half-filled guest form, and START waits", () => {
+      renderEditor(
+        draftWith({
+          participants: participantsFor(8, 0),
+          config: {
+            ...draftWith().config,
+            courts: [
+              { courtId: clubCourts[0].id, name: "Court 1", format: "doubles" },
+            ],
+          },
+        }),
+      );
+      const start = screen.getByRole("button", {
+        name: /Start pickleball session/i,
+      });
+      expect(start).toBeEnabled();
+
+      fireEvent.change(screen.getByLabelText("First name"), {
+        target: { value: "Kai" },
+      });
+      const steps = within(screen.getByRole("list", { name: "Setup steps" }));
+      expect(steps.getByText(/Players · 1 to fix/)).toHaveTextContent(
+        "Players · 1 to fix, needs attention",
+      );
+      expect(
+        screen.getByText(
+          "Guest form has an unfinished entry: add Kai's last name or clear it",
+        ),
+      ).toBeInTheDocument();
+      expect(start).toBeDisabled();
+      expect(
+        screen.getByText("Finish the checklist to start."),
+      ).toBeInTheDocument();
+
+      // Clearing the entry fixes it.
+      fireEvent.change(screen.getByLabelText("First name"), {
+        target: { value: "" },
+      });
+      expect(steps.getByText(/^Players/)).toHaveTextContent("Players, done");
+      expect(start).toBeEnabled();
+    });
+
+    it("enables START only once saved, and says what it will do when pressed", async () => {
+      renderEditor(
+        draftWith({
+          participants: participantsFor(8, 0),
+          config: {
+            ...draftWith().config,
+            courts: [
+              { courtId: clubCourts[0].id, name: "Court 1", format: "doubles" },
+            ],
+          },
+        }),
+      );
+      const start = screen.getByRole("button", {
+        name: /Start pickleball session/i,
+      });
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "Renamed" },
+      });
+      expect(start).toBeDisabled();
+      expect(
+        screen.getByText("Waiting for your changes to save."),
+      ).toBeInTheDocument();
+      await waitFor(() => expect(start).toBeEnabled(), SAVE_WAIT);
+
+      fireEvent.click(start);
+      expect(
+        screen.getByText(
+          "Starting a session arrives in the next update. Your setup is saved.",
+        ),
+      ).toHaveAttribute("role", "status");
+    });
+
+    it("a new draft: courts and players not started, and START is off", () => {
+      renderEditor();
+      expect(
+        within(screen.getByRole("list", { name: "Setup steps" }))
+          .getAllByRole("listitem")
+          .map((item) => item.textContent),
+      ).toEqual([
+        "Details, done",
+        "2Courts, not started",
+        "3Players, not started",
+        "Rotation, done",
+        "5Review & start, not started",
+      ]);
+      expect(screen.getByText("Add at least one court")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Start pickleball session/i }),
+      ).toBeDisabled();
+    });
+  });
+
+  describe("saved setups", () => {
+    const saturdaySetup: SavedSetupSummary = {
+      setupId: "f0000000-0000-4000-8000-000000000001",
+      name: "Saturday Social",
+      lastUsedAt: new Date(2026, 9, 31, 20, 0).toISOString(),
+      courtCount: 2,
+      topObjective: "shortestWaits",
+    };
+    const thursdaySetup: SavedSetupSummary = {
+      setupId: "f0000000-0000-4000-8000-000000000002",
+      name: "Thursday Ladder",
+      lastUsedAt: new Date(2026, 9, 20, 20, 0).toISOString(),
+      courtCount: 1,
+      topObjective: "equalGames",
+    };
+
+    it("offers the most recent setup in the reuse banner until dismissed", () => {
+      renderEditor(draftWith(), [saturdaySetup, thursdaySetup]);
+      const banner = screen.getByRole("region", {
+        name: "Reuse a saved setup",
+      });
+      expect(banner).toHaveTextContent(
+        "Reuse \u201cSaturday Social\u201d · last used 31 Oct · 2 courts · Shortest waits first",
+      );
+      fireEvent.click(within(banner).getByRole("button", { name: "Dismiss" }));
+      expect(
+        screen.queryByRole("region", { name: "Reuse a saved setup" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("doesn't offer a setup when there are none, or one was already applied", () => {
+      renderEditor();
+      expect(
+        screen.queryByRole("region", { name: "Reuse a saved setup" }),
+      ).not.toBeInTheDocument();
+      cleanup();
+      renderEditor(
+        draftWith({
+          config: {
+            ...draftWith().config,
+            appliedSavedSetupId: saturdaySetup.setupId,
+          },
+        }),
+        [saturdaySetup],
+      );
+      expect(
+        screen.queryByRole("region", { name: "Reuse a saved setup" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("lists saved setups, with an empty state", () => {
+      renderEditor();
+      fireEvent.click(screen.getByRole("button", { name: "Saved setups" }));
+      expect(screen.getByText(/No saved setups yet/)).toBeInTheDocument();
+      cleanup();
+      renderEditor(draftWith(), [saturdaySetup, thursdaySetup]);
+      const toggle = screen.getByRole("button", { name: "Saved setups" });
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      const list = screen.getByRole("region", { name: "Saved setups" });
+      expect(
+        within(list)
+          .getAllByRole("listitem")
+          .map((item) => item.textContent),
+      ).toEqual([
+        "Saturday Sociallast used 31 Oct · 2 courts · Shortest waits firstUse",
+        "Thursday Ladderlast used 20 Oct · 1 court · Equal games firstUse",
+      ]);
+    });
+
+    it("saves the latest edits first, applies the setup and takes the server's draft", async () => {
+      const callOrder: string[] = [];
+      saveSessionDraftMock.mockImplementation(async () => {
+        callOrder.push("saveSessionDraft");
+        return { ok: true as const, draftRevision: 1 };
+      });
+      const appliedRotation = {
+        ...recommendedRotationPreferences(),
+        objectiveOrder: [
+          "shortestWaits",
+          "equalGames",
+          "playingTime",
+          "fullCourts",
+          "noBackToBack",
+          "mixPartners",
+        ] as RotationObjective[],
+      };
+      applySavedSetupMock.mockImplementation(async () => {
+        callOrder.push("applySavedSetup");
+        return {
+          ok: true,
+          notice: "Court 5 is no longer available and was left out.",
+          savedSetups: [saturdaySetup],
+          draft: draftWith({
+            name: "Edited name",
+            location: "Riverside courts",
+            plannedEnd: new Date(2026, 10, 7, 19, 30).toISOString(),
+            config: {
+              courts: [
+                {
+                  courtId: clubCourts[1].id,
+                  name: "Court 2",
+                  format: "doubles",
+                },
+              ],
+              matchFormat: "doubles",
+              targetMatchMinutes: 12,
+              changeoverMinutes: 3,
+              rotation: appliedRotation,
+              appliedSavedSetupId: saturdaySetup.setupId,
+            },
+          }),
+        };
+      });
+      renderEditor(draftWith(), [saturdaySetup]);
+
+      // An edit still waiting for the autosave delay.
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "Edited name" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Use this setup" }));
+      expect(
+        await screen.findByText(
+          "Using \u201cSaturday Social\u201d. Court 5 is no longer available and was left out.",
+        ),
+      ).toBeInTheDocument();
+      expect(callOrder).toEqual(["saveSessionDraft", "applySavedSetup"]);
+      expect(saveSessionDraftMock.mock.calls[0][0]).toMatchObject({
+        name: "Edited name",
+      });
+      // Loaded at revision 0; the flush saved revision 1; apply builds on it.
+      expect(saveSessionDraftMock.mock.calls[0][1]).toBe(0);
+      expect(applySavedSetupMock).toHaveBeenCalledWith({
+        sessionId: SESSION_ID,
+        setupId: saturdaySetup.setupId,
+        expectedDraftRevision: 1,
+      });
+
+      // The editor shows the applied values, and they count as saved.
+      expect(screen.getByLabelText("Location (optional)")).toHaveValue(
+        "Riverside courts",
+      );
+      expect(screen.getByLabelText("End time")).toHaveValue("19:30");
+      expect(screen.getByRole("button", { name: /Court 2/ })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      expect(
+        screen.getByRole("button", { name: "Move Shortest waits up" }),
+      ).toBeDisabled();
+      expect(
+        screen.queryByRole("region", { name: "Reuse a saved setup" }),
+      ).not.toBeInTheDocument();
+      expect(saveStatus()).toHaveTextContent("Saved");
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      expect(saveSessionDraftMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("refuses to apply over invalid edits and changes nothing", async () => {
+      renderEditor(draftWith(), [saturdaySetup]);
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Use this setup" }));
+      expect(
+        await screen.findByText(
+          "Fix the highlighted fields first, then use \u201cSaturday Social\u201d.",
+        ),
+      ).toBeInTheDocument();
+      expect(applySavedSetupMock).not.toHaveBeenCalled();
+      expect(saveSessionDraftMock).not.toHaveBeenCalled();
+      expect(screen.getByLabelText("Session name")).toHaveValue("");
+      expect(
+        screen.getByRole("region", { name: "Reuse a saved setup" }),
+      ).toBeInTheDocument();
+    });
+
+    it("waits for a save in flight, keeps that edit, and locks the form while applying", async () => {
+      let resolveSave!: (result: { ok: true; draftRevision: number }) => void;
+      saveSessionDraftMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSave = resolve;
+          }),
+      );
+      let resolveApply!: (
+        result: Awaited<ReturnType<typeof applySavedSetup>>,
+      ) => void;
+      applySavedSetupMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveApply = resolve;
+          }),
+      );
+      renderEditor(draftWith(), [saturdaySetup]);
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "Kept edit" },
+      });
+      await waitFor(
+        () => expect(saveSessionDraftMock).toHaveBeenCalledTimes(1),
+        SAVE_WAIT,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Use this setup" }));
+      // Locked while applying.
+      expect(screen.getByLabelText("Session name")).toBeDisabled();
+      expect(
+        screen.getByRole("switch", { name: "Allow manual assignments" }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "Save this setup" }),
+      ).toBeDisabled();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(applySavedSetupMock).not.toHaveBeenCalled();
+
+      resolveSave({ ok: true, draftRevision: 1 });
+      await waitFor(() => expect(applySavedSetupMock).toHaveBeenCalledTimes(1));
+      // The in-flight save carried the edit, so nothing was saved twice.
+      expect(saveSessionDraftMock).toHaveBeenCalledTimes(1);
+      expect(saveSessionDraftMock.mock.calls[0][0]).toMatchObject({
+        name: "Kept edit",
+      });
+
+      resolveApply({
+        ok: true,
+        notice: null,
+        savedSetups: [saturdaySetup],
+        draft: draftWith({
+          name: "Kept edit",
+          config: {
+            ...draftWith().config,
+            appliedSavedSetupId: saturdaySetup.setupId,
+          },
+        }),
+      });
+      expect(
+        await screen.findByText("Using \u201cSaturday Social\u201d."),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Session name")).toHaveValue("Kept edit");
+      expect(screen.getByLabelText("Session name")).toBeEnabled();
+    });
+
+    it("keeps a court added since the page loaded", async () => {
+      applySavedSetupMock.mockResolvedValue({
+        ok: true,
+        notice: null,
+        savedSetups: [saturdaySetup],
+        draft: draftWith({
+          config: {
+            ...draftWith().config,
+            courts: [
+              {
+                courtId: "c0000000-0000-4000-8000-000000000009",
+                name: "New court",
+                format: "doubles",
+              },
+            ],
+            appliedSavedSetupId: saturdaySetup.setupId,
+          },
+        }),
+      });
+      renderEditor(draftWith(), [saturdaySetup]);
+      fireEvent.click(screen.getByRole("button", { name: "Use this setup" }));
+      expect(
+        await screen.findByRole("button", { name: /New court/ }),
+      ).toHaveAttribute("aria-pressed", "true");
+      expect(saveStatus()).toHaveTextContent("Saved");
+    });
+
+    it("says to reload, and stops autosaving, when the setup applied but couldn't be read back", async () => {
+      applySavedSetupMock.mockResolvedValue({
+        ok: false,
+        message:
+          "The setup was applied, but the page couldn't refresh. Reload the page.",
+        requiresReload: true,
+      });
+      renderEditor(draftWith(), [saturdaySetup]);
+      fireEvent.click(screen.getByRole("button", { name: "Use this setup" }));
+      await waitFor(() =>
+        expect(saveStatus()).toHaveTextContent("! Not saved: reload the page"),
+      );
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "Stale edit" },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      expect(saveSessionDraftMock).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole("button", { name: /Start pickleball session/i }),
+      ).toBeDisabled();
+    });
+
+    it("doesn't apply when the latest edits can't be saved first", async () => {
+      saveSessionDraftMock.mockResolvedValue({
+        ok: false,
+        message: "Something went wrong. Try again in a moment.",
+      });
+      renderEditor(draftWith(), [saturdaySetup]);
+      fireEvent.change(screen.getByLabelText("Session name"), {
+        target: { value: "Edited name" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Use this setup" }));
+      expect(
+        await screen.findByText(
+          /Your latest edits couldn't be saved, so \u201cSaturday Social\u201d wasn't applied/,
+        ),
+      ).toBeInTheDocument();
+      expect(applySavedSetupMock).not.toHaveBeenCalled();
+    });
+
+    it("saves this setup under a name, validating it first", async () => {
+      saveSetupMock.mockResolvedValue({
+        ok: true,
+        message: "Replaced \u201cSaturday social\u201d.",
+        savedSetups: [saturdaySetup],
+      });
+      renderEditor();
+      fireEvent.click(screen.getByRole("button", { name: "Save this setup" }));
+      const nameInput = screen.getByLabelText("Setup name");
+      expect(nameInput).toHaveValue("Saturday social");
+
+      fireEvent.change(nameInput, { target: { value: "  " } });
+      fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
+      expect(nameInput).toHaveAttribute("aria-invalid", "true");
+      expect(nameInput).toHaveAccessibleDescription("Name this setup.");
+      expect(saveSetupMock).not.toHaveBeenCalled();
+
+      fireEvent.change(nameInput, { target: { value: "Saturday social" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
+      expect(
+        await screen.findByText("Replaced \u201cSaturday social\u201d."),
+      ).toBeInTheDocument();
+      expect(saveSetupMock).toHaveBeenCalledWith({
+        setupName: "Saturday social",
+        draft: expect.objectContaining({
+          sessionId: SESSION_ID,
+          name: "Saturday social",
+          rotation: recommendedRotationPreferences(),
+        }),
+      });
+      expect(screen.queryByLabelText("Setup name")).not.toBeInTheDocument();
+    });
+
+    it("won't save a setup while the form has errors, and shows a server refusal", async () => {
+      saveSetupMock.mockResolvedValue({
+        ok: false,
+        message: "Something went wrong. Try again in a moment.",
+      });
+      renderEditor();
+      fireEvent.change(screen.getByLabelText("End time"), {
+        target: { value: "17:00" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Save this setup" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
+      expect(
+        await screen.findByText(
+          "Fix the highlighted fields first, then save the setup.",
+        ),
+      ).toBeInTheDocument();
+      expect(saveSetupMock).not.toHaveBeenCalled();
+
+      fireEvent.change(screen.getByLabelText("End time"), {
+        target: { value: "20:00" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
+      expect(
+        await screen.findByText("Something went wrong. Try again in a moment."),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Setup name")).toBeInTheDocument();
+    });
   });
 });

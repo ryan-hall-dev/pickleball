@@ -76,8 +76,16 @@ async function expectNoHorizontalScroll(page: Page) {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
+/**
+ * The autosave status, inside <main>: dnd-kit's drag announcements are
+ * another (visually hidden) status region at the end of <body>.
+ */
+function saveStatus(page: Page) {
+  return page.getByRole("main").getByRole("status");
+}
+
 async function expectSaved(page: Page) {
-  await expect(page.getByRole("status")).toHaveText("Saved");
+  await expect(saveStatus(page)).toHaveText("Saved");
 }
 
 async function openDraftSessionId(hostUserId: string): Promise<string> {
@@ -145,7 +153,7 @@ test("a host sets up a draft's details and courts, sees the summary, reloads and
   await expect(endTimeInput).toHaveAccessibleDescription(
     "(next day) A session can last at most 12 hours.",
   );
-  await expect(page.getByRole("status")).toContainText("Not saved");
+  await expect(saveStatus(page)).toContainText("Not saved");
   await page.getByLabel("End time").fill("19:30");
   await page.getByLabel("Location (optional)").fill("Riverside courts");
   await expectSaved(page);
@@ -408,4 +416,398 @@ test("a host who isn't an admin can't add courts to the club", async ({
   await expect(
     page.getByRole("button", { name: "Add court", exact: true }),
   ).toHaveCount(0);
+});
+
+const RECOMMENDED_PRIORITY_LABELS = [
+  "Equal games for everyone",
+  "Shortest waits",
+  "Playing time",
+  "Full courts",
+  "No back-to-back games",
+  "Mix up partners",
+];
+
+async function expectPriorityOrder(page: Page, expectedLabels: string[]) {
+  const rows = page
+    .getByRole("list", { name: "What matters most" })
+    .getByRole("listitem");
+  await expect(rows).toHaveCount(expectedLabels.length);
+  for (const [index, label] of expectedLabels.entries()) {
+    await expect(rows.nth(index)).toContainText(`${index + 1}. ${label}`);
+  }
+}
+
+async function savedRotation(hostUserId: string) {
+  const { data, error } = await adminClient
+    .from("sessions")
+    .select("config_snapshot")
+    .eq("host_id", hostUserId)
+    .eq("status", "draft")
+    .single();
+  if (error) throw error;
+  return (data.config_snapshot as { rotation?: unknown }).rotation;
+}
+
+test("a host reorders the rotation and switches rules; it persists across navigation, tabs and reloads", async ({
+  page,
+  context,
+}) => {
+  const email = await signInAsNewAdmin(page, "setup-rotation");
+  const hostUserId = (await findUserIdByEmail(email))!;
+  testHostUserIds.push(hostUserId);
+  await startNewDraft(page);
+  await expectPriorityOrder(page, RECOMMENDED_PRIORITY_LABELS);
+  const manualSwitch = page.getByRole("switch", {
+    name: "Allow manual assignments",
+  });
+  await expect(manualSwitch).toHaveAttribute("aria-checked", "true");
+
+  // Buttons: Shortest waits to the top; focus stays on that row.
+  await page.getByRole("button", { name: "Move Shortest waits up" }).click();
+  await expect(
+    page.getByRole("button", { name: "Move Shortest waits down" }),
+  ).toBeFocused();
+  if (test.info().project.name === "mobile") {
+    // Keyboard on a phone: the Move button. dnd-kit's keyboard drag scrolls
+    // the page instead of moving the row on this viewport (a dnd-kit quirk;
+    // the buttons are the supported path there).
+    await page.getByRole("button", { name: "Move Mix up partners up" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("button", { name: "Move Mix up partners up" }),
+    ).toBeFocused();
+  } else {
+    // Keyboard drag: pick up Mix up partners, move it up one, drop it. Each
+    // step waits for dnd-kit's screen-reader announcement ("Picked up…" is
+    // replaced at once by where the row is now).
+    await page
+      .getByRole("button", { name: "Drag to reorder Mix up partners" })
+      .focus();
+    await page.keyboard.press("Space");
+    await expect(
+      page.getByText("Mix up partners is over position 6 of 6."),
+    ).toBeAttached();
+    await page.keyboard.press("ArrowUp");
+    await expect(
+      page.getByText("Mix up partners is over position 5 of 6."),
+    ).toBeAttached();
+    await page.keyboard.press("Space");
+  }
+  const reorderedLabels = [
+    "Shortest waits",
+    "Equal games for everyone",
+    "Playing time",
+    "Full courts",
+    "Mix up partners",
+    "No back-to-back games",
+  ];
+  await expectPriorityOrder(page, reorderedLabels);
+  await manualSwitch.click();
+  await expect(manualSwitch).toHaveAttribute("aria-checked", "false");
+  await expectSaved(page);
+  expect(await savedRotation(hostUserId)).toEqual({
+    objectiveOrder: [
+      "shortestWaits",
+      "equalGames",
+      "playingTime",
+      "fullCourts",
+      "mixPartners",
+      "noBackToBack",
+    ],
+    rules: {
+      preventConsecutive: true,
+      fewerGamesFirst: true,
+      longestWaitFirst: true,
+      mixPartners: true,
+      minimiseRepeatOpponents: true,
+      allowManualAssignments: false,
+    },
+  });
+
+  // Away to Members and back: still there.
+  const nav = page.getByRole("navigation", { name: "Host" });
+  await nav.getByRole("link", { name: "Members" }).click();
+  await expect(page).toHaveURL(/\/members$/);
+  await nav.getByRole("link", { name: "Session setup" }).click();
+  await expectPriorityOrder(page, reorderedLabels);
+  await expect(manualSwitch).toHaveAttribute("aria-checked", "false");
+
+  // A second tab shows the same; a rule changed there shows in tab 1 on reload.
+  const secondTab = await context.newPage();
+  await secondTab.goto("/setup");
+  await expectPriorityOrder(secondTab, reorderedLabels);
+  await expect(
+    secondTab.getByRole("switch", { name: "Allow manual assignments" }),
+  ).toHaveAttribute("aria-checked", "false");
+  const secondTabOpponents = secondTab.getByRole("switch", {
+    name: "Rotate opponents",
+  });
+  await secondTabOpponents.click();
+  await expect(secondTabOpponents).toHaveAttribute("aria-checked", "false");
+  await expectSaved(secondTab);
+  await secondTab.close();
+  await page.reload();
+  await expect(
+    page.getByRole("switch", { name: "Rotate opponents" }),
+  ).toHaveAttribute("aria-checked", "false");
+  await expectPriorityOrder(page, reorderedLabels);
+
+  // Leaving within the autosave delay still saves the last change.
+  await page.getByRole("button", { name: "Move Playing time up" }).click();
+  await nav.getByRole("link", { name: "Members" }).click();
+  await expect(page).toHaveURL(/\/members$/);
+  await expect
+    .poll(async () => {
+      const rotation = (await savedRotation(hostUserId)) as {
+        objectiveOrder: string[];
+      };
+      return rotation.objectiveOrder.slice(0, 2);
+    })
+    .toEqual(["shortestWaits", "playingTime"]);
+  await nav.getByRole("link", { name: "Session setup" }).click();
+  await expectPriorityOrder(page, [
+    "Shortest waits",
+    "Playing time",
+    "Equal games for everyone",
+    "Full courts",
+    "Mix up partners",
+    "No back-to-back games",
+  ]);
+  // Back on the (cached) route, the next edit saves: the flush on leaving
+  // recorded the new revision, so no false "changed elsewhere".
+  await page.getByLabel("Location (optional)").fill("After a quick leave");
+  await expectSaved(page);
+  await expect(
+    page.getByRole("region", { name: "Setup changed elsewhere" }),
+  ).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const { data } = await adminClient
+        .from("sessions")
+        .select("location")
+        .eq("host_id", hostUserId)
+        .eq("status", "draft")
+        .single();
+      return data?.location;
+    })
+    .toBe("After a quick leave");
+  await expectNoHorizontalScroll(page);
+});
+
+test("a host saves a setup, discards the draft, and reuses the setup in a new one", async ({
+  page,
+}) => {
+  const courtToken = uniqueCourtToken();
+  const { error: courtsError } = await adminClient.from("courts").insert([
+    { name: `${courtToken} A`, sort_order: 900_001 },
+    { name: `${courtToken} B`, sort_order: 900_002 },
+  ]);
+  if (courtsError) throw courtsError;
+  const email = await signInAsNewAdmin(page, "setup-saved");
+  const hostUserId = (await findUserIdByEmail(email))!;
+  testHostUserIds.push(hostUserId);
+  await startNewDraft(page);
+  // A new host has nothing to reuse.
+  await expect(
+    page.getByRole("region", { name: "Reuse a saved setup" }),
+  ).toHaveCount(0);
+
+  await page.getByLabel("Session name").fill("E2E Thursday ladder");
+  await page.getByLabel("Location (optional)").fill("Riverside courts");
+  await page.getByRole("button", { name: "90 min" }).click();
+  const courtA = page.getByRole("button", {
+    name: new RegExp(`${courtToken} A`),
+  });
+  await courtA.click();
+  await page.getByRole("button", { name: "Move Playing time up" }).click();
+  await page.getByRole("switch", { name: "Allow manual assignments" }).click();
+  await expectSaved(page);
+
+  await page.getByRole("button", { name: "Save this setup" }).click();
+  await expect(page.getByLabel("Setup name")).toHaveValue(
+    "E2E Thursday ladder",
+  );
+  await page.getByRole("button", { name: "Save setup" }).click();
+  await expect(page.getByText("Saved “E2E Thursday ladder”.")).toBeVisible();
+
+  // A fresh draft starts from the defaults and offers the setup.
+  await page.getByRole("button", { name: "Discard draft" }).click();
+  await page.getByRole("button", { name: "Yes, discard" }).click();
+  await page.getByRole("button", { name: "Start a new session" }).click();
+  const banner = page.getByRole("region", { name: "Reuse a saved setup" });
+  await expect(banner).toContainText("Reuse “E2E Thursday ladder” · last used");
+  await expect(banner).toContainText("1 court · Equal games first");
+  await expect(page.getByLabel("Location (optional)")).toHaveValue("");
+  await expect(courtA).toHaveAttribute("aria-pressed", "false");
+  const defaultName = await page.getByLabel("Session name").inputValue();
+  const startTime = await page.getByLabel("Start time").inputValue();
+
+  await banner.getByRole("button", { name: "Use this setup" }).click();
+  await expect(page.getByText("Using “E2E Thursday ladder”.")).toBeVisible();
+  await expect(banner).toHaveCount(0);
+  const expectAppliedValues = async () => {
+    await expect(page.getByLabel("Location (optional)")).toHaveValue(
+      "Riverside courts",
+    );
+    await expect(courtA).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "90 min" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expectPriorityOrder(page, [
+      "Equal games for everyone",
+      "Playing time",
+      "Shortest waits",
+      "Full courts",
+      "No back-to-back games",
+      "Mix up partners",
+    ]);
+    await expect(
+      page.getByRole("switch", { name: "Allow manual assignments" }),
+    ).toHaveAttribute("aria-checked", "false");
+    // The session's own name and start stay.
+    await expect(page.getByLabel("Session name")).toHaveValue(defaultName);
+    await expect(page.getByLabel("Start time")).toHaveValue(startTime);
+  };
+  await expectAppliedValues();
+  await expectSaved(page);
+
+  // Reload: applied values persisted, and the banner doesn't come back.
+  await page.reload();
+  await expectAppliedValues();
+  await expect(
+    page.getByRole("region", { name: "Reuse a saved setup" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Saved setups" }).click();
+  await expect(
+    page.getByRole("region", { name: "Saved setups" }).getByRole("listitem"),
+  ).toHaveCount(1);
+  await expectNoHorizontalScroll(page);
+});
+
+test("the stepper and checklist flag a half-filled guest form", async ({
+  page,
+}) => {
+  const email = await signInAsNewAdmin(page, "setup-stepper");
+  const hostUserId = (await findUserIdByEmail(email))!;
+  testHostUserIds.push(hostUserId);
+  await startNewDraft(page);
+  const steps = page.getByRole("list", { name: "Setup steps" });
+  await expect(steps.getByRole("listitem")).toHaveText([
+    "Details, done",
+    "2Courts, not started",
+    "3Players, not started",
+    "Rotation, done",
+    "5Review & start, not started",
+  ]);
+
+  // Four players attend (enough for doubles), so the guest form is the one thing to fix.
+  const sessionId = await openDraftSessionId(hostUserId);
+  const { error: guestsError } = await adminClient
+    .from("session_participants")
+    .insert(
+      Array.from({ length: 4 }, (_, index) => ({
+        session_id: sessionId,
+        is_guest: true,
+        first_name: `Guest${index}`,
+        last_name: "Stepper",
+      })),
+    );
+  if (guestsError) throw guestsError;
+  await page.reload();
+  await expect(steps.getByRole("listitem").nth(2)).toHaveText("Players, done");
+
+  await page.getByLabel("First name").fill("Kai");
+  await expect(steps.getByRole("listitem").nth(2)).toHaveText(
+    "!Players · 1 to fix, needs attention",
+  );
+  const checklist = page.getByRole("list", { name: "Setup checklist" });
+  await expect(checklist).toContainText(
+    "Guest form has an unfinished entry: add Kai's last name or clear it",
+  );
+  await expect(
+    page.getByRole("button", { name: /start pickleball session/i }),
+  ).toBeDisabled();
+
+  await page.getByLabel("First name").fill("");
+  await expect(steps.getByRole("listitem").nth(2)).toHaveText("Players, done");
+  await expectNoHorizontalScroll(page);
+});
+
+test("a stale tab can't overwrite newer settings: it says so, and saves again after a reload", async ({
+  page,
+  context,
+}) => {
+  const email = await signInAsNewAdmin(page, "setup-two-tabs");
+  const hostUserId = (await findUserIdByEmail(email))!;
+  testHostUserIds.push(hostUserId);
+  await startNewDraft(page);
+  const tabA = page;
+  const tabB = await context.newPage();
+  await tabB.goto("/setup");
+  await expectSaved(tabB);
+
+  // Tab A switches a rule off and saves.
+  const tabAOpponents = tabA.getByRole("switch", { name: "Rotate opponents" });
+  await tabAOpponents.click();
+  await expect(tabAOpponents).toHaveAttribute("aria-checked", "false");
+  await expectSaved(tabA);
+
+  // Tab B still shows the old settings; its edit is refused.
+  await tabB.getByLabel("Session name").fill("Stale tab name");
+  const conflictBanner = tabB.getByRole("region", {
+    name: "Setup changed elsewhere",
+  });
+  await expect(conflictBanner).toContainText(
+    "Setup was changed in another tab or by another device. Reload to see the latest — your unsaved changes here will be lost.",
+  );
+  await expect(saveStatus(tabB)).toHaveText("! Not saved: changed elsewhere");
+  await expect(tabB.getByLabel("Session name")).toHaveValue("Stale tab name");
+  const { data: row, error } = await adminClient
+    .from("sessions")
+    .select("name, config_snapshot")
+    .eq("host_id", hostUserId)
+    .eq("status", "draft")
+    .single();
+  if (error) throw error;
+  expect(row.name).not.toBe("Stale tab name");
+  expect(
+    (
+      row.config_snapshot as {
+        rotation: { rules: { minimiseRepeatOpponents: boolean } };
+      }
+    ).rotation.rules.minimiseRepeatOpponents,
+  ).toBe(false);
+
+  // Reload: tab B shows tab A's value and can save again.
+  await conflictBanner.getByRole("button", { name: "Reload" }).click();
+  await expect(
+    tabB.getByRole("switch", { name: "Rotate opponents" }),
+  ).toHaveAttribute("aria-checked", "false");
+  await expect(conflictBanner).toHaveCount(0);
+  await tabB.getByLabel("Session name").fill("Fresh tab name");
+  await expectSaved(tabB);
+  await expect
+    .poll(async () => {
+      const { data } = await adminClient
+        .from("sessions")
+        .select("name")
+        .eq("host_id", hostUserId)
+        .eq("status", "draft")
+        .single();
+      return data?.name;
+    })
+    .toBe("Fresh tab name");
+
+  // A client-side trip away and back loads the newest revision too.
+  const nav = tabB.getByRole("navigation", { name: "Host" });
+  await nav.getByRole("link", { name: "Members" }).click();
+  await expect(tabB).toHaveURL(/\/members$/);
+  await nav.getByRole("link", { name: "Session setup" }).click();
+  await tabB.getByLabel("Location (optional)").fill("After navigating");
+  await expectSaved(tabB);
+  await expect(
+    tabB.getByRole("region", { name: "Setup changed elsewhere" }),
+  ).toHaveCount(0);
+  await tabB.close();
 });

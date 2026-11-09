@@ -1,5 +1,12 @@
 import { z } from "zod";
-import type { CourtConfig, CourtFormat } from "@/engine/session";
+import {
+  RECOMMENDED_ROTATION_PREFERENCES,
+  type CourtConfig,
+  type CourtFormat,
+  type RotationObjective,
+  type RotationPreferences,
+  type RotationRules,
+} from "@/engine/session";
 import { memberInputSchema } from "@/server/members/memberRules";
 
 // Validation and the draft config shape for the Setup screen (plan §4, §7 M4).
@@ -56,6 +63,53 @@ function wholeMinutesSchema(range: { min: number; max: number }) {
 
 const courtFormatSchema = z.enum(COURT_FORMATS);
 
+/** Every rotation objective the engine knows (plan §5.3). */
+export const ROTATION_OBJECTIVES = [
+  "equalGames",
+  "shortestWaits",
+  "playingTime",
+  "fullCourts",
+  "noBackToBack",
+  "mixPartners",
+] as const satisfies readonly RotationObjective[];
+
+const ROTATION_RULE_KEYS = [
+  "preventConsecutive",
+  "fewerGamesFirst",
+  "longestWaitFirst",
+  "mixPartners",
+  "minimiseRepeatOpponents",
+  "allowManualAssignments",
+] as const satisfies readonly (keyof RotationRules)[];
+
+/** A fresh, mutable copy of the engine's recommended rotation. */
+export function recommendedRotationPreferences(): RotationPreferences {
+  return {
+    objectiveOrder: [...RECOMMENDED_ROTATION_PREFERENCES.objectiveOrder],
+    rules: { ...RECOMMENDED_ROTATION_PREFERENCES.rules },
+  };
+}
+
+/**
+ * The host's rotation, exactly the engine's `RotationPreferences`: every
+ * objective ranked once, and all six rules on or off.
+ */
+export const rotationPreferencesSchema = z.object({
+  objectiveOrder: z
+    .array(z.enum(ROTATION_OBJECTIVES))
+    .refine(
+      (objectiveOrder) =>
+        objectiveOrder.length === ROTATION_OBJECTIVES.length &&
+        new Set(objectiveOrder).size === ROTATION_OBJECTIVES.length,
+      { error: "Rank every rotation priority exactly once." },
+    ),
+  rules: z.object(
+    Object.fromEntries(
+      ROTATION_RULE_KEYS.map((ruleKey) => [ruleKey, z.boolean()]),
+    ) as Record<(typeof ROTATION_RULE_KEYS)[number], z.ZodBoolean>,
+  ),
+}) satisfies z.ZodType<RotationPreferences>;
+
 /**
  * Longest planned session. Matches the plan's rule that sessions still live
  * 12 h after their planned end are auto-ended; a social never runs this long.
@@ -84,26 +138,28 @@ function checkPlannedTimes(
   }
 }
 
+/** Optional: an empty location is stored as null. */
+const locationSchema = z
+  .string()
+  .transform(collapseSpaces)
+  .pipe(
+    z
+      .string()
+      .max(LOCATION_MAX_LENGTH, {
+        error: `Use at most ${LOCATION_MAX_LENGTH} characters.`,
+      })
+      .refine((location) => !CONTROL_CHARACTERS.test(location), {
+        error: "Remove special characters.",
+      }),
+  )
+  .transform((location) => (location === "" ? null : location));
+
 /** What the Setup screen saves into a draft (sessions columns + its config). */
 export const saveSessionDraftInputSchema = z
   .object({
     sessionId: z.uuid(),
     name: shortLabelSchema("Enter a session name."),
-    // Optional: an empty location is stored as null.
-    location: z
-      .string()
-      .transform(collapseSpaces)
-      .pipe(
-        z
-          .string()
-          .max(LOCATION_MAX_LENGTH, {
-            error: `Use at most ${LOCATION_MAX_LENGTH} characters.`,
-          })
-          .refine((location) => !CONTROL_CHARACTERS.test(location), {
-            error: "Remove special characters.",
-          }),
-      )
-      .transform((location) => (location === "" ? null : location)),
+    location: locationSchema,
     hostName: shortLabelSchema("Enter the host's name."),
     plannedStart: z.iso.datetime({ offset: true }),
     plannedEnd: z.iso.datetime({ offset: true }),
@@ -115,6 +171,7 @@ export const saveSessionDraftInputSchema = z
     matchFormat: courtFormatSchema,
     targetMatchMinutes: wholeMinutesSchema(TARGET_MATCH_MINUTES_RANGE),
     changeoverMinutes: wholeMinutesSchema(CHANGEOVER_MINUTES_RANGE),
+    rotation: rotationPreferencesSchema,
   })
   .superRefine(checkPlannedTimes);
 
@@ -188,25 +245,28 @@ export interface SessionDraftConfig {
   matchFormat: CourtFormat;
   targetMatchMinutes: number;
   changeoverMinutes: number;
+  rotation: RotationPreferences;
+  /** The saved setup last applied to this draft (hides the reuse banner), or null. */
+  appliedSavedSetupId: string | null;
 }
 
-export const DEFAULT_SESSION_DRAFT_CONFIG: SessionDraftConfig = {
+export const DEFAULT_SESSION_DRAFT_CONFIG: Readonly<SessionDraftConfig> = {
   courts: [],
   matchFormat: "doubles",
   targetMatchMinutes: DEFAULT_TARGET_MATCH_MINUTES,
   changeoverMinutes: DEFAULT_CHANGEOVER_MINUTES,
+  rotation: RECOMMENDED_ROTATION_PREFERENCES,
+  appliedSavedSetupId: null,
 };
 
+const courtConfigSchema = z.object({
+  courtId: z.uuid(),
+  name: z.string(),
+  format: courtFormatSchema,
+});
+
 const sessionDraftConfigSchema = z.object({
-  courts: z
-    .array(
-      z.object({
-        courtId: z.uuid(),
-        name: z.string(),
-        format: courtFormatSchema,
-      }),
-    )
-    .default([]),
+  courts: z.array(courtConfigSchema).default([]),
   matchFormat: courtFormatSchema.default(
     DEFAULT_SESSION_DRAFT_CONFIG.matchFormat,
   ),
@@ -216,6 +276,9 @@ const sessionDraftConfigSchema = z.object({
   changeoverMinutes: wholeMinutesSchema(CHANGEOVER_MINUTES_RANGE).default(
     DEFAULT_CHANGEOVER_MINUTES,
   ),
+  // Drafts saved before the Rotation card (M4.4) have none: the recommended one.
+  rotation: rotationPreferencesSchema.default(recommendedRotationPreferences),
+  appliedSavedSetupId: z.uuid().nullable().default(null),
 });
 
 /**
@@ -227,7 +290,10 @@ export function parseSessionDraftConfig(
   configSnapshot: unknown,
 ): SessionDraftConfig {
   if (configSnapshot === null || configSnapshot === undefined) {
-    return DEFAULT_SESSION_DRAFT_CONFIG;
+    return {
+      ...DEFAULT_SESSION_DRAFT_CONFIG,
+      rotation: recommendedRotationPreferences(),
+    };
   }
   const parsed = sessionDraftConfigSchema.safeParse(configSnapshot);
   if (!parsed.success) {
@@ -236,4 +302,77 @@ export function parseSessionDraftConfig(
     );
   }
   return parsed.data;
+}
+
+/**
+ * A saved setup's config (`saved_setups.config`): a host's reusable defaults.
+ * Never attendance or anything about a session (the database refuses other
+ * keys too).
+ */
+export interface SavedSetupConfig {
+  location: string | null;
+  durationMinutes: number;
+  courts: CourtConfig[];
+  matchFormat: CourtFormat;
+  targetMatchMinutes: number;
+  changeoverMinutes: number;
+  rotation: RotationPreferences;
+}
+
+const savedSetupConfigSchema = z.strictObject({
+  location: z.string().max(LOCATION_MAX_LENGTH).nullable(),
+  durationMinutes: wholeMinutesSchema({
+    min: 1,
+    max: MAX_SESSION_DURATION_MINUTES,
+  }),
+  courts: z.array(courtConfigSchema),
+  matchFormat: courtFormatSchema,
+  targetMatchMinutes: wholeMinutesSchema(TARGET_MATCH_MINUTES_RANGE),
+  changeoverMinutes: wholeMinutesSchema(CHANGEOVER_MINUTES_RANGE),
+  rotation: rotationPreferencesSchema,
+}) satisfies z.ZodType<SavedSetupConfig>;
+
+/** Checks a saved setup's config without throwing (before writing one, or to skip a bad row). */
+export function safeParseSavedSetupConfig(config: unknown) {
+  return savedSetupConfigSchema.safeParse(config);
+}
+
+/** Reads a saved setup's config; one this app didn't write is a bug, so it fails loudly. */
+export function parseSavedSetupConfig(config: unknown): SavedSetupConfig {
+  const parsed = savedSetupConfigSchema.safeParse(config);
+  if (!parsed.success) {
+    throw new Error(
+      `A saved setup's config is malformed: ${z.prettifyError(parsed.error)}`,
+    );
+  }
+  return parsed.data;
+}
+
+/** "Save this setup": the setup's name plus the editor's current (valid) draft values. */
+export const saveSetupInputSchema = z.object({
+  setupName: shortLabelSchema("Name this setup."),
+  draft: saveSessionDraftInputSchema,
+});
+
+export type SaveSetupInput = z.input<typeof saveSetupInputSchema>;
+
+export const applySavedSetupInputSchema = z.object({
+  sessionId: z.uuid(),
+  setupId: z.uuid(),
+  /** The draft settings revision the editor shows (optimistic concurrency). */
+  expectedDraftRevision: z.number().int().min(0),
+});
+
+export type ApplySavedSetupInput = z.input<typeof applySavedSetupInputSchema>;
+
+/** After applying a saved setup: "Court 5 is no longer available and was left out." */
+export function courtsLeftOutNotice(
+  courtNames: readonly string[],
+): string | null {
+  if (courtNames.length === 0) return null;
+  if (courtNames.length === 1) {
+    return `${courtNames[0]} is no longer available and was left out.`;
+  }
+  const listed = `${courtNames.slice(0, -1).join(", ")} and ${courtNames.at(-1)}`;
+  return `${listed} are no longer available and were left out.`;
 }

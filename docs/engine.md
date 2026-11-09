@@ -37,6 +37,8 @@ How `src/engine/schedule/` decides who plays next and how `src/engine/report/` m
 
 ## Default weights (calibrated)
 
+The calibrated order and rules are `RECOMMENDED_ROTATION_PREFERENCES` (`session/types.ts`): Setup's "Recommended" rotation, and the default in tests and simulations.
+
 Points per unit, caps in games or slots. The host's order multiplies each objective's weights (1st ×2.0, 2nd ×1.5, 3rd ×1.2, rest ×1.0). Rule toggles set terms to 0.
 
 | Term                         | Weight           | Cap        | Scaled by objective | Toggle                    |

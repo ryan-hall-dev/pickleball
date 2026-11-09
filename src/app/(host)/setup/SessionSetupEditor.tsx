@@ -8,22 +8,47 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { LINK_BUTTON_CLASS_NAME } from "@/components/controlStyles";
+import { AttentionMessage } from "@/components/AttentionMessage";
+import {
+  ATTENTION_OUTLINE_BUTTON_CLASS_NAME,
+  LINK_BUTTON_CLASS_NAME,
+} from "@/components/controlStyles";
 import type { ActiveMemberChoice } from "@/server/members/memberDirectory";
-import { saveSessionDraft } from "@/server/setup/setupActions";
-import type { ClubCourt, SessionDraft } from "@/server/setup/setupDraft";
+import {
+  applySavedSetup,
+  saveSessionDraft,
+  saveSetup,
+  type SaveSessionDraftResult,
+} from "@/server/setup/setupActions";
+import type {
+  ClubCourt,
+  SavedSetupSummary,
+  SessionDraft,
+} from "@/server/setup/setupDraft";
 import type { SaveSessionDraftInput } from "@/server/setup/setupRules";
 import { CourtsCard } from "./CourtsCard";
 import { DiscardDraftButton } from "./DiscardDraftButton";
+import { RotationCard } from "./RotationCard";
+import {
+  ReuseSetupBanner,
+  SavedSetupsButtons,
+  SavedSetupsList,
+  SaveSetupForm,
+  type SavedSetupsPanel,
+} from "./SavedSetups";
+import { topObjectiveSummary } from "./rotationOptions";
 import { SessionDetailsCard } from "./SessionDetailsCard";
 import { SessionSummary, type SummaryTiming } from "./SessionSummary";
 import { SetupPageHeader } from "./SetupPageHeader";
+import { setupReadiness } from "./setupReadiness";
+import { SetupStepper } from "./SetupStepper";
 import {
   setupFormFromDraft,
   validateSetupForm,
   type SetupForm,
 } from "./setupPlanning";
 import { useDraftAttendance } from "./useDraftAttendance";
+import { EMPTY_GUEST_FORM, type GuestForm } from "./whosPlaying";
 import { WhosPlayingCard } from "./WhosPlayingCard";
 
 /** Edits settle for this long before they are saved. */
@@ -65,10 +90,19 @@ type SaveFailure = { saveInputKey: string; message: string };
  * edits made meanwhile are saved right after it, newest wins. Leaving the
  * page within the settle delay still saves (on unmount), and closing the tab
  * with unsaved edits asks first.
+ *
+ * `holdAndSaveLatest` / `release` bracket a write that replaces the form from
+ * the server (applying a saved setup): no autosave can start in between, and
+ * the latest edits are saved first so the server works from them.
+ *
+ * Every save names the draft's settings revision it builds on. If another
+ * tab or device saved in between, the server refuses (a conflict): autosave
+ * then stops for good, the edits stay on screen, and only a reload goes on.
  */
 function useDraftAutosave(
   saveInput: SaveSessionDraftInput | null,
   isPaused: boolean,
+  initialDraftRevision: number,
 ) {
   const saveInputKey = useMemo(
     () => (saveInput ? JSON.stringify(saveInput) : null),
@@ -76,84 +110,183 @@ function useDraftAutosave(
   );
   // The draft as loaded is already saved.
   const [lastSavedKey, setLastSavedKey] = useState(saveInputKey);
+  const lastSavedKeyRef = useRef(saveInputKey);
   const [isSaving, setIsSaving] = useState(false);
   const [failure, setFailure] = useState<SaveFailure | null>(null);
+  const [isHeld, setIsHeld] = useState(false);
+  const isHeldRef = useRef(false);
+  /** The settings revision the next write builds on (from the load, then each write). */
+  const draftRevisionRef = useRef(initialDraftRevision);
+  const [isConflict, setIsConflict] = useState(false);
+  const isConflictRef = useRef(false);
+  /** Set by the Reload button so its own reload doesn't ask "leave page?". */
+  const isReloadingDeliberatelyRef = useRef(false);
   const isSavingRef = useRef(false);
   const queuedSaveInputRef = useRef<SaveSessionDraftInput | null>(null);
   /** Key of the save awaiting the server, so the unmount flush doesn't repeat it. */
   const inFlightSaveKeyRef = useRef<string | null>(null);
+  /** The running save loop; resolves with the result of its last save. */
+  const saveLoopRef = useRef<Promise<SaveSessionDraftResult> | null>(null);
 
-  const runSave = useCallback(async (input: SaveSessionDraftInput) => {
-    if (isSavingRef.current) {
-      queuedSaveInputRef.current = input;
-      return;
-    }
-    isSavingRef.current = true;
-    setIsSaving(true);
-    setFailure(null);
-    let inputToSave = input;
-    for (;;) {
-      inFlightSaveKeyRef.current = JSON.stringify(inputToSave);
-      const result = await saveSessionDraft(inputToSave).catch(() => ({
-        ok: false as const,
-        message: OFFLINE_MESSAGE,
-      }));
-      const queuedInput = queuedSaveInputRef.current;
-      queuedSaveInputRef.current = null;
-      if (queuedInput) {
-        // Newer edits arrived while saving: save those (this result is stale).
-        inputToSave = queuedInput;
-        continue;
-      }
-      const inputKey = JSON.stringify(inputToSave);
-      if (result.ok) setLastSavedKey(inputKey);
-      else setFailure({ saveInputKey: inputKey, message: result.message });
-      break;
-    }
-    inFlightSaveKeyRef.current = null;
-    isSavingRef.current = false;
-    setIsSaving(false);
+  const markSaved = useCallback((inputKey: string) => {
+    lastSavedKeyRef.current = inputKey;
+    setLastSavedKey(inputKey);
   }, []);
 
+  /** Another tab or device changed the settings: never write again from here. */
+  const markConflict = useCallback(() => {
+    isHeldRef.current = true;
+    isConflictRef.current = true;
+    setIsHeld(true);
+    setIsConflict(true);
+  }, []);
+
+  const runSave = useCallback(
+    (input: SaveSessionDraftInput): Promise<SaveSessionDraftResult> => {
+      if (isSavingRef.current && saveLoopRef.current) {
+        queuedSaveInputRef.current = input;
+        return saveLoopRef.current;
+      }
+      isSavingRef.current = true;
+      setIsSaving(true);
+      setFailure(null);
+      const saveLoop = (async () => {
+        let inputToSave = input;
+        let result: SaveSessionDraftResult;
+        for (;;) {
+          inFlightSaveKeyRef.current = JSON.stringify(inputToSave);
+          result = await saveSessionDraft(
+            inputToSave,
+            draftRevisionRef.current,
+          ).catch(() => ({
+            ok: false as const,
+            message: OFFLINE_MESSAGE,
+          }));
+          if (result.ok) draftRevisionRef.current = result.draftRevision;
+          const queuedInput = queuedSaveInputRef.current;
+          queuedSaveInputRef.current = null;
+          if (!result.ok && result.isConflict) {
+            // Queued edits are dropped too: they'd overwrite the newer settings.
+            markConflict();
+            break;
+          }
+          if (queuedInput) {
+            // Newer edits arrived while saving: save those (this result is stale).
+            inputToSave = queuedInput;
+            continue;
+          }
+          const inputKey = JSON.stringify(inputToSave);
+          if (result.ok) markSaved(inputKey);
+          else setFailure({ saveInputKey: inputKey, message: result.message });
+          break;
+        }
+        inFlightSaveKeyRef.current = null;
+        isSavingRef.current = false;
+        saveLoopRef.current = null;
+        setIsSaving(false);
+        return result;
+      })();
+      saveLoopRef.current = saveLoop;
+      return saveLoop;
+    },
+    [markSaved, markConflict],
+  );
+
+  const isAutosavePaused = isPaused || isHeld;
   useEffect(() => {
-    if (isPaused || !saveInput || saveInputKey === lastSavedKey) return;
+    if (isAutosavePaused || !saveInput || saveInputKey === lastSavedKey) return;
     // A failed save is retried by the host (Retry) or by their next edit.
     if (failure?.saveInputKey === saveInputKey) return;
-    const timeout = setTimeout(
-      () => void runSave(saveInput),
-      AUTOSAVE_DELAY_MS,
-    );
+    const timeout = setTimeout(() => {
+      // A hold can begin before this effect re-runs to clear the timer.
+      if (!isHeldRef.current) void runSave(saveInput);
+    }, AUTOSAVE_DELAY_MS);
     return () => clearTimeout(timeout);
-  }, [isPaused, saveInput, saveInputKey, lastSavedKey, failure, runSave]);
+  }, [
+    isAutosavePaused,
+    saveInput,
+    saveInputKey,
+    lastSavedKey,
+    failure,
+    runSave,
+  ]);
 
   // The newest values, for the unmount flush below (refs are written after render).
-  const latestRef = useRef({ saveInput, saveInputKey, lastSavedKey, isPaused });
+  const latestRef = useRef({ saveInput, saveInputKey, isPaused });
   useEffect(() => {
-    latestRef.current = { saveInput, saveInputKey, lastSavedKey, isPaused };
+    latestRef.current = { saveInput, saveInputKey, isPaused };
   });
+  // Leaving (unmount) or being hidden: with cacheComponents, Next keeps
+  // recent routes in a hidden <Activity>, which runs this cleanup but keeps
+  // state and refs. So the flush goes through runSave: it records the new
+  // revision and marks the edits saved, so coming back doesn't re-save with
+  // a stale revision (a false "changed elsewhere").
   useEffect(
     () => () => {
       const latest = latestRef.current;
-      const queuedInput = queuedSaveInputRef.current;
-      const isAlreadyBeingSaved =
-        latest.saveInputKey === inFlightSaveKeyRef.current ||
-        (queuedInput !== null &&
-          JSON.stringify(queuedInput) === latest.saveInputKey);
       if (
         !latest.isPaused &&
+        !isHeldRef.current &&
         latest.saveInput &&
-        latest.saveInputKey !== latest.lastSavedKey &&
-        !isAlreadyBeingSaved
+        latest.saveInputKey !== lastSavedKeyRef.current &&
+        latest.saveInputKey !== inFlightSaveKeyRef.current
       ) {
-        // Fire and forget: the page is going away (e.g. a client navigation).
-        void saveSessionDraft(latest.saveInput).catch(() => {});
+        void runSave(latest.saveInput);
       }
     },
-    [],
+    [runSave],
   );
 
-  const status: SaveStatus =
-    saveInput === null
+  /**
+   * Stops autosave, waits for any save, then saves the newest valid edits.
+   * After a conflict nothing more is written: it returns the conflict.
+   */
+  const holdAndSaveLatest =
+    useCallback(async (): Promise<SaveSessionDraftResult> => {
+      isHeldRef.current = true;
+      setIsHeld(true);
+      if (saveLoopRef.current) await saveLoopRef.current;
+      if (isConflictRef.current) {
+        return {
+          ok: false,
+          message: "The setup was changed elsewhere.",
+          isConflict: true,
+        };
+      }
+      const latest = latestRef.current;
+      if (
+        !latest.saveInput ||
+        latest.saveInputKey === lastSavedKeyRef.current
+      ) {
+        return { ok: true, draftRevision: draftRevisionRef.current };
+      }
+      return runSave(latest.saveInput);
+    }, [runSave]);
+
+  /**
+   * Resumes autosave. After a server write that replaced the form, pass what
+   * the server now holds (not saved again) and its settings revision.
+   */
+  const release = useCallback(
+    (
+      applied: {
+        savedInput: SaveSessionDraftInput | null;
+        draftRevision: number;
+      } | null,
+    ) => {
+      if (applied) {
+        draftRevisionRef.current = applied.draftRevision;
+        if (applied.savedInput) markSaved(JSON.stringify(applied.savedInput));
+      }
+      isHeldRef.current = false;
+      setIsHeld(false);
+    },
+    [markSaved],
+  );
+
+  const status: SaveStatus = isConflict
+    ? { kind: "conflict" }
+    : saveInput === null
       ? { kind: "invalid" }
       : failure?.saveInputKey === saveInputKey && !isSaving
         ? { kind: "failed", message: failure.message }
@@ -164,6 +297,7 @@ function useDraftAutosave(
   useEffect(() => {
     if (!hasUnsavedEdits) return;
     function askBeforeLeaving(event: BeforeUnloadEvent) {
+      if (isReloadingDeliberatelyRef.current) return;
       event.preventDefault();
       // Older browsers need returnValue set to show the prompt.
       event.returnValue = "";
@@ -175,14 +309,31 @@ function useDraftAutosave(
   const retry = () => {
     if (saveInput) void runSave(saveInput);
   };
-  return { status, retry };
+  /** The conflict banner's Reload: the host has been told edits here are lost. */
+  const reloadDiscardingEdits = () => {
+    isReloadingDeliberatelyRef.current = true;
+    window.location.reload();
+  };
+  return {
+    status,
+    retry,
+    holdAndSaveLatest,
+    release,
+    markConflict,
+    draftRevisionRef,
+    reloadDiscardingEdits,
+  };
 }
 
 type SaveStatus =
   | { kind: "saved" }
   | { kind: "saving" }
   | { kind: "invalid" }
-  | { kind: "failed"; message: string };
+  | { kind: "failed"; message: string }
+  /** A setup was applied but couldn't be read back; autosave stays held. */
+  | { kind: "reloadRequired" }
+  /** Another tab or device changed the settings; autosave has stopped. */
+  | { kind: "conflict" };
 
 function SaveStatusIndicator({
   status,
@@ -209,6 +360,16 @@ function SaveStatusIndicator({
             <span aria-hidden="true">! </span>Not saved. {status.message}
           </span>
         )}
+        {status.kind === "conflict" && (
+          <span className="text-orange-soft">
+            <span aria-hidden="true">! </span>Not saved: changed elsewhere
+          </span>
+        )}
+        {status.kind === "reloadRequired" && (
+          <span className="text-orange-soft">
+            <span aria-hidden="true">! </span>Not saved: reload the page
+          </span>
+        )}
       </span>
       {status.kind === "failed" && (
         <button
@@ -233,13 +394,19 @@ interface SessionSetupFormProps {
   activeMembers: ActiveMemberChoice[];
   /** Only admins add courts to the club. */
   canAddCourts: boolean;
+  /** The host's own saved setups, most recently used first. */
+  initialSavedSetups: SavedSetupSummary[];
 }
+
+/** What happened after saving or applying a setup (shown under the header). */
+type SavedSetupMessage = { tone: "info" | "attention"; text: string };
 
 function SessionSetupForm({
   draft,
   initialClubCourts,
   activeMembers,
   canAddCourts,
+  initialSavedSetups,
 }: SessionSetupFormProps) {
   const [clubCourts, setClubCourts] = useState(initialClubCourts);
   const [form, setForm] = useState<SetupForm>(() =>
@@ -248,15 +415,39 @@ function SessionSetupForm({
       new Set(initialClubCourts.map((court) => court.id)),
     ),
   );
+  const [guestForm, setGuestForm] = useState<GuestForm>(EMPTY_GUEST_FORM);
   const [isAutosavePaused, setIsAutosavePaused] = useState(false);
+  const [savedSetups, setSavedSetups] = useState(initialSavedSetups);
+  const [appliedSavedSetupId, setAppliedSavedSetupId] = useState(
+    draft.config.appliedSavedSetupId,
+  );
+  const [openSavedSetupsPanel, setOpenSavedSetupsPanel] =
+    useState<SavedSetupsPanel>("none");
+  const [isReuseBannerDismissed, setIsReuseBannerDismissed] = useState(false);
+  const [isApplyingSetup, setIsApplyingSetup] = useState(false);
+  const [savedSetupMessage, setSavedSetupMessage] =
+    useState<SavedSetupMessage | null>(null);
+  const [isReloadRequired, setIsReloadRequired] = useState(false);
   const validation = useMemo(
     () => validateSetupForm(form, draft.sessionId),
     [form, draft.sessionId],
   );
-  const { status, retry } = useDraftAutosave(
+  const {
+    status: autosaveStatus,
+    retry,
+    holdAndSaveLatest,
+    release,
+    markConflict,
+    draftRevisionRef,
+    reloadDiscardingEdits,
+  } = useDraftAutosave(
     validation.saveInput,
     isAutosavePaused,
+    draft.draftRevision,
   );
+  const status: SaveStatus = isReloadRequired
+    ? { kind: "reloadRequired" }
+    : autosaveStatus;
   const { fieldErrors, durationMinutes } = validation;
   const attendance = useDraftAttendance(
     draft.sessionId,
@@ -267,6 +458,14 @@ function SessionSetupForm({
   const attendingGuestCount = attendance.participants.filter(
     (participant) => participant.isGuest,
   ).length;
+  const readiness = setupReadiness({
+    fieldErrors,
+    selectedCourtCount: form.selectedCourtIds.length,
+    matchFormat: form.matchFormat,
+    attendingPlayerCount,
+    guestForm,
+    isDraftSaved: status.kind === "saved",
+  });
 
   const targetMatchMinutes = fieldErrors.targetMatchMinutes
     ? null
@@ -295,12 +494,124 @@ function SessionSetupForm({
     }
   }
 
+  async function saveThisSetup(setupName: string) {
+    if (!validation.saveInput) {
+      return {
+        ok: false as const,
+        message: "Fix the highlighted fields first, then save the setup.",
+      };
+    }
+    const result = await saveSetup({
+      setupName,
+      draft: validation.saveInput,
+    }).catch(() => ({ ok: false as const, message: OFFLINE_MESSAGE }));
+    if (result.ok) {
+      setSavedSetups(result.savedSetups);
+      setOpenSavedSetupsPanel("none");
+      // It's what's on screen already: no need to offer it back.
+      setIsReuseBannerDismissed(true);
+      setSavedSetupMessage({ tone: "info", text: result.message });
+    }
+    return result;
+  }
+
+  async function applySetup(setup: SavedSetupSummary) {
+    setSavedSetupMessage(null);
+    // Applying replaces the form, so invalid edits (which can't be saved
+    // first) would be lost without a word: refuse instead.
+    if (!validation.saveInput) {
+      setSavedSetupMessage({
+        tone: "attention",
+        text: `Fix the highlighted fields first, then use \u201c${setup.name}\u201d.`,
+      });
+      return;
+    }
+    setIsApplyingSetup(true);
+    // The server applies on top of the saved draft, so save the latest
+    // edits first and keep autosave from writing stale values meanwhile.
+    const flushed = await holdAndSaveLatest();
+    if (!flushed.ok && flushed.isConflict) {
+      setIsApplyingSetup(false);
+      return;
+    }
+    if (!flushed.ok) {
+      release(null);
+      setIsApplyingSetup(false);
+      setSavedSetupMessage({
+        tone: "attention",
+        text: `Your latest edits couldn't be saved, so \u201c${setup.name}\u201d wasn't applied. ${flushed.message}`,
+      });
+      return;
+    }
+    const result = await applySavedSetup({
+      sessionId: draft.sessionId,
+      setupId: setup.setupId,
+      expectedDraftRevision: draftRevisionRef.current,
+    }).catch(() => ({ ok: false as const, message: OFFLINE_MESSAGE }));
+    setIsApplyingSetup(false);
+    if (!result.ok) {
+      // Applied but not read back: keep autosave held so the stale screen
+      // can't overwrite it; the message asks for a reload.
+      if ("requiresReload" in result && result.requiresReload) {
+        setIsReloadRequired(true);
+      } else if ("isConflict" in result && result.isConflict) {
+        markConflict();
+        return;
+      } else {
+        release(null);
+      }
+      setSavedSetupMessage({ tone: "attention", text: result.message });
+      return;
+    }
+    // A court added since this page loaded is still a club court: keep it
+    // (its other formats aren't known here, so it offers the applied one).
+    const knownCourtIds = new Set(clubCourts.map((court) => court.id));
+    const newCourts: ClubCourt[] = result.draft.config.courts
+      .filter((court) => !knownCourtIds.has(court.courtId))
+      .map((court) => ({
+        id: court.courtId,
+        name: court.name,
+        supportedFormats: [court.format],
+      }));
+    if (newCourts.length > 0) {
+      setClubCourts((currentCourts) => [...currentCourts, ...newCourts]);
+    }
+    const appliedForm = setupFormFromDraft(
+      result.draft,
+      new Set([...knownCourtIds, ...newCourts.map((court) => court.id)]),
+    );
+    setForm(appliedForm);
+    release({
+      savedInput: validateSetupForm(appliedForm, draft.sessionId).saveInput,
+      draftRevision: result.draft.draftRevision,
+    });
+    setSavedSetups(result.savedSetups);
+    setAppliedSavedSetupId(setup.setupId);
+    setOpenSavedSetupsPanel("none");
+    setSavedSetupMessage({
+      tone: result.notice ? "attention" : "info",
+      text: [`Using \u201c${setup.name}\u201d.`, result.notice]
+        .filter(Boolean)
+        .join(" "),
+    });
+  }
+
+  const reuseCandidate =
+    savedSetups.length > 0 && !appliedSavedSetupId && !isReuseBannerDismissed
+      ? savedSetups[0]
+      : null;
+
   return (
     <>
       <SetupPageHeader
         actions={
           <>
             <SaveStatusIndicator status={status} onRetry={retry} />
+            <SavedSetupsButtons
+              isDisabled={isApplyingSetup || status.kind === "conflict"}
+              openPanel={openSavedSetupsPanel}
+              onOpenPanelChange={setOpenSavedSetupsPanel}
+            />
             <DiscardDraftButton
               sessionId={draft.sessionId}
               onAutosavePausedChange={setIsAutosavePaused}
@@ -308,29 +619,77 @@ function SessionSetupForm({
           </>
         }
       />
+      {openSavedSetupsPanel === "list" && (
+        <SavedSetupsList
+          savedSetups={savedSetups}
+          isApplying={isApplyingSetup || status.kind === "conflict"}
+          onUse={(setup) => void applySetup(setup)}
+        />
+      )}
+      {openSavedSetupsPanel === "save" && (
+        <SaveSetupForm
+          isDisabled={isApplyingSetup || status.kind === "conflict"}
+          defaultName={form.name}
+          onSave={saveThisSetup}
+          onClose={() => setOpenSavedSetupsPanel("none")}
+        />
+      )}
+      <div aria-live="polite" className="empty:hidden">
+        {savedSetupMessage &&
+          (savedSetupMessage.tone === "info" ? (
+            <p className="text-[15px] text-lime-soft">
+              {savedSetupMessage.text}
+            </p>
+          ) : (
+            <AttentionMessage>{savedSetupMessage.text}</AttentionMessage>
+          ))}
+      </div>
+      {status.kind === "conflict" && (
+        <DraftConflictBanner onReload={reloadDiscardingEdits} />
+      )}
+      {reuseCandidate && status.kind !== "conflict" && (
+        <ReuseSetupBanner
+          setup={reuseCandidate}
+          isApplying={isApplyingSetup}
+          onUse={() => void applySetup(reuseCandidate)}
+          onDismiss={() => setIsReuseBannerDismissed(true)}
+        />
+      )}
+      <SetupStepper steps={readiness.steps} />
       <div className="flex flex-wrap items-start gap-[18px]">
         <div className="flex min-w-0 flex-[999_1_640px] flex-col gap-[18px]">
-          <SessionDetailsCard
-            form={form}
-            fieldErrors={fieldErrors}
-            durationMinutes={durationMinutes}
-            isEndNextDay={validation.isEndNextDay}
-            onChange={updateForm}
-          />
-          <CourtsCard
-            clubCourts={clubCourts}
-            selectedCourtIds={form.selectedCourtIds}
-            matchFormat={form.matchFormat}
-            attendingPlayerCount={attendingPlayerCount}
-            courtsError={fieldErrors.courts}
-            canAddCourts={canAddCourts}
-            onChange={updateForm}
-            onCourtAdded={addCourt}
-          />
+          {/* Applying a setup replaces these values: no edits meanwhile. */}
+          <fieldset disabled={isApplyingSetup} className="contents">
+            <SessionDetailsCard
+              form={form}
+              fieldErrors={fieldErrors}
+              durationMinutes={durationMinutes}
+              isEndNextDay={validation.isEndNextDay}
+              onChange={updateForm}
+            />
+            <CourtsCard
+              clubCourts={clubCourts}
+              selectedCourtIds={form.selectedCourtIds}
+              matchFormat={form.matchFormat}
+              attendingPlayerCount={attendingPlayerCount}
+              courtsError={fieldErrors.courts}
+              canAddCourts={canAddCourts}
+              onChange={updateForm}
+              onCourtAdded={addCourt}
+            />
+          </fieldset>
           <WhosPlayingCard
             activeMembers={activeMembers}
             attendance={attendance}
+            guestForm={guestForm}
+            onGuestFormChange={setGuestForm}
           />
+          <fieldset disabled={isApplyingSetup} className="contents">
+            <RotationCard
+              rotation={form.rotation}
+              onChange={(rotation) => updateForm({ rotation })}
+            />
+          </fieldset>
         </div>
         <SessionSummary
           sessionName={form.name}
@@ -341,8 +700,38 @@ function SessionSetupForm({
           matchFormat={form.matchFormat}
           attendingPlayerCount={attendingPlayerCount}
           attendingGuestCount={attendingGuestCount}
+          rotationSummary={topObjectiveSummary(form.rotation)}
+          readiness={readiness}
         />
       </div>
     </>
+  );
+}
+
+/** DESIGN.md "Updated by another host": settings changed in another tab or device. */
+function DraftConflictBanner({ onReload }: { onReload: () => void }) {
+  return (
+    <section
+      aria-label="Setup changed elsewhere"
+      className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[14px] border border-orange-edge bg-orange-surface px-3.5 py-2.5"
+    >
+      <span
+        aria-hidden="true"
+        className="flex size-5 shrink-0 items-center justify-center rounded-full bg-orange text-xs font-extrabold text-on-orange"
+      >
+        !
+      </span>
+      <p className="min-w-0 flex-[1_1_300px] text-sm text-orange-text">
+        Setup was changed in another tab or by another device. Reload to see the
+        latest &mdash; your unsaved changes here will be lost.
+      </p>
+      <button
+        type="button"
+        onClick={onReload}
+        className={ATTENTION_OUTLINE_BUTTON_CLASS_NAME}
+      >
+        Reload
+      </button>
+    </section>
   );
 }

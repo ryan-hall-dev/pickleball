@@ -16,7 +16,9 @@ import {
   type DraftAttendanceResult,
 } from "@/server/setup/setupActions";
 import type { DraftParticipant } from "@/server/setup/setupDraft";
+import { useState } from "react";
 import { useDraftAttendance } from "./useDraftAttendance";
+import { EMPTY_GUEST_FORM } from "./whosPlaying";
 import { WhosPlayingCard } from "./WhosPlayingCard";
 
 vi.mock("@/server/setup/setupActions", () => ({
@@ -86,9 +88,15 @@ function CardHarness({
     participants,
     activeMembers,
   );
+  const [guestForm, setGuestForm] = useState(EMPTY_GUEST_FORM);
   return (
     <>
-      <WhosPlayingCard activeMembers={activeMembers} attendance={attendance} />
+      <WhosPlayingCard
+        activeMembers={activeMembers}
+        attendance={attendance}
+        guestForm={guestForm}
+        onGuestFormChange={setGuestForm}
+      />
       <p data-testid="player-count">{attendance.participants.length}</p>
     </>
   );

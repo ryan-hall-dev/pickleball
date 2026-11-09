@@ -5,6 +5,7 @@ import { readHostAccess } from "@/server/auth/currentHost";
 import { listAllActiveMembers } from "@/server/members/memberDirectory";
 import {
   listActiveClubCourts,
+  listOwnSavedSetups,
   readHostOpenSession,
 } from "@/server/setup/setupDraft";
 import { SessionSetupEditor } from "./SessionSetupEditor";
@@ -40,9 +41,10 @@ async function SessionSetupContent() {
   const openSession = await readHostOpenSession(hostAccess.host.userId);
 
   if (openSession.status === "draft") {
-    const [clubCourts, activeMembers] = await Promise.all([
+    const [clubCourts, activeMembers, savedSetups] = await Promise.all([
       listActiveClubCourts(),
       listAllActiveMembers(),
+      listOwnSavedSetups(hostAccess.host.userId),
     ]);
     return (
       <SessionSetupEditor
@@ -52,6 +54,7 @@ async function SessionSetupContent() {
         initialClubCourts={clubCourts}
         activeMembers={activeMembers}
         canAddCourts={hostAccess.host.role === "admin"}
+        initialSavedSetups={savedSetups}
       />
     );
   }

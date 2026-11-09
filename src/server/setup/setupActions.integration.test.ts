@@ -13,20 +13,34 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import type { Database } from "@/lib/database.types";
+import {
+  RECOMMENDED_ROTATION_PREFERENCES,
+  type RotationPreferences,
+} from "@/engine/session";
+import type { Database, Json } from "@/lib/database.types";
 import { HOST_ACCESS_DENIAL_MESSAGES } from "@/server/auth/hostAccess";
 import {
   addClubCourt,
   addDraftGuest,
+  applySavedSetup,
+  type ApplySavedSetupResult,
   type DraftAttendanceResult,
   discardSessionDraft,
   removeDraftGuest,
   saveSessionDraft,
+  saveSetup,
   setDraftMemberAttendance,
   startSessionDraft,
 } from "./setupActions";
-import { listActiveClubCourts, readHostOpenSession } from "./setupDraft";
-import type { SaveSessionDraftInput } from "./setupRules";
+import {
+  listActiveClubCourts,
+  listSavedSetups,
+  readHostOpenSession,
+} from "./setupDraft";
+import {
+  recommendedRotationPreferences,
+  type SaveSessionDraftInput,
+} from "./setupRules";
 
 type DatabaseClient = SupabaseClient<Database>;
 
@@ -189,6 +203,40 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     return openSession.draft;
   }
 
+  async function draftRevisionOf(sessionId: string): Promise<number> {
+    const { data, error } = await admin
+      .from("sessions")
+      .select("draft_revision")
+      .eq("id", sessionId)
+      .maybeSingle();
+    if (error) throw error;
+    // An unknown session: any revision (the write is refused anyway).
+    return data?.draft_revision ?? 0;
+  }
+
+  /**
+   * Saves as an editor that loaded the draft just now (its current settings
+   * revision). Reports success as `{ ok: true }`; the revision tests below
+   * call saveSessionDraft directly.
+   */
+  async function saveAtCurrentRevision(input: SaveSessionDraftInput) {
+    const result = await saveSessionDraft(
+      input,
+      await draftRevisionOf(input.sessionId),
+    );
+    return result.ok ? { ok: true } : result;
+  }
+
+  async function applyAtCurrentRevision(input: {
+    sessionId: string;
+    setupId: string;
+  }) {
+    return applySavedSetup({
+      ...input,
+      expectedDraftRevision: await draftRevisionOf(input.sessionId),
+    });
+  }
+
   function saveInputFor(
     sessionId: string,
     overrides: Partial<SaveSessionDraftInput> = {},
@@ -203,6 +251,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       matchFormat: "doubles",
       targetMatchMinutes: 12,
       changeoverMinutes: 3,
+      rotation: recommendedRotationPreferences(),
       ...overrides,
     };
   }
@@ -300,7 +349,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           await startSessionDraft({ name: "Sneaky", ...plannedTimes(24) }),
         ).toEqual(expected);
         expect(
-          await saveSessionDraft(
+          await saveAtCurrentRevision(
             saveInputFor(aliceDraftBefore[0].id, { name: "Hijacked" }),
           ),
         ).toEqual(expected);
@@ -335,6 +384,24 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
             participantId: randomUUID(),
           }),
         ).toEqual(expected);
+        expect(
+          await saveSetup({
+            setupName: "Sneaky setup",
+            draft: saveInputFor(aliceDraftBefore[0].id),
+          }),
+        ).toEqual(expected);
+        expect(
+          await applyAtCurrentRevision({
+            sessionId: aliceDraftBefore[0].id,
+            setupId: randomUUID(),
+          }),
+        ).toEqual(expected);
+        const { count: sneakySetupCount } = await admin
+          .from("saved_setups")
+          .select("id", { count: "exact", head: true })
+          .in("host_id", createdUserIds)
+          .eq("name", "Sneaky setup");
+        expect(sneakySetupCount).toBe(0);
 
         expect(await openSessionRows(hostAlice.userId)).toEqual(
           aliceDraftBefore,
@@ -358,7 +425,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
 
       actingClient = hostBob.client;
       expect(
-        await saveSessionDraft(
+        await saveAtCurrentRevision(
           saveInputFor(aliceDraft.sessionId, { name: "Bob was here" }),
         ),
       ).toEqual({ ok: false, message: DRAFT_NOT_OPEN });
@@ -378,7 +445,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       const aliceDraft = await openDraftFor(hostAlice);
       const before = await openSessionRows(hostAlice.userId);
       expect(
-        await saveSessionDraft(
+        await saveAtCurrentRevision(
           saveInputFor(aliceDraft.sessionId, {
             ...plannedTimes(48, 0),
           }),
@@ -388,7 +455,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         message: "End time must be after the start time.",
       });
       expect(
-        await saveSessionDraft(
+        await saveAtCurrentRevision(
           saveInputFor(aliceDraft.sessionId, { name: "" }),
         ),
       ).toEqual({ ok: false, message: "Enter a session name." });
@@ -435,7 +502,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
 
     it("saves details and courts, snapshots court names from the database and keeps other steps' config", async () => {
       const draft = await openDraftFor(hostBob);
-      // A key another setup step (rotation) will own.
+      // A key some later step will own.
       await admin
         .from("sessions")
         .update({
@@ -444,7 +511,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
             matchFormat: "doubles",
             targetMatchMinutes: 15,
             changeoverMinutes: 2,
-            rotation: { objectiveOrder: ["equalGames"] },
+            laterStep: { kept: true },
           },
         })
         .eq("id", draft.sessionId);
@@ -455,7 +522,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         location: "",
         hostName: "Bob B.",
       });
-      expect(await saveSessionDraft(input)).toEqual({ ok: true });
+      expect(await saveAtCurrentRevision(input)).toEqual({ ok: true });
 
       const [row] = await openSessionRows(hostBob.userId);
       expect(row).toMatchObject({
@@ -474,7 +541,8 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           matchFormat: "doubles",
           targetMatchMinutes: 12,
           changeoverMinutes: 3,
-          rotation: { objectiveOrder: ["equalGames"] },
+          rotation: recommendedRotationPreferences(),
+          laterStep: { kept: true },
         },
       });
       expect(Date.parse(row.planned_end) - Date.parse(row.planned_start)).toBe(
@@ -494,7 +562,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       const before = await openSessionRows(hostBob.userId);
       actingClient = hostBob.client;
       for (const courtIds of [[singlesOnlyCourtId], [inactiveCourtId]]) {
-        const result = await saveSessionDraft(
+        const result = await saveAtCurrentRevision(
           saveInputFor(draft.sessionId, { courtIds, matchFormat: "doubles" }),
         );
         expect(result).toMatchObject({ ok: false });
@@ -502,7 +570,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       expect(await openSessionRows(hostBob.userId)).toEqual(before);
 
       expect(
-        await saveSessionDraft(
+        await saveAtCurrentRevision(
           saveInputFor(draft.sessionId, {
             courtIds: [doublesCourtId, singlesOnlyCourtId],
             matchFormat: "singles",
@@ -523,6 +591,85 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           }),
         ],
       });
+    });
+
+    it("round-trips the rotation as the engine's RotationPreferences, and only the owner can write it", async () => {
+      const draft = await openDraftFor(hostBob);
+      const rotation = {
+        objectiveOrder: [
+          "noBackToBack",
+          "mixPartners",
+          "equalGames",
+          "shortestWaits",
+          "playingTime",
+          "fullCourts",
+        ],
+        rules: {
+          preventConsecutive: true,
+          fewerGamesFirst: false,
+          longestWaitFirst: true,
+          mixPartners: true,
+          minimiseRepeatOpponents: false,
+          allowManualAssignments: false,
+        },
+      } satisfies RotationPreferences;
+      actingClient = hostBob.client;
+      expect(
+        await saveAtCurrentRevision(
+          saveInputFor(draft.sessionId, { rotation }),
+        ),
+      ).toEqual({ ok: true });
+
+      // The raw snapshot holds exactly the engine's shape: a permutation of
+      // all six objectives and all six rules as booleans, nothing else.
+      const [row] = await openSessionRows(hostBob.userId);
+      const storedRotation = (row.config_snapshot as Record<string, unknown>)
+        .rotation as RotationPreferences;
+      expect(storedRotation).toEqual(rotation);
+      expect(Object.keys(storedRotation).sort()).toEqual([
+        "objectiveOrder",
+        "rules",
+      ]);
+      expect([...storedRotation.objectiveOrder].sort()).toEqual(
+        [...RECOMMENDED_ROTATION_PREFERENCES.objectiveOrder].sort(),
+      );
+      expect(Object.keys(storedRotation.rules).sort()).toEqual(
+        Object.keys(RECOMMENDED_ROTATION_PREFERENCES.rules).sort(),
+      );
+      expect(
+        Object.values(storedRotation.rules).every(
+          (isOn) => typeof isOn === "boolean",
+        ),
+      ).toBe(true);
+      expect((await openDraftFor(hostBob)).config.rotation).toEqual(rotation);
+
+      // Another host can't write it; an invalid order never reaches the database.
+      actingClient = hostAlice.client;
+      expect(
+        await saveAtCurrentRevision(
+          saveInputFor(draft.sessionId, {
+            rotation: recommendedRotationPreferences(),
+          }),
+        ),
+      ).toEqual({ ok: false, message: DRAFT_NOT_OPEN });
+      actingClient = hostBob.client;
+      expect(
+        await saveAtCurrentRevision(
+          saveInputFor(draft.sessionId, {
+            rotation: {
+              ...rotation,
+              objectiveOrder: [
+                ...rotation.objectiveOrder.slice(0, 5),
+                "noBackToBack",
+              ],
+            },
+          }),
+        ),
+      ).toEqual({
+        ok: false,
+        message: "Rank every rotation priority exactly once.",
+      });
+      expect((await openDraftFor(hostBob)).config.rotation).toEqual(rotation);
     });
 
     it("lists the draft's attending members and guests", async () => {
@@ -590,7 +737,9 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       expect(await readHostOpenSession(hostBob.userId)).toEqual({
         status: "none",
       });
-      expect(await saveSessionDraft(saveInputFor(draft.sessionId))).toEqual({
+      expect(
+        await saveAtCurrentRevision(saveInputFor(draft.sessionId)),
+      ).toEqual({
         ok: false,
         message: DRAFT_NOT_OPEN,
       });
@@ -629,7 +778,9 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         sessionId: draft.sessionId,
         name: "Fresh start",
       });
-      expect(await saveSessionDraft(saveInputFor(draft.sessionId))).toEqual({
+      expect(
+        await saveAtCurrentRevision(saveInputFor(draft.sessionId)),
+      ).toEqual({
         ok: false,
         message: DRAFT_NOT_OPEN,
       });
@@ -982,6 +1133,459 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       expect(cleared).toEqual([
         expect.objectContaining({ isGuest: true, firstName: "Kai" }),
       ]);
+    });
+  });
+  describe("saved setups", () => {
+    let hostDana: { client: DatabaseClient; userId: string };
+    let hostEve: { client: DatabaseClient; userId: string };
+    const waitsFirstRotation = {
+      objectiveOrder: [
+        "shortestWaits",
+        "mixPartners",
+        "equalGames",
+        "playingTime",
+        "fullCourts",
+        "noBackToBack",
+      ],
+      rules: {
+        preventConsecutive: false,
+        fewerGamesFirst: true,
+        longestWaitFirst: true,
+        mixPartners: true,
+        minimiseRepeatOpponents: true,
+        allowManualAssignments: false,
+      },
+    } satisfies RotationPreferences;
+
+    beforeAll(async () => {
+      hostDana = await signedInUser("Dana Setups");
+      hostEve = await signedInUser("Eve Setups");
+      for (const host of [hostDana, hostEve]) {
+        actingClient = host.client;
+        expect(
+          await startSessionDraft({
+            name: "Setups social",
+            ...plannedTimes(72),
+          }),
+        ).toEqual({ ok: true });
+      }
+    });
+
+    function appliedDraft(result: ApplySavedSetupResult) {
+      if (!result.ok) throw new Error(`apply failed: ${result.message}`);
+      return result;
+    }
+
+    async function savedSetupRows(hostUserId: string) {
+      const { data, error } = await admin
+        .from("saved_setups")
+        .select("id, name, config, last_used_at")
+        .eq("host_id", hostUserId)
+        .order("created_at");
+      if (error) throw error;
+      return data;
+    }
+
+    it("saves, lists, replaces and applies a setup without touching attendance", async () => {
+      const draft = await openDraftFor(hostDana);
+      actingClient = hostDana.client;
+      const setupValues = saveInputFor(draft.sessionId, {
+        location: "Riverside courts",
+        ...plannedTimes(72, 90),
+        courtIds: [doublesCourtId],
+        matchFormat: "doubles",
+        targetMatchMinutes: 12,
+        changeoverMinutes: 3,
+        rotation: waitsFirstRotation,
+      });
+      const saved = await saveSetup({
+        setupName: "Saturday Social",
+        draft: setupValues,
+      });
+      expect(saved).toMatchObject({
+        ok: true,
+        message: "Saved \u201cSaturday Social\u201d.",
+        savedSetups: [
+          {
+            name: "Saturday Social",
+            courtCount: 1,
+            topObjective: "shortestWaits",
+          },
+        ],
+      });
+
+      // Stored without attendance or anything about the session.
+      const [setupRow] = await savedSetupRows(hostDana.userId);
+      expect(setupRow.config).toEqual({
+        location: "Riverside courts",
+        durationMinutes: 90,
+        courts: [
+          {
+            courtId: doublesCourtId,
+            name: `${RUN_TOKEN} Doubles`,
+            format: "doubles",
+          },
+        ],
+        matchFormat: "doubles",
+        targetMatchMinutes: 12,
+        changeoverMinutes: 3,
+        rotation: waitsFirstRotation,
+      });
+
+      // The same name in another case replaces it.
+      expect(
+        await saveSetup({ setupName: "saturday social", draft: setupValues }),
+      ).toMatchObject({
+        ok: true,
+        message: "Replaced \u201csaturday social\u201d.",
+      });
+      const setupRows = await savedSetupRows(hostDana.userId);
+      expect(setupRows).toHaveLength(1);
+      expect(setupRows[0].id).toBe(setupRow.id);
+
+      // The draft moves on: other courts, format, length, rotation; a guest arrives.
+      expect(
+        await saveAtCurrentRevision(
+          saveInputFor(draft.sessionId, {
+            name: "Dana's Sunday",
+            location: "",
+            ...plannedTimes(96, 60),
+            courtIds: [singlesOnlyCourtId],
+            matchFormat: "singles",
+            targetMatchMinutes: 20,
+            changeoverMinutes: 5,
+          }),
+        ),
+      ).toEqual({ ok: true });
+      const guestResult = await addDraftGuest({
+        sessionId: draft.sessionId,
+        participantId: randomUUID(),
+        firstName: "Kai",
+        lastName: "Guest",
+        skillLevel: "",
+      });
+      expect(guestResult).toMatchObject({ ok: true });
+      const beforeApply = await openDraftFor(hostDana);
+
+      actingClient = hostDana.client;
+      const applied = appliedDraft(
+        await applyAtCurrentRevision({
+          sessionId: draft.sessionId,
+          setupId: setupRow.id,
+        }),
+      );
+      expect(applied.notice).toBeNull();
+      expect(applied.draft).toMatchObject({
+        sessionId: draft.sessionId,
+        name: "Dana's Sunday",
+        location: "Riverside courts",
+        plannedStart: beforeApply.plannedStart,
+        participants: beforeApply.participants,
+        config: {
+          courts: [
+            {
+              courtId: doublesCourtId,
+              name: `${RUN_TOKEN} Doubles`,
+              format: "doubles",
+            },
+          ],
+          matchFormat: "doubles",
+          targetMatchMinutes: 12,
+          changeoverMinutes: 3,
+          rotation: waitsFirstRotation,
+          appliedSavedSetupId: setupRow.id,
+        },
+      });
+      expect(
+        Date.parse(applied.draft.plannedEnd) -
+          Date.parse(applied.draft.plannedStart),
+      ).toBe(90 * 60_000);
+      const [sessionRow] = await openSessionRows(hostDana.userId);
+      expect(
+        (sessionRow.config_snapshot as Record<string, unknown>).rotation,
+      ).toEqual(waitsFirstRotation);
+      expect(applied.savedSetups[0].setupId).toBe(setupRow.id);
+      const [usedSetup] = await savedSetupRows(hostDana.userId);
+      expect(Date.parse(usedSetup.last_used_at)).toBeGreaterThanOrEqual(
+        Date.parse(setupRows[0].last_used_at),
+      );
+
+      // Editing the draft afterwards never changes the saved setup.
+      expect(
+        await saveAtCurrentRevision(
+          saveInputFor(draft.sessionId, {
+            courtIds: [],
+            rotation: recommendedRotationPreferences(),
+          }),
+        ),
+      ).toEqual({ ok: true });
+      expect((await savedSetupRows(hostDana.userId))[0].config).toEqual(
+        setupRow.config,
+      );
+    });
+
+    it("leaves out courts that are no longer available, and says which", async () => {
+      const draft = await openDraftFor(hostDana);
+      const { data: insertedSetup, error } = await admin
+        .from("saved_setups")
+        .insert({
+          host_id: hostDana.userId,
+          name: "Has a closed court",
+          config: {
+            location: null,
+            durationMinutes: 120,
+            courts: [
+              { courtId: doublesCourtId, name: "Old name", format: "doubles" },
+              { courtId: inactiveCourtId, name: "Court 5", format: "doubles" },
+            ],
+            matchFormat: "doubles",
+            targetMatchMinutes: 15,
+            changeoverMinutes: 2,
+            rotation: recommendedRotationPreferences(),
+          } as unknown as NonNullable<Json>,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+
+      actingClient = hostDana.client;
+      const applied = appliedDraft(
+        await applyAtCurrentRevision({
+          sessionId: draft.sessionId,
+          setupId: insertedSetup.id,
+        }),
+      );
+      expect(applied.notice).toBe(
+        "Court 5 is no longer available and was left out.",
+      );
+      // Current names come from the database.
+      expect(applied.draft.config.courts).toEqual([
+        {
+          courtId: doublesCourtId,
+          name: `${RUN_TOKEN} Doubles`,
+          format: "doubles",
+        },
+      ]);
+      expect(applied.draft.location).toBeNull();
+    });
+
+    it("never writes a config it couldn't read back, and lists past a malformed row", async () => {
+      const draft = await openDraftFor(hostDana);
+      const before = await savedSetupRows(hostDana.userId);
+      actingClient = hostDana.client;
+      // 20 seconds long: valid times, but it rounds to 0 whole minutes.
+      const plannedStart = new Date(Date.now() + 80 * 3_600_000);
+      plannedStart.setSeconds(0, 0);
+      expect(
+        await saveSetup({
+          setupName: "Too short",
+          draft: saveInputFor(draft.sessionId, {
+            plannedStart: plannedStart.toISOString(),
+            plannedEnd: new Date(plannedStart.getTime() + 20_000).toISOString(),
+          }),
+        }),
+      ).toEqual({
+        ok: false,
+        message:
+          "This setup can't be saved: Use a whole number of minutes from 1 to 720.",
+      });
+      expect(await savedSetupRows(hostDana.userId)).toEqual(before);
+
+      const { data: badRow, error } = await admin
+        .from("saved_setups")
+        .insert({
+          host_id: hostDana.userId,
+          name: "Malformed",
+          config: { durationMinutes: "long" },
+          last_used_at: new Date(Date.now() + 60_000).toISOString(),
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      const listed = await listSavedSetups(admin, hostDana.userId);
+      expect(listed.map((setup) => setup.setupId)).not.toContain(badRow.id);
+      expect(listed.length).toBe(before.length);
+      expect(console.error).toHaveBeenCalledWith(
+        "Skipping a saved setup with a malformed config",
+        { setupId: badRow.id, hostUserId: hostDana.userId },
+      );
+      await admin.from("saved_setups").delete().eq("id", badRow.id);
+    });
+
+    it("never lets another host see or apply someone's setup", async () => {
+      const danaDraft = await openDraftFor(hostDana);
+      const eveDraft = await openDraftFor(hostEve);
+      const [danaSetup] = await savedSetupRows(hostDana.userId);
+      const eveBefore = await openSessionRows(hostEve.userId);
+      const danaBefore = await openSessionRows(hostDana.userId);
+
+      actingClient = hostEve.client;
+      expect(await listSavedSetups(hostEve.client, hostEve.userId)).toEqual([]);
+      const notFound = {
+        ok: false,
+        message: "That saved setup isn't available any more. Reload the page.",
+      };
+      expect(
+        await applyAtCurrentRevision({
+          sessionId: eveDraft.sessionId,
+          setupId: danaSetup.id,
+        }),
+      ).toEqual(notFound);
+      expect(
+        await applyAtCurrentRevision({
+          sessionId: danaDraft.sessionId,
+          setupId: danaSetup.id,
+        }),
+      ).toEqual(notFound);
+      expect(await openSessionRows(hostEve.userId)).toEqual(eveBefore);
+      expect(await openSessionRows(hostDana.userId)).toEqual(danaBefore);
+      expect((await savedSetupRows(hostDana.userId))[0]).toEqual(danaSetup);
+
+      // Eve saving under Dana's name makes her own setup.
+      expect(
+        await saveSetup({
+          setupName: danaSetup.name,
+          draft: saveInputFor(eveDraft.sessionId),
+        }),
+      ).toMatchObject({
+        ok: true,
+        message: `Saved \u201c${danaSetup.name}\u201d.`,
+      });
+      expect((await savedSetupRows(hostDana.userId))[0]).toEqual(danaSetup);
+      expect(await savedSetupRows(hostEve.userId)).toHaveLength(1);
+    });
+  });
+
+  describe("draft settings concurrency", () => {
+    const CHANGED_ELSEWHERE = {
+      ok: false,
+      message:
+        "Setup was changed in another tab or by another device. Reload to see the latest \u2014 your unsaved changes here will be lost.",
+      isConflict: true,
+    };
+    let hostFrank: { client: DatabaseClient; userId: string };
+
+    beforeAll(async () => {
+      hostFrank = await signedInUser("Frank Tabs");
+      actingClient = hostFrank.client;
+      expect(
+        await startSessionDraft({ name: "Two tabs", ...plannedTimes(120) }),
+      ).toEqual({ ok: true });
+    });
+
+    it("refuses a save based on a stale revision and overwrites nothing", async () => {
+      const loaded = await openDraftFor(hostFrank);
+      expect(loaded.draftRevision).toBe(0);
+      actingClient = hostFrank.client;
+      // Tab A and tab B both loaded revision 0; A saves first.
+      expect(
+        await saveSessionDraft(
+          saveInputFor(loaded.sessionId, { name: "Tab A" }),
+          loaded.draftRevision,
+        ),
+      ).toEqual({ ok: true, draftRevision: 1 });
+      expect(
+        await saveSessionDraft(
+          saveInputFor(loaded.sessionId, {
+            name: "Tab B",
+            rotation: {
+              ...recommendedRotationPreferences(),
+              rules: {
+                ...recommendedRotationPreferences().rules,
+                mixPartners: false,
+              },
+            },
+          }),
+          loaded.draftRevision,
+        ),
+      ).toEqual(CHANGED_ELSEWHERE);
+      const [row] = await openSessionRows(hostFrank.userId);
+      expect(row).toMatchObject({ name: "Tab A", draft_revision: 1 });
+      expect(
+        (row.config_snapshot as unknown as { rotation: RotationPreferences })
+          .rotation,
+      ).toEqual(recommendedRotationPreferences());
+
+      // After reloading (revision 1), tab B saves.
+      const reloaded = await openDraftFor(hostFrank);
+      actingClient = hostFrank.client;
+      expect(
+        await saveSessionDraft(
+          saveInputFor(reloaded.sessionId, { name: "Tab B" }),
+          reloaded.draftRevision,
+        ),
+      ).toEqual({ ok: true, draftRevision: 2 });
+    });
+
+    it("doesn't bump the revision for attendance", async () => {
+      const loaded = await openDraftFor(hostFrank);
+      actingClient = hostFrank.client;
+      expect(
+        await addDraftGuest({
+          sessionId: loaded.sessionId,
+          participantId: randomUUID(),
+          firstName: "Tab",
+          lastName: "Guest",
+          skillLevel: "",
+        }),
+      ).toMatchObject({ ok: true });
+      expect((await openDraftFor(hostFrank)).draftRevision).toBe(
+        loaded.draftRevision,
+      );
+      actingClient = hostFrank.client;
+      expect(
+        await saveSessionDraft(
+          saveInputFor(loaded.sessionId),
+          loaded.draftRevision,
+        ),
+      ).toMatchObject({ ok: true });
+    });
+
+    it("refuses to apply a saved setup over a stale revision", async () => {
+      const loaded = await openDraftFor(hostFrank);
+      actingClient = hostFrank.client;
+      const saved = await saveSetup({
+        setupName: "Frank's setup",
+        draft: saveInputFor(loaded.sessionId, { location: "Elsewhere" }),
+      });
+      expect(saved).toMatchObject({ ok: true });
+      const [setupRow] = await admin
+        .from("saved_setups")
+        .select("id, last_used_at")
+        .eq("host_id", hostFrank.userId)
+        .then(({ data }) => data ?? []);
+      const before = await openSessionRows(hostFrank.userId);
+
+      expect(
+        await applySavedSetup({
+          sessionId: loaded.sessionId,
+          setupId: setupRow.id,
+          expectedDraftRevision: loaded.draftRevision - 1,
+        }),
+      ).toEqual(CHANGED_ELSEWHERE);
+      expect(await openSessionRows(hostFrank.userId)).toEqual(before);
+      const { data: unusedSetup } = await admin
+        .from("saved_setups")
+        .select("last_used_at")
+        .eq("id", setupRow.id)
+        .single();
+      expect(unusedSetup?.last_used_at).toBe(setupRow.last_used_at);
+
+      const applied = await applySavedSetup({
+        sessionId: loaded.sessionId,
+        setupId: setupRow.id,
+        expectedDraftRevision: loaded.draftRevision,
+      });
+      expect(applied).toMatchObject({
+        ok: true,
+        draft: {
+          location: "Elsewhere",
+          draftRevision: loaded.draftRevision + 1,
+        },
+      });
+
+      // A draft whose revision moved on can still be discarded.
+      expect(await discardSessionDraft(loaded.sessionId)).toEqual({ ok: true });
     });
   });
 });

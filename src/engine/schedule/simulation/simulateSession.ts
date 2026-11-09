@@ -20,7 +20,11 @@ import {
   type SessionState,
   type SkillLevel,
 } from "../../session";
-import { PLAYERS_PER_MATCH, PLAYERS_PER_TEAM } from "../../session";
+import {
+  PLAYERS_PER_MATCH,
+  PLAYERS_PER_TEAM,
+  RECOMMENDED_ROTATION_PREFERENCES,
+} from "../../session";
 import { recommend } from "../recommend";
 import { scheduleInputFromSession } from "../scheduleInputFromSession";
 import { createSeededRandom } from "../seededRandom";
@@ -31,24 +35,8 @@ export const SIMULATION_START_AT = Date.UTC(2026, 10, 7, 18, 0, 0);
 const MINUTE_MS = 60_000;
 const SIMULATION_ACTOR_ID = "00000000-0000-4000-8000-00000000a001";
 
-export const DEFAULT_SIMULATION_PREFERENCES: RotationPreferences = {
-  objectiveOrder: [
-    "equalGames",
-    "shortestWaits",
-    "playingTime",
-    "fullCourts",
-    "noBackToBack",
-    "mixPartners",
-  ],
-  rules: {
-    preventConsecutive: true,
-    fewerGamesFirst: true,
-    longestWaitFirst: true,
-    mixPartners: true,
-    minimiseRepeatOpponents: true,
-    allowManualAssignments: true,
-  },
-};
+export const DEFAULT_SIMULATION_PREFERENCES: RotationPreferences =
+  RECOMMENDED_ROTATION_PREFERENCES;
 
 /** Who picks the groups: the engine, or uniform random groups (the baseline). */
 export type SimulationPolicy = "engine" | "random";

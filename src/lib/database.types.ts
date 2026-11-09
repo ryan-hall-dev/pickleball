@@ -253,14 +253,14 @@ isOneToOne: false
                   ]
                 },"sessions": {
                   Row: {
-                    "checkin_open": boolean,"config_snapshot": Json | null,"created_at": string,"ended_at": string | null,"final_stats": Json | null,"host_id": string | null,"host_name": string,"id": string,"last_seq": number,"location": string | null,"name": string,"planned_end": string,"planned_start": string,"started_at": string | null,"status": Database["public"]['Enums']["session_status"],"updated_at": string
+                    "checkin_open": boolean,"config_snapshot": Json | null,"created_at": string,"draft_revision": number,"ended_at": string | null,"final_stats": Json | null,"host_id": string | null,"host_name": string,"id": string,"last_seq": number,"location": string | null,"name": string,"planned_end": string,"planned_start": string,"started_at": string | null,"status": Database["public"]['Enums']["session_status"],"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "checkin_open"?: boolean,"config_snapshot"?: Json | null,"created_at"?: string,"ended_at"?: string | null,"final_stats"?: Json | null,"host_id"?: string | null,"host_name": string,"id"?: string,"last_seq"?: number,"location"?: string | null,"name": string,"planned_end": string,"planned_start": string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["session_status"],"updated_at"?: string
+                    "checkin_open"?: boolean,"config_snapshot"?: Json | null,"created_at"?: string,"draft_revision"?: number,"ended_at"?: string | null,"final_stats"?: Json | null,"host_id"?: string | null,"host_name": string,"id"?: string,"last_seq"?: number,"location"?: string | null,"name": string,"planned_end": string,"planned_start": string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["session_status"],"updated_at"?: string
                   }
                   Update: {
-                    "checkin_open"?: boolean,"config_snapshot"?: Json | null,"created_at"?: string,"ended_at"?: string | null,"final_stats"?: Json | null,"host_id"?: string | null,"host_name"?: string,"id"?: string,"last_seq"?: number,"location"?: string | null,"name"?: string,"planned_end"?: string,"planned_start"?: string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["session_status"],"updated_at"?: string
+                    "checkin_open"?: boolean,"config_snapshot"?: Json | null,"created_at"?: string,"draft_revision"?: number,"ended_at"?: string | null,"final_stats"?: Json | null,"host_id"?: string | null,"host_name"?: string,"id"?: string,"last_seq"?: number,"location"?: string | null,"name"?: string,"planned_end"?: string,"planned_start"?: string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["session_status"],"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -286,6 +286,9 @@ isOneToOne: false
 "append_session_event":
 { Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_last_seq": number,"p_match_row"?: Json,"p_occurred_at": string,"p_payload": Json,"p_session_id": string,"p_type": Database["public"]['Enums']["session_event_type"] }; Returns: Json
                            },
+"apply_saved_setup":
+{ Args: { "p_actor_user_id": string,"p_config_patch": Json,"p_duration_minutes": number,"p_expected_draft_revision": number,"p_location": string,"p_session_id": string,"p_setup_id": string }; Returns: Json
+                           },
 "approve_checkin":
 { Args: { "p_actor_user_id": string,"p_checkin_request_id": string,"p_event_id"?: string,"p_expected_last_seq"?: number,"p_occurred_at"?: string,"p_session_participant_id": string }; Returns: Json
                            },
@@ -308,7 +311,10 @@ isOneToOne: false
 { Args: { "p_actor_user_id": string,"p_session_participant_id": string }; Returns: Json
                            },
 "save_session_draft":
-{ Args: { "p_actor_user_id": string,"p_config_patch": Json,"p_host_name": string,"p_location": string,"p_name": string,"p_planned_end": string,"p_planned_start": string,"p_session_id": string }; Returns: Json
+{ Args: { "p_actor_user_id": string,"p_config_patch": Json,"p_expected_draft_revision": number,"p_host_name": string,"p_location": string,"p_name": string,"p_planned_end": string,"p_planned_start": string,"p_session_id": string }; Returns: Json
+                           },
+"save_setup":
+{ Args: { "p_actor_user_id": string,"p_config": Json,"p_name": string }; Returns: string
                            },
 "search_checkin_names":
 { Args: { "p_checkin_tag": string,"p_device_token_hash": string,"p_ip_hash": string,"p_name_query": string }; Returns: {

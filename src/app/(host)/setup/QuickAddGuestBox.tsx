@@ -1,6 +1,13 @@
 "use client";
 
-import { useRef, useState, type FormEvent, type Ref } from "react";
+import {
+  useRef,
+  useState,
+  type Dispatch,
+  type FormEvent,
+  type Ref,
+  type SetStateAction,
+} from "react";
 import { AttentionMessage } from "@/components/AttentionMessage";
 import {
   FIELD_LABEL_CLASS_NAME,
@@ -29,23 +36,28 @@ import {
  * to the attendee list, never to the members directory.
  */
 export function QuickAddGuestBox({
+  form,
+  onFormChange,
   guests,
   pendingParticipantIds,
   onAddGuest,
   onRemoveGuest,
 }: {
+  /** Held by the editor: setup readiness flags an unfinished entry. */
+  form: GuestForm;
+  /** A state setter: field edits use the functional form so none are lost. */
+  onFormChange: Dispatch<SetStateAction<GuestForm>>;
   guests: DraftParticipant[];
   /** Guests still being written (their remove button waits). */
   pendingParticipantIds: ReadonlySet<string>;
   onAddGuest: (guest: MemberInput) => void;
   onRemoveGuest: (guest: DraftParticipant) => void;
 }) {
-  const [form, setForm] = useState<GuestForm>(EMPTY_GUEST_FORM);
   const [fieldErrors, setFieldErrors] = useState<GuestFormErrors>({});
   const firstNameInputRef = useRef<HTMLInputElement>(null);
 
   function updateField(field: keyof GuestForm, value: string) {
-    setForm((currentForm) => ({ ...currentForm, [field]: value }));
+    onFormChange((currentForm) => ({ ...currentForm, [field]: value }));
     // An edited field's old error no longer applies.
     setFieldErrors((currentErrors) => ({
       ...currentErrors,
@@ -61,7 +73,7 @@ export function QuickAddGuestBox({
       return;
     }
     onAddGuest(validation.guest);
-    setForm(EMPTY_GUEST_FORM);
+    onFormChange(EMPTY_GUEST_FORM);
     setFieldErrors({});
     // Ready for the next guest.
     firstNameInputRef.current?.focus();

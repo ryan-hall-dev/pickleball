@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useMemo, useState } from "react";
+import {
+  useId,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { AttentionMessage } from "@/components/AttentionMessage";
 import {
   LINK_BUTTON_CLASS_NAME,
@@ -32,6 +38,7 @@ import {
   memberIdsInChanges,
   memberIdsToSelect,
   selectableMemberCount,
+  type GuestForm,
   type WhosPlayingMemberRow,
 } from "./whosPlaying";
 
@@ -43,9 +50,13 @@ function plural(count: number, singular: string, pluralForm: string): string {
 export function WhosPlayingCard({
   activeMembers,
   attendance,
+  guestForm,
+  onGuestFormChange,
 }: {
   activeMembers: ActiveMemberChoice[];
   attendance: DraftAttendance;
+  guestForm: GuestForm;
+  onGuestFormChange: Dispatch<SetStateAction<GuestForm>>;
 }) {
   const {
     participants,
@@ -323,6 +334,8 @@ export function WhosPlayingCard({
       </div>
 
       <QuickAddGuestBox
+        form={guestForm}
+        onFormChange={onGuestFormChange}
         guests={guests}
         pendingParticipantIds={pendingParticipantIds}
         onAddGuest={(guest) =>

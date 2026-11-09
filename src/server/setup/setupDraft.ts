@@ -1,11 +1,15 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CourtFormat } from "@/engine/session";
+import type { CourtFormat, RotationObjective } from "@/engine/session";
 import type { Database } from "@/lib/database.types";
 import { readAllRows } from "@/lib/supabase/readAllRows";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { SkillLevel } from "@/server/members/memberSearch";
-import { parseSessionDraftConfig, type SessionDraftConfig } from "./setupRules";
+import {
+  parseSessionDraftConfig,
+  safeParseSavedSetupConfig,
+  type SessionDraftConfig,
+} from "./setupRules";
 
 // Reads for the Setup screen use the signed-in host's session, so RLS decides
 // what is visible (hosts only). Writes live in setupActions.ts.
@@ -25,6 +29,8 @@ export interface SessionDraft {
   plannedStart: string;
   plannedEnd: string;
   config: SessionDraftConfig;
+  /** Settings revision: every settings write names it and bumps it. */
+  draftRevision: number;
   /** Everyone on the draft's attendee list (members and guests). */
   participants: DraftParticipant[];
 }
@@ -55,7 +61,7 @@ export async function readHostOpenSession(
   const { data: session, error } = await supabase
     .from("sessions")
     .select(
-      "id, status, name, location, host_name, planned_start, planned_end, config_snapshot",
+      "id, status, name, location, host_name, planned_start, planned_end, config_snapshot, draft_revision",
     )
     .eq("host_id", hostUserId)
     .in("status", ["draft", "live"])
@@ -77,6 +83,7 @@ export async function readHostOpenSession(
       plannedStart: session.planned_start,
       plannedEnd: session.planned_end,
       config: parseSessionDraftConfig(session.config_snapshot),
+      draftRevision: session.draft_revision,
       participants: await listDraftParticipants(supabase, session.id),
     },
   };
@@ -131,4 +138,66 @@ export async function listActiveClubCourts(): Promise<ClubCourt[]> {
     name: court.name,
     supportedFormats: court.supported_formats,
   }));
+}
+
+/** One of the host's saved setups, as the Saved setups list and reuse banner show it. */
+export interface SavedSetupSummary {
+  setupId: string;
+  name: string;
+  /** ISO timestamp. */
+  lastUsedAt: string;
+  courtCount: number;
+  topObjective: RotationObjective;
+}
+
+/** Plenty for one host; the list shows the most recently used first. */
+export const SAVED_SETUPS_LIST_LIMIT = 50;
+
+/**
+ * The host's OWN saved setups, most recently used first. RLS also limits
+ * every host to their own (saved_setups_select_own); the host filter is
+ * still needed because the service-role client bypasses RLS. A row that
+ * doesn't parse is skipped and logged (ids only) so one bad row can't break
+ * the Setup screen. Takes the client like listDraftParticipants.
+ */
+export async function listSavedSetups(
+  supabase: SupabaseClient<Database>,
+  hostUserId: string,
+): Promise<SavedSetupSummary[]> {
+  const { data, error } = await supabase
+    .from("saved_setups")
+    .select("id, name, config, last_used_at")
+    .eq("host_id", hostUserId)
+    .order("last_used_at", { ascending: false })
+    .order("id")
+    .limit(SAVED_SETUPS_LIST_LIMIT);
+  if (error) {
+    throw new Error(`Reading the saved setups failed: ${error.message}`);
+  }
+  return data.flatMap((row) => {
+    const parsed = safeParseSavedSetupConfig(row.config);
+    if (!parsed.success) {
+      console.error("Skipping a saved setup with a malformed config", {
+        setupId: row.id,
+        hostUserId,
+      });
+      return [];
+    }
+    return [
+      {
+        setupId: row.id,
+        name: row.name,
+        lastUsedAt: row.last_used_at,
+        courtCount: parsed.data.courts.length,
+        topObjective: parsed.data.rotation.objectiveOrder[0],
+      },
+    ];
+  });
+}
+
+/** The signed-in host's saved setups, read under RLS. */
+export async function listOwnSavedSetups(
+  hostUserId: string,
+): Promise<SavedSetupSummary[]> {
+  return listSavedSetups(await createSupabaseServerClient(), hostUserId);
 }

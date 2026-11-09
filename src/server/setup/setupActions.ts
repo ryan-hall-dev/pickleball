@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import type { CourtConfig } from "@/engine/session";
+import type { CourtConfig, CourtFormat } from "@/engine/session";
 import type { Json } from "@/lib/database.types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { authorizeCurrentHost } from "@/server/auth/currentHost";
@@ -13,8 +13,12 @@ import {
 import type { SkillLevel } from "@/server/members/memberSearch";
 import {
   listDraftParticipants,
+  listSavedSetups,
+  readHostOpenSession,
   type ClubCourt,
   type DraftParticipant,
+  type SavedSetupSummary,
+  type SessionDraft,
 } from "./setupDraft";
 import {
   addClubCourtInputSchema,
@@ -30,6 +34,14 @@ import {
   type SaveSessionDraftInput,
   type SessionDraftConfig,
   type SetDraftMemberAttendanceInput,
+  type ApplySavedSetupInput,
+  type SaveSetupInput,
+  applySavedSetupInputSchema,
+  courtsLeftOutNotice,
+  parseSavedSetupConfig,
+  safeParseSavedSetupConfig,
+  saveSetupInputSchema,
+  type SavedSetupConfig,
   type StartSessionDraftInput,
 } from "./setupRules";
 
@@ -39,6 +51,41 @@ import {
 // OWN draft: every session read and write is filtered by host_id = caller.
 
 export type SetupActionResult = { ok: true } | { ok: false; message: string };
+
+/**
+ * A draft settings write. On success, the draft's new settings revision (the
+ * next write must name it). `isConflict`: another tab or device changed the
+ * settings since this editor's revision; nothing was written.
+ */
+export type SaveSessionDraftResult =
+  | { ok: true; draftRevision: number }
+  | { ok: false; message: string; isConflict?: true };
+
+/** After a saved-setup write: the host's saved setups as the database now has them. */
+export type SaveSetupResult =
+  | { ok: true; message: string; savedSetups: SavedSetupSummary[] }
+  | { ok: false; message: string };
+
+/**
+ * After applying a saved setup: the draft as the database now has it (the
+ * editor takes these values), an optional note (e.g. a court left out), and
+ * the host's saved setups.
+ */
+export type ApplySavedSetupResult =
+  | {
+      ok: true;
+      draft: SessionDraft;
+      notice: string | null;
+      savedSetups: SavedSetupSummary[];
+    }
+  | {
+      ok: false;
+      message: string;
+      /** The setup WAS applied but couldn't be read back: the screen is stale. */
+      requiresReload?: true;
+      /** The draft's settings changed elsewhere: nothing was applied. */
+      isConflict?: true;
+    };
 
 export type AddClubCourtResult =
   { ok: true; court: ClubCourt } | { ok: false; message: string };
@@ -64,11 +111,35 @@ const DRAFT_NOT_OPEN =
 const DRAFT_NOT_OPEN_ERROR = "DRAFT_NOT_OPEN";
 const SAVED_BUT_LIST_NOT_REFRESHED =
   "Saved, but the list couldn't refresh. Reload the page.";
+const SAVED_SETUP_NOT_FOUND =
+  "That saved setup isn't available any more. Reload the page.";
+/** Raised by apply_saved_setup when the setup isn't the caller's. */
+const SAVED_SETUP_NOT_FOUND_ERROR = "SAVED_SETUP_NOT_FOUND";
+const MS_PER_MINUTE = 60_000;
+/** Raised by the draft settings writes when the expected revision is stale. */
+const DRAFT_CHANGED_ELSEWHERE_ERROR = "DRAFT_CHANGED_ELSEWHERE";
+const DRAFT_CHANGED_ELSEWHERE =
+  "Setup was changed in another tab or by another device. Reload to see the latest \u2014 your unsaved changes here will be lost.";
+const draftRevisionSchema = z.number().int().min(0);
+
+/** The new revision a draft settings write returns ({ draftRevision }). */
+function draftRevisionFrom(data: unknown): number {
+  const parsed = z
+    .object({ draftRevision: draftRevisionSchema })
+    .safeParse(data);
+  if (!parsed.success) {
+    throw new Error("A draft settings write returned no revision.");
+  }
+  return parsed.data.draftRevision;
+}
 const ONLY_ADMINS_ADD_COURTS = "Only admins can add courts to the club.";
 const LIVE_SESSION_EXISTS =
   "You already have a live session. End it before setting up a new one.";
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
+
+/** What the details autosave writes: every draft config key but the applied setup. */
+type SessionDraftConfigPatch = Omit<SessionDraftConfig, "appliedSavedSetupId">;
 
 function logWriteFailure(label: string, host: SignedInHost, error: unknown) {
   // Ids only: no names or other personal data in logs.
@@ -97,6 +168,43 @@ async function readOwnDraft(
     .maybeSingle();
   if (error) throw new Error(`Reading the draft failed: ${error.message}`);
   return data;
+}
+
+/**
+ * Court snapshots for a draft or saved setup: names come from the database
+ * (never trusted from the browser), in club order. Courts that were removed,
+ * deactivated or don't support the format are listed as unavailable.
+ */
+async function snapshotCourts(
+  adminClient: AdminClient,
+  courtIds: readonly string[],
+  matchFormat: CourtFormat,
+): Promise<{ courts: CourtConfig[]; unavailableCourtIds: string[] }> {
+  if (courtIds.length === 0) return { courts: [], unavailableCourtIds: [] };
+  const { data: courtRows, error } = await adminClient
+    .from("courts")
+    .select("id, name, supported_formats, is_active, sort_order")
+    .in("id", [...courtIds])
+    .order("sort_order")
+    .order("name");
+  if (error) throw new Error(`Reading the courts failed: ${error.message}`);
+  const courts = courtRows
+    .filter(
+      (court) =>
+        court.is_active && court.supported_formats.includes(matchFormat),
+    )
+    .map((court) => ({
+      courtId: court.id,
+      name: court.name,
+      format: matchFormat,
+    }));
+  const usableCourtIds = new Set(courts.map((court) => court.courtId));
+  return {
+    courts,
+    unavailableCourtIds: courtIds.filter(
+      (courtId) => !usableCourtIds.has(courtId),
+    ),
+  };
 }
 
 /** Creates the host's draft. Does nothing if they already have one open. */
@@ -156,13 +264,14 @@ export async function startSessionDraft(
 }
 
 /**
- * Saves the Session details and Courts cards into the host's own draft.
+ * Saves the Session details, Courts and Rotation cards into the host's own draft.
  * Court names are read from the database (never trusted from the browser) and
  * snapshotted with the chosen format.
  */
 export async function saveSessionDraft(
   input: SaveSessionDraftInput,
-): Promise<SetupActionResult> {
+  expectedDraftRevision: number,
+): Promise<SaveSessionDraftResult> {
   const authorization = await authorizeCurrentHost("host");
   if (!authorization.ok) {
     return {
@@ -175,51 +284,41 @@ export async function saveSessionDraft(
   if (!parsed.success) {
     return { ok: false, message: firstIssueMessage(parsed.error) };
   }
+  const parsedRevision = draftRevisionSchema.safeParse(expectedDraftRevision);
+  if (!parsedRevision.success) {
+    return { ok: false, message: SOMETHING_WENT_WRONG };
+  }
   const draftInput = parsed.data;
 
   try {
     const adminClient = createSupabaseAdminClient();
-    let courts: CourtConfig[] = [];
-    if (draftInput.courtIds.length > 0) {
-      const { data: courtRows, error: courtsError } = await adminClient
-        .from("courts")
-        .select("id, name, supported_formats, is_active, sort_order")
-        .in("id", draftInput.courtIds)
-        .order("sort_order")
-        .order("name");
-      if (courtsError) {
-        throw new Error(`Reading the courts failed: ${courtsError.message}`);
-      }
-      const usableCourts = courtRows.filter(
-        (court) =>
-          court.is_active &&
-          court.supported_formats.includes(draftInput.matchFormat),
-      );
-      if (usableCourts.length !== draftInput.courtIds.length) {
-        return {
-          ok: false,
-          message: `A chosen court was removed or doesn't support ${draftInput.matchFormat}. Reload the page.`,
-        };
-      }
-      courts = usableCourts.map((court) => ({
-        courtId: court.id,
-        name: court.name,
-        format: draftInput.matchFormat,
-      }));
+    const { courts, unavailableCourtIds } = await snapshotCourts(
+      adminClient,
+      draftInput.courtIds,
+      draftInput.matchFormat,
+    );
+    if (unavailableCourtIds.length > 0) {
+      return {
+        ok: false,
+        message: `A chosen court was removed or doesn't support ${draftInput.matchFormat}. Reload the page.`,
+      };
     }
 
-    const draftConfig: SessionDraftConfig = {
+    const draftConfig: SessionDraftConfigPatch = {
       courts,
       matchFormat: draftInput.matchFormat,
       targetMatchMinutes: draftInput.targetMatchMinutes,
       changeoverMinutes: draftInput.changeoverMinutes,
+      rotation: draftInput.rotation,
     };
     // One statement, under the session's row lock: writes the details and
     // merges this step's config keys, keeping keys other setup steps own. It
-    // only touches the caller's own draft (DRAFT_NOT_OPEN otherwise).
-    const { error } = await adminClient.rpc("save_session_draft", {
+    // only touches the caller's own draft (DRAFT_NOT_OPEN otherwise), and
+    // only if nothing changed it since the revision this edit started from.
+    const { data, error } = await adminClient.rpc("save_session_draft", {
       p_actor_user_id: host.userId,
       p_session_id: draftInput.sessionId,
+      p_expected_draft_revision: parsedRevision.data,
       p_name: draftInput.name,
       // The function stores an empty location as none.
       p_location: draftInput.location ?? "",
@@ -231,15 +330,18 @@ export async function saveSessionDraft(
     if (error?.message === DRAFT_NOT_OPEN_ERROR) {
       return { ok: false, message: DRAFT_NOT_OPEN };
     }
+    if (error?.message === DRAFT_CHANGED_ELSEWHERE_ERROR) {
+      return { ok: false, message: DRAFT_CHANGED_ELSEWHERE, isConflict: true };
+    }
     if (error?.code === POSTGRES_CHECK_VIOLATION) {
       return { ok: false, message: "Check the session details and try again." };
     }
     if (error) throw new Error(`Saving the draft failed: ${error.message}`);
+    return { ok: true, draftRevision: draftRevisionFrom(data) };
   } catch (error) {
     logWriteFailure("Saving a session draft failed", host, error);
     return { ok: false, message: SOMETHING_WENT_WRONG };
   }
-  return { ok: true };
 }
 
 /** Discards the host's own draft (cancel_draft_session; it never had a log). */
@@ -492,4 +594,201 @@ export async function removeDraftGuest(
         p_session_participant_id: participantId,
       }),
   );
+}
+
+function sameSetupName(first: string, second: string): boolean {
+  return first.trim().toLowerCase() === second.trim().toLowerCase();
+}
+
+/**
+ * Saves the editor's current values as one of the host's setups (location,
+ * duration, courts, format, timings, rotation; never attendance). Saving
+ * under a name the host already uses (ignoring case) replaces that setup.
+ */
+export async function saveSetup(
+  input: SaveSetupInput,
+): Promise<SaveSetupResult> {
+  const authorization = await authorizeCurrentHost("host");
+  if (!authorization.ok) {
+    return {
+      ok: false,
+      message: HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
+    };
+  }
+  const { host } = authorization;
+  const parsed = saveSetupInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: firstIssueMessage(parsed.error) };
+  }
+  const { setupName, draft } = parsed.data;
+
+  try {
+    const adminClient = createSupabaseAdminClient();
+    const { courts, unavailableCourtIds } = await snapshotCourts(
+      adminClient,
+      draft.courtIds,
+      draft.matchFormat,
+    );
+    if (unavailableCourtIds.length > 0) {
+      return {
+        ok: false,
+        message: `A chosen court was removed or doesn't support ${draft.matchFormat}. Reload the page.`,
+      };
+    }
+    const config: SavedSetupConfig = {
+      location: draft.location,
+      durationMinutes: Math.round(
+        (Date.parse(draft.plannedEnd) - Date.parse(draft.plannedStart)) /
+          MS_PER_MINUTE,
+      ),
+      courts,
+      matchFormat: draft.matchFormat,
+      targetMatchMinutes: draft.targetMatchMinutes,
+      changeoverMinutes: draft.changeoverMinutes,
+      rotation: draft.rotation,
+    };
+    // Never write a row listSavedSetups / applySavedSetup couldn't read.
+    const checkedConfig = safeParseSavedSetupConfig(config);
+    if (!checkedConfig.success) {
+      return {
+        ok: false,
+        message: `This setup can't be saved: ${firstIssueMessage(checkedConfig.error)}`,
+      };
+    }
+    // Only for the wording ("Replaced" vs "Saved"); the upsert itself is atomic.
+    const { data: existingSetups, error: readError } = await adminClient
+      .from("saved_setups")
+      .select("name")
+      .eq("host_id", host.userId);
+    if (readError) {
+      throw new Error(`Reading the saved setups failed: ${readError.message}`);
+    }
+    const isReplacing = existingSetups.some((existing) =>
+      sameSetupName(existing.name, setupName),
+    );
+    const { error } = await adminClient.rpc("save_setup", {
+      p_actor_user_id: host.userId,
+      p_name: setupName,
+      p_config: checkedConfig.data as unknown as Json,
+    });
+    if (error) throw new Error(`Saving the setup failed: ${error.message}`);
+    return {
+      ok: true,
+      message: `${isReplacing ? "Replaced" : "Saved"} \u201c${setupName}\u201d.`,
+      savedSetups: await listSavedSetups(adminClient, host.userId),
+    };
+  } catch (error) {
+    logWriteFailure("Saving a setup failed", host, error);
+    return { ok: false, message: SOMETHING_WENT_WRONG };
+  }
+}
+
+/**
+ * Copies one of the host's saved setups into their own draft: location,
+ * courts, format, timings, rotation, and end = the draft's start + the
+ * setup's duration. The session name, start and attendance stay as they are.
+ * Courts that are gone or can't host the format are left out (and named).
+ */
+export async function applySavedSetup(
+  input: ApplySavedSetupInput,
+): Promise<ApplySavedSetupResult> {
+  const authorization = await authorizeCurrentHost("host");
+  if (!authorization.ok) {
+    return {
+      ok: false,
+      message: HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
+    };
+  }
+  const { host } = authorization;
+  const parsed = applySavedSetupInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: firstIssueMessage(parsed.error) };
+  }
+  const { sessionId, setupId, expectedDraftRevision } = parsed.data;
+
+  let notice: string | null;
+  try {
+    const adminClient = createSupabaseAdminClient();
+    const { data: setupRow, error: setupError } = await adminClient
+      .from("saved_setups")
+      .select("config")
+      .eq("id", setupId)
+      .eq("host_id", host.userId)
+      .maybeSingle();
+    if (setupError) {
+      throw new Error(`Reading the saved setup failed: ${setupError.message}`);
+    }
+    if (!setupRow) return { ok: false, message: SAVED_SETUP_NOT_FOUND };
+    const setup = parseSavedSetupConfig(setupRow.config);
+    const { courts, unavailableCourtIds } = await snapshotCourts(
+      adminClient,
+      setup.courts.map((court) => court.courtId),
+      setup.matchFormat,
+    );
+    notice = courtsLeftOutNotice(
+      setup.courts
+        .filter((court) => unavailableCourtIds.includes(court.courtId))
+        .map((court) => court.name),
+    );
+    const configPatch: SessionDraftConfig = {
+      courts,
+      matchFormat: setup.matchFormat,
+      targetMatchMinutes: setup.targetMatchMinutes,
+      changeoverMinutes: setup.changeoverMinutes,
+      rotation: setup.rotation,
+      appliedSavedSetupId: setupId,
+    };
+    // One transaction: the draft write (under its row lock) and marking the
+    // setup as used. End = the locked row's start + the duration.
+    const { error } = await adminClient.rpc("apply_saved_setup", {
+      p_actor_user_id: host.userId,
+      p_session_id: sessionId,
+      p_setup_id: setupId,
+      p_expected_draft_revision: expectedDraftRevision,
+      p_location: setup.location ?? "",
+      p_duration_minutes: setup.durationMinutes,
+      p_config_patch: configPatch as unknown as Json,
+    });
+    if (error?.message === DRAFT_NOT_OPEN_ERROR) {
+      return { ok: false, message: DRAFT_NOT_OPEN };
+    }
+    if (error?.message === DRAFT_CHANGED_ELSEWHERE_ERROR) {
+      return { ok: false, message: DRAFT_CHANGED_ELSEWHERE, isConflict: true };
+    }
+    if (error?.message === SAVED_SETUP_NOT_FOUND_ERROR) {
+      return { ok: false, message: SAVED_SETUP_NOT_FOUND };
+    }
+    if (error) throw new Error(`Applying the setup failed: ${error.message}`);
+  } catch (error) {
+    logWriteFailure("Applying a saved setup failed", host, error);
+    return { ok: false, message: SOMETHING_WENT_WRONG };
+  }
+
+  try {
+    const openSession = await readHostOpenSession(host.userId);
+    if (openSession.status !== "draft") {
+      return { ok: false, message: DRAFT_NOT_OPEN };
+    }
+    return {
+      ok: true,
+      draft: openSession.draft,
+      notice,
+      savedSetups: await listSavedSetups(
+        createSupabaseAdminClient(),
+        host.userId,
+      ),
+    };
+  } catch (error) {
+    logWriteFailure(
+      "Reading the draft after applying a setup failed",
+      host,
+      error,
+    );
+    return {
+      ok: false,
+      message:
+        "The setup was applied, but the page couldn't refresh. Reload the page.",
+      requiresReload: true,
+    };
+  }
 }

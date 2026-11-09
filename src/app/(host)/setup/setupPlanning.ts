@@ -15,6 +15,7 @@ import {
   PLAYERS_PER_MATCH,
   type CourtFormat,
   type GamesEstimate,
+  type RotationPreferences,
 } from "@/engine";
 import type { SessionDraft } from "@/server/setup/setupDraft";
 import {
@@ -126,6 +127,7 @@ export interface SetupForm {
   changeoverMinutes: string;
   selectedCourtIds: string[];
   matchFormat: CourtFormat;
+  rotation: RotationPreferences;
 }
 
 export type SetupFormField =
@@ -161,6 +163,7 @@ export function setupFormFromDraft(
       .map((court) => court.courtId)
       .filter((courtId) => activeCourtIds.has(courtId)),
     matchFormat: draft.config.matchFormat,
+    rotation: draft.config.rotation,
   };
 }
 
@@ -215,6 +218,7 @@ export function validateSetupForm(
     matchFormat: form.matchFormat,
     targetMatchMinutes: wholeNumberOrNaN(form.targetMatchMinutes),
     changeoverMinutes: wholeNumberOrNaN(form.changeoverMinutes),
+    rotation: form.rotation,
   };
   const parsed = saveSessionDraftInputSchema.safeParse(candidateInput);
   if (!parsed.success) {
@@ -236,7 +240,8 @@ export function validateSetupForm(
   const hasErrors = Object.keys(fieldErrors).length > 0;
   return {
     fieldErrors,
-    saveInput: hasErrors ? null : candidateInput,
+    // Both checks: a schema issue with no mapped field must still block saving.
+    saveInput: parsed.success && !hasErrors ? candidateInput : null,
     durationMinutes:
       plannedStart && plannedEnd
         ? minutesBetween(plannedStart, plannedEnd)

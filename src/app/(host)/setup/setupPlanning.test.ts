@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { estimateGames } from "@/engine";
 import type { SessionDraft } from "@/server/setup/setupDraft";
+import { recommendedRotationPreferences } from "@/server/setup/setupRules";
 import {
   addMinutesToTimeValue,
   courtCapacity,
@@ -33,6 +34,7 @@ const validForm: SetupForm = {
   changeoverMinutes: "2",
   selectedCourtIds: [COURT_1, COURT_2],
   matchFormat: "doubles",
+  rotation: recommendedRotationPreferences(),
 };
 
 describe("local date and time inputs", () => {
@@ -110,8 +112,11 @@ describe("setupFormFromDraft", () => {
       matchFormat: "doubles",
       targetMatchMinutes: 15,
       changeoverMinutes: 2,
+      rotation: recommendedRotationPreferences(),
+      appliedSavedSetupId: null,
     },
     participants: [],
+    draftRevision: 0,
   };
 
   it("shows the draft in local time and drops courts that are no longer active", () => {
@@ -140,6 +145,7 @@ describe("validateSetupForm", () => {
       matchFormat: "doubles",
       targetMatchMinutes: 15,
       changeoverMinutes: 2,
+      rotation: recommendedRotationPreferences(),
     });
   });
 
@@ -238,8 +244,11 @@ describe("validateSetupForm", () => {
             matchFormat: "doubles",
             targetMatchMinutes: 15,
             changeoverMinutes: 2,
+            rotation: recommendedRotationPreferences(),
+            appliedSavedSetupId: null,
           },
           participants: [],
+          draftRevision: 0,
         },
         new Set(),
       );

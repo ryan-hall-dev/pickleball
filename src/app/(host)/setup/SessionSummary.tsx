@@ -1,5 +1,9 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useState, type ReactNode } from "react";
 import { estimateGames, type CourtFormat } from "@/engine";
+import { CheckIcon } from "./CheckIcon";
+import type { ChecklistItem, SetupReadiness } from "./setupReadiness";
 import {
   courtCapacity,
   describeGamesEstimate,
@@ -30,6 +34,8 @@ export function SessionSummary({
   matchFormat,
   attendingPlayerCount,
   attendingGuestCount,
+  rotationSummary,
+  readiness,
 }: {
   sessionName: string;
   plannedStart: Date | null;
@@ -39,7 +45,11 @@ export function SessionSummary({
   matchFormat: CourtFormat;
   attendingPlayerCount: number;
   attendingGuestCount: number;
+  /** e.g. "Equal games first". */
+  rotationSummary: string;
+  readiness: SetupReadiness;
 }) {
+  const [isStartNoteShown, setIsStartNoteShown] = useState(false);
   const capacity = courtCapacity(courtCount, matchFormat, attendingPlayerCount);
   const attendingMemberCount = attendingPlayerCount - attendingGuestCount;
   const estimateCopy: GamesEstimateCopy = timing
@@ -119,9 +129,7 @@ export function SessionSummary({
           <SummaryRow term="Waiting at start" valueClassName="font-bold">
             <span className="tabular-nums">{capacity.waitingAtStart}</span>
           </SummaryRow>
-          <SummaryRow term="Rotation">
-            <Muted>Recommended</Muted>
-          </SummaryRow>
+          <SummaryRow term="Rotation">{rotationSummary}</SummaryRow>
         </dl>
 
         <CapacityDiagram
@@ -132,16 +140,19 @@ export function SessionSummary({
         />
 
         <GamesEstimateBox copy={estimateCopy} />
+
+        <SetupChecklist items={readiness.checklist} />
       </SetupSection>
 
       <section
         aria-label="Start session"
         className="flex flex-col gap-2.5 rounded-card border border-card-border bg-card p-[18px]"
       >
-        {/* Enabled once players and rotation are set (later setup steps); the confirm step is M6. */}
+        {/* Enabled by the same readiness as the stepper and checklist; the confirm step is M6. */}
         <button
           type="button"
-          disabled
+          disabled={!readiness.isReadyToStart}
+          onClick={() => setIsStartNoteShown(true)}
           aria-describedby="start-session-note"
           className="flex h-16 w-full items-center justify-center gap-2 rounded-[18px] bg-lime px-2 text-[19px] font-extrabold tracking-[0.03em] text-on-lime uppercase disabled:cursor-not-allowed disabled:border disabled:border-inner-border disabled:bg-transparent disabled:text-placeholder"
         >
@@ -160,8 +171,18 @@ export function SessionSummary({
           id="start-session-note"
           className="text-center text-[13px] text-muted"
         >
-          Finish setup to start: players and rotation are set in the next steps.
+          {readiness.isReadyToStart
+            ? "You'll confirm on the next step. First matches are generated and courts assigned automatically."
+            : readiness.isSetupComplete
+              ? "Waiting for your changes to save."
+              : "Finish the checklist to start."}
         </p>
+        {/* Until M6 builds the confirm step, say so rather than do nothing. */}
+        {isStartNoteShown && readiness.isReadyToStart && (
+          <p role="status" className="text-center text-sm text-lime-soft">
+            Starting a session arrives in the next update. Your setup is saved.
+          </p>
+        )}
       </section>
     </aside>
   );
@@ -311,5 +332,41 @@ function GamesEstimateBox({ copy }: { copy: GamesEstimateCopy }) {
       </span>
       <span>{copy.lead}</span>
     </p>
+  );
+}
+
+/** Summary checklist: a check or "!" plus words for every line. */
+function SetupChecklist({ items }: { items: ChecklistItem[] }) {
+  return (
+    <ul
+      aria-label="Setup checklist"
+      className="mt-4 flex flex-col gap-2 text-sm"
+    >
+      {items.map((item) => (
+        <li
+          key={item.text}
+          className={`flex items-center gap-2.5 ${item.isDone ? "" : "text-orange-text"}`}
+        >
+          {item.isDone ? (
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-lime text-on-lime">
+              <CheckIcon sizePx={11} />
+            </span>
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex size-5 shrink-0 items-center justify-center rounded-full bg-orange text-xs font-extrabold text-on-orange"
+            >
+              !
+            </span>
+          )}
+          <span>
+            <span className="sr-only">
+              {item.isDone ? "Done: " : "To do: "}
+            </span>
+            {item.text}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -19,14 +19,15 @@ import {
   type SessionClock,
 } from "../metrics";
 import { createInitialSessionState, type SessionState } from "../state";
-import type {
-  CourtConfig,
-  CourtFormat,
-  Participant,
-  ParticipantId,
-  RotationPreferences,
-  SessionConfig,
-  SkillLevel,
+import {
+  RECOMMENDED_ROTATION_PREFERENCES,
+  type CourtConfig,
+  type CourtFormat,
+  type Participant,
+  type ParticipantId,
+  type RotationPreferences,
+  type SessionConfig,
+  type SkillLevel,
 } from "../types";
 
 /** Mulberry32: a tiny deterministic RNG returning floats in [0, 1). */
@@ -117,24 +118,8 @@ export function makeParticipants(count: number, seed = 1): Participant[] {
   }));
 }
 
-export const DEFAULT_ROTATION: RotationPreferences = {
-  objectiveOrder: [
-    "equalGames",
-    "shortestWaits",
-    "playingTime",
-    "fullCourts",
-    "noBackToBack",
-    "mixPartners",
-  ],
-  rules: {
-    preventConsecutive: true,
-    fewerGamesFirst: true,
-    longestWaitFirst: true,
-    mixPartners: true,
-    minimiseRepeatOpponents: true,
-    allowManualAssignments: true,
-  },
-};
+export const DEFAULT_ROTATION: RotationPreferences =
+  RECOMMENDED_ROTATION_PREFERENCES;
 
 /** Court `i` (1-based) has id `fixtureUuid("c", i)` and name "Court i". */
 export function makeCourt(number: number, format: CourtFormat): CourtConfig {

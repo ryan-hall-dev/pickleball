@@ -72,6 +72,31 @@ export interface RotationPreferences {
   rules: RotationRules;
 }
 
+/**
+ * The engine's calibrated defaults (docs/engine.md, "Calibration"): the order
+ * and rules the weights were tuned with. Setup offers these as "Recommended";
+ * tests and simulations use the same object so the values can't drift.
+ */
+export const RECOMMENDED_ROTATION_PREFERENCES: Readonly<RotationPreferences> =
+  Object.freeze({
+    objectiveOrder: Object.freeze([
+      "equalGames",
+      "shortestWaits",
+      "playingTime",
+      "fullCourts",
+      "noBackToBack",
+      "mixPartners",
+    ]) as RotationObjective[],
+    rules: Object.freeze({
+      preventConsecutive: true,
+      fewerGamesFirst: true,
+      longestWaitFirst: true,
+      mixPartners: true,
+      minimiseRepeatOpponents: true,
+      allowManualAssignments: true,
+    }),
+  });
+
 /** Everything about a session that is fixed when it starts (`sessions.config_snapshot`). */
 export interface SessionConfig {
   /** Courts enabled at start. More can be added mid-session with `CourtAdded`. */

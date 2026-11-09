@@ -71,6 +71,7 @@ Browser (host)                                   Supabase Postgres (RLS: hosts o
 
 - **Atomic, server-side updates.** Hosts can't write events directly (INSERT is revoked from the `authenticated` role). A server action replays the log and validates the new action with the same engine code (e.g. "match already completed" is rejected). It then calls one Postgres function that, in a single transaction: verifies the caller is a host, checks `event_id`, checks the sequence, inserts the event, applies any side effect (`matches` row) and bumps `sessions.last_seq`.
 - **Duplicate-action protection.** Each action carries a client-generated `event_id` (UNIQUE). The function looks it up **before** the sequence check, so a double click or a retry of an action that already landed returns the original result instead of a false conflict. A genuinely stale action (`expected_seq ≠ last_seq + 1`) is rejected, the screen refreshes, and the host sees "Updated by another host". The UI shows pending and failed states with a retry.
+- **Draft settings use optimistic concurrency** (Ryan, 2026-11-09). Every setup settings write (autosave, applying a saved setup) names the `sessions.draft_revision` it built on and bumps it; a stale tab or device is refused (`DRAFT_CHANGED_ELSEWHERE`), stops autosaving and asks the host to reload. Attendance writes are set-based and not versioned.
 - **Refresh and reconnect:** reload the log and replay. Timers are derived from timestamps (`now − start − paused time`), using server time plus a measured client clock offset.
 - **Pause** stops session time, match clocks, play time, waiting time and presence from accruing.
 - **Recommendations are derived, not stored.** They are recomputed from state + settings + a seed after every change. That covers every recalculation trigger in the brief. "Shuffle" records a new seed as an action, so all hosts see the same suggestions. Shuffle only offers lineups whose score is comparable to the best (within a small tolerance); it never offers a worse lineup just to be different. When no comparable alternative exists, the UI shows exactly: "No alternative lineup available without compromising fairness." (Ryan, 2026-11-08)
@@ -317,6 +318,8 @@ Carried into M6 from M4:
 
 - Start must re-read the selected courts by id (active, supporting the format, current names) rather than trust the draft's `config_snapshot.courts`, which can hold a court deactivated or renamed after the last save. `matchFormat` in the draft snapshot is draft-only; `start_session` replaces the snapshot with the `SessionStarted` config.
 - Sessions may run past midnight: an end time at or before the start time means the next day (2026-11-09).
+- Start must copy the draft's `rotation` (objective order and all six rules) into the SessionStarted config unchanged; M6 acceptance includes an e2e asserting the started session's `config_snapshot.rotation` equals what the host set in Setup (Ryan, 2026-11-09).
+- Start must leave the draft-only `appliedSavedSetupId` (and `matchFormat`, see above) out of the SessionStarted config.
 
 ## 8. Interpretations of the brief (no decision needed unless you disagree)
 
