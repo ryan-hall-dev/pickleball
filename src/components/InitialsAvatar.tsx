@@ -7,12 +7,35 @@ export function initialsFromName(name: string): string {
   return `${firstInitial}${lastInitial}`.toUpperCase();
 }
 
-/** 36px initials circle in the neutral (waiting) colours. Decorative: the name is always shown beside it. */
-export function InitialsAvatar({ name }: { name: string }) {
+/** DESIGN.md avatar colours by status. */
+const AVATAR_TONE_CLASS_NAMES = {
+  waiting: "bg-inner-border text-text-soft",
+  notAttending: "bg-inner-border text-muted",
+  playing: "bg-lime-avatar text-lime-soft",
+  next: "bg-blue-avatar text-blue-soft",
+} as const;
+
+const AVATAR_SIZE_CLASS_NAMES = {
+  /** 36px: lists. */
+  list: "size-9 text-[13px]",
+  /** 30px: guest chips. */
+  chip: "size-[30px] text-[11px]",
+} as const;
+
+/** Initials circle (36px, neutral colours by default). Decorative: the name is always shown beside it. */
+export function InitialsAvatar({
+  name,
+  tone = "waiting",
+  size = "list",
+}: {
+  name: string;
+  tone?: keyof typeof AVATAR_TONE_CLASS_NAMES;
+  size?: keyof typeof AVATAR_SIZE_CLASS_NAMES;
+}) {
   return (
     <span
       aria-hidden="true"
-      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-inner-border text-[13px] font-bold text-text-soft"
+      className={`flex shrink-0 items-center justify-center rounded-full font-bold ${AVATAR_SIZE_CLASS_NAMES[size]} ${AVATAR_TONE_CLASS_NAMES[tone]}`}
     >
       {initialsFromName(name)}
     </span>

@@ -9,6 +9,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { LINK_BUTTON_CLASS_NAME } from "@/components/controlStyles";
+import type { ActiveMemberChoice } from "@/server/members/memberDirectory";
 import { saveSessionDraft } from "@/server/setup/setupActions";
 import type { ClubCourt, SessionDraft } from "@/server/setup/setupDraft";
 import type { SaveSessionDraftInput } from "@/server/setup/setupRules";
@@ -22,6 +23,8 @@ import {
   validateSetupForm,
   type SetupForm,
 } from "./setupPlanning";
+import { useDraftAttendance } from "./useDraftAttendance";
+import { WhosPlayingCard } from "./WhosPlayingCard";
 
 /** Edits settle for this long before they are saved. */
 const AUTOSAVE_DELAY_MS = 700;
@@ -36,10 +39,7 @@ function subscribeToNothing() {
  * server doesn't know, so the form only renders in the browser (no server
  * render of local times that would then mismatch on hydration).
  */
-export function SessionSetupEditor(props: {
-  draft: SessionDraft;
-  initialClubCourts: ClubCourt[];
-}) {
+export function SessionSetupEditor(props: SessionSetupFormProps) {
   const isInBrowser = useSyncExternalStore(
     subscribeToNothing,
     () => true,
@@ -227,13 +227,20 @@ function wholeNumberOrNull(text: string): number | null {
   return /^\d+$/.test(text.trim()) ? Number(text.trim()) : null;
 }
 
+interface SessionSetupFormProps {
+  draft: SessionDraft;
+  initialClubCourts: ClubCourt[];
+  activeMembers: ActiveMemberChoice[];
+  /** Only admins add courts to the club. */
+  canAddCourts: boolean;
+}
+
 function SessionSetupForm({
   draft,
   initialClubCourts,
-}: {
-  draft: SessionDraft;
-  initialClubCourts: ClubCourt[];
-}) {
+  activeMembers,
+  canAddCourts,
+}: SessionSetupFormProps) {
   const [clubCourts, setClubCourts] = useState(initialClubCourts);
   const [form, setForm] = useState<SetupForm>(() =>
     setupFormFromDraft(
@@ -251,6 +258,15 @@ function SessionSetupForm({
     isAutosavePaused,
   );
   const { fieldErrors, durationMinutes } = validation;
+  const attendance = useDraftAttendance(
+    draft.sessionId,
+    draft.participants,
+    activeMembers,
+  );
+  const attendingPlayerCount = attendance.participants.length;
+  const attendingGuestCount = attendance.participants.filter(
+    (participant) => participant.isGuest,
+  ).length;
 
   const targetMatchMinutes = fieldErrors.targetMatchMinutes
     ? null
@@ -305,10 +321,15 @@ function SessionSetupForm({
             clubCourts={clubCourts}
             selectedCourtIds={form.selectedCourtIds}
             matchFormat={form.matchFormat}
-            attendingPlayerCount={draft.attendingPlayerCount}
+            attendingPlayerCount={attendingPlayerCount}
             courtsError={fieldErrors.courts}
+            canAddCourts={canAddCourts}
             onChange={updateForm}
             onCourtAdded={addCourt}
+          />
+          <WhosPlayingCard
+            activeMembers={activeMembers}
+            attendance={attendance}
           />
         </div>
         <SessionSummary
@@ -318,8 +339,8 @@ function SessionSetupForm({
           timing={timing}
           courtCount={form.selectedCourtIds.length}
           matchFormat={form.matchFormat}
-          attendingPlayerCount={draft.attendingPlayerCount}
-          attendingGuestCount={draft.attendingGuestCount}
+          attendingPlayerCount={attendingPlayerCount}
+          attendingGuestCount={attendingGuestCount}
         />
       </div>
     </>

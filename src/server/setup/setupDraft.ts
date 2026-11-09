@@ -1,6 +1,10 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CourtFormat } from "@/engine/session";
+import type { Database } from "@/lib/database.types";
+import { readAllRows } from "@/lib/supabase/readAllRows";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { SkillLevel } from "@/server/members/memberSearch";
 import { parseSessionDraftConfig, type SessionDraftConfig } from "./setupRules";
 
 // Reads for the Setup screen use the signed-in host's session, so RLS decides
@@ -22,8 +26,20 @@ export interface SessionDraft {
   plannedEnd: string;
   config: SessionDraftConfig;
   /** Everyone on the draft's attendee list (members and guests). */
-  attendingPlayerCount: number;
-  attendingGuestCount: number;
+  participants: DraftParticipant[];
+}
+
+/** One row of a draft's attendee list (`session_participants`), names snapshotted. */
+export interface DraftParticipant {
+  participantId: string;
+  /** Null for a guest who isn't a club member. */
+  memberId: string | null;
+  isGuest: boolean;
+  firstName: string;
+  lastName: string;
+  skillLevel: SkillLevel | null;
+  /** Whether the linked member is still active; null without a member. */
+  isMemberActive: boolean | null;
 }
 
 /** The host's one open session (the sessions_one_open_per_host_idx index). */
@@ -31,8 +47,6 @@ export type HostOpenSession =
   | { status: "none" }
   | { status: "live"; sessionId: string; name: string }
   | { status: "draft"; draft: SessionDraft };
-
-type ServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 export async function readHostOpenSession(
   hostUserId: string,
@@ -53,10 +67,6 @@ export async function readHostOpenSession(
     return { status: "live", sessionId: session.id, name: session.name };
   }
 
-  const [attendingPlayerCount, attendingGuestCount] = await Promise.all([
-    countParticipants(supabase, session.id, false),
-    countParticipants(supabase, session.id, true),
-  ]);
   return {
     status: "draft",
     draft: {
@@ -67,29 +77,43 @@ export async function readHostOpenSession(
       plannedStart: session.planned_start,
       plannedEnd: session.planned_end,
       config: parseSessionDraftConfig(session.config_snapshot),
-      attendingPlayerCount,
-      attendingGuestCount,
+      participants: await listDraftParticipants(supabase, session.id),
     },
   };
 }
 
-async function countParticipants(
-  supabase: ServerClient,
+/**
+ * A draft's whole attendee list in the order people were added. Takes the
+ * client so the page reads under RLS and the attendance actions (which have
+ * just checked ownership in the database) read with the service-role client.
+ * No limit on attendance: long lists are read in chunks.
+ */
+export async function listDraftParticipants(
+  supabase: SupabaseClient<Database>,
   sessionId: string,
-  onlyGuests: boolean,
-): Promise<number> {
-  let builder = supabase
-    .from("session_participants")
-    .select("id", { count: "exact", head: true })
-    .eq("session_id", sessionId);
-  if (onlyGuests) builder = builder.eq("is_guest", true);
-  const { count, error } = await builder;
-  if (error || count === null) {
-    throw new Error(
-      `Counting the draft's players failed: ${error?.message ?? "no count"}`,
-    );
-  }
-  return count;
+): Promise<DraftParticipant[]> {
+  const rows = await readAllRows(
+    (fromRow, toRow) =>
+      supabase
+        .from("session_participants")
+        .select(
+          "id, member_id, is_guest, first_name, last_name, skill_level, members(is_active)",
+        )
+        .eq("session_id", sessionId)
+        .order("created_at")
+        .order("id")
+        .range(fromRow, toRow),
+    "Reading the draft's players failed",
+  );
+  return rows.map((row) => ({
+    participantId: row.id,
+    memberId: row.member_id,
+    isGuest: row.is_guest,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    skillLevel: row.skill_level,
+    isMemberActive: row.members?.is_active ?? null,
+  }));
 }
 
 /** The club's active courts in display order. */

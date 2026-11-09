@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CARD_CLASS_NAME } from "@/components/controlStyles";
 import { readHostAccess } from "@/server/auth/currentHost";
+import { listAllActiveMembers } from "@/server/members/memberDirectory";
 import {
   listActiveClubCourts,
   readHostOpenSession,
@@ -36,18 +37,21 @@ async function SessionSetupContent() {
   const hostAccess = await readHostAccess();
   // Fails closed: only hosts see setup (RLS also returns nothing otherwise).
   if (hostAccess.status !== "host") return null;
-  const [openSession, clubCourts] = await Promise.all([
-    readHostOpenSession(hostAccess.host.userId),
-    listActiveClubCourts(),
-  ]);
+  const openSession = await readHostOpenSession(hostAccess.host.userId);
 
   if (openSession.status === "draft") {
+    const [clubCourts, activeMembers] = await Promise.all([
+      listActiveClubCourts(),
+      listAllActiveMembers(),
+    ]);
     return (
       <SessionSetupEditor
         // A new draft remounts the editor with fresh state.
         key={openSession.draft.sessionId}
         draft={openSession.draft}
         initialClubCourts={clubCourts}
+        activeMembers={activeMembers}
+        canAddCourts={hostAccess.host.role === "admin"}
       />
     );
   }

@@ -111,8 +111,7 @@ describe("setupFormFromDraft", () => {
       targetMatchMinutes: 15,
       changeoverMinutes: 2,
     },
-    attendingPlayerCount: 0,
-    attendingGuestCount: 0,
+    participants: [],
   };
 
   it("shows the draft in local time and drops courts that are no longer active", () => {
@@ -240,8 +239,7 @@ describe("validateSetupForm", () => {
             targetMatchMinutes: 15,
             changeoverMinutes: 2,
           },
-          attendingPlayerCount: 0,
-          attendingGuestCount: 0,
+          participants: [],
         },
         new Set(),
       );

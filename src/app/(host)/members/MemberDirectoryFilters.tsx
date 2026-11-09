@@ -2,33 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition, type FormEvent } from "react";
-import { TEXT_INPUT_CLASS_NAME } from "@/components/controlStyles";
+import {
+  SELECTED_FILTER_CHIP_CLASS_NAME,
+  TEXT_INPUT_CLASS_NAME,
+  UNSELECTED_FILTER_CHIP_CLASS_NAME,
+} from "@/components/controlStyles";
 import {
   buildMemberDirectoryHref,
   MEMBER_SEARCH_TEXT_MAX_LENGTH,
-  SKILL_LEVEL_LABELS,
-  SKILL_LEVELS,
+  SKILL_FILTER_OPTIONS,
   type MemberDirectoryQuery,
   type MemberStatusFilter,
-  type SkillLevel,
 } from "@/server/members/memberSearch";
 
 const SEARCH_DEBOUNCE_MS = 300;
-
-const FILTER_CHIP_BASE_CLASS_NAME =
-  "inline-flex h-11 items-center rounded-full px-3.5 text-sm";
-const FILTER_CHIP_SELECTED_CLASS_NAME = "bg-text font-bold text-bg";
-const FILTER_CHIP_UNSELECTED_CLASS_NAME =
-  "border border-outline font-semibold text-text hover:bg-inner";
-
-const SKILL_FILTER_OPTIONS: { skillLevel: SkillLevel | null; label: string }[] =
-  [
-    { skillLevel: null, label: "All" },
-    ...SKILL_LEVELS.map((skillLevel) => ({
-      skillLevel,
-      label: SKILL_LEVEL_LABELS[skillLevel],
-    })),
-  ];
 
 const STATUS_FILTER_OPTIONS: { status: MemberStatusFilter; label: string }[] = [
   { status: "active", label: "Active" },
@@ -36,11 +23,9 @@ const STATUS_FILTER_OPTIONS: { status: MemberStatusFilter; label: string }[] = [
 ];
 
 function filterChipClassName(isSelected: boolean): string {
-  return `${FILTER_CHIP_BASE_CLASS_NAME} ${
-    isSelected
-      ? FILTER_CHIP_SELECTED_CLASS_NAME
-      : FILTER_CHIP_UNSELECTED_CLASS_NAME
-  }`;
+  return isSelected
+    ? SELECTED_FILTER_CHIP_CLASS_NAME
+    : UNSELECTED_FILTER_CHIP_CLASS_NAME;
 }
 
 /**

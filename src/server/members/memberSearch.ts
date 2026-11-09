@@ -17,6 +17,18 @@ export const SKILL_LEVEL_LABELS: Record<SkillLevel, string> = {
   advanced: "Advanced",
 };
 
+/** The skill filter chips: "All" (null), then each level. */
+export const SKILL_FILTER_OPTIONS: {
+  skillLevel: SkillLevel | null;
+  label: string;
+}[] = [
+  { skillLevel: null, label: "All" },
+  ...SKILL_LEVELS.map((skillLevel) => ({
+    skillLevel,
+    label: SKILL_LEVEL_LABELS[skillLevel],
+  })),
+];
+
 export type MemberStatusFilter = "active" | "deactivated";
 
 /**

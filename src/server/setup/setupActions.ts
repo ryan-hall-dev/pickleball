@@ -10,15 +10,26 @@ import {
   HOST_ACCESS_DENIAL_MESSAGES,
   type SignedInHost,
 } from "@/server/auth/hostAccess";
-import type { ClubCourt } from "./setupDraft";
+import type { SkillLevel } from "@/server/members/memberSearch";
+import {
+  listDraftParticipants,
+  type ClubCourt,
+  type DraftParticipant,
+} from "./setupDraft";
 import {
   addClubCourtInputSchema,
+  addDraftGuestInputSchema,
   DEFAULT_SESSION_DRAFT_CONFIG,
+  removeDraftGuestInputSchema,
   saveSessionDraftInputSchema,
+  setDraftMemberAttendanceInputSchema,
   startSessionDraftInputSchema,
   type AddClubCourtInput,
+  type AddDraftGuestInput,
+  type RemoveDraftGuestInput,
   type SaveSessionDraftInput,
   type SessionDraftConfig,
+  type SetDraftMemberAttendanceInput,
   type StartSessionDraftInput,
 } from "./setupRules";
 
@@ -32,14 +43,28 @@ export type SetupActionResult = { ok: true } | { ok: false; message: string };
 export type AddClubCourtResult =
   { ok: true; court: ClubCourt } | { ok: false; message: string };
 
+/**
+ * After an attendance write: the draft's whole attendee list as the database
+ * now has it, so the screen also picks up changes made in another tab. When
+ * the write landed but reading the list back failed, `participants` is null
+ * and `message` says so (the change must not be offered for retry).
+ */
+export type DraftAttendanceResult =
+  | { ok: true; participants: DraftParticipant[] }
+  | { ok: true; participants: null; message: string }
+  | { ok: false; message: string };
+
 const SETUP_PATH = "/setup";
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 const POSTGRES_CHECK_VIOLATION = "23514";
 const SOMETHING_WENT_WRONG = "Something went wrong. Try again in a moment.";
 const DRAFT_NOT_OPEN =
   "This draft is no longer open (it was discarded or started). Reload the page.";
-/** Raised by save_session_draft when the session isn't the caller's open draft. */
+/** Raised by the draft write functions when the session isn't the caller's open draft. */
 const DRAFT_NOT_OPEN_ERROR = "DRAFT_NOT_OPEN";
+const SAVED_BUT_LIST_NOT_REFRESHED =
+  "Saved, but the list couldn't refresh. Reload the page.";
+const ONLY_ADMINS_ADD_COURTS = "Only admins can add courts to the club.";
 const LIVE_SESSION_EXISTS =
   "You already have a live session. End it before setting up a new one.";
 
@@ -256,15 +281,21 @@ export async function discardSessionDraft(
   return { ok: true };
 }
 
-/** Adds a court to the club (any host; courts are shared by every session). */
+/**
+ * Adds a court to the club. Admins only (Ryan, 2026-11-09): courts are shared
+ * by every session, so other hosts only choose from the existing ones.
+ */
 export async function addClubCourt(
   input: AddClubCourtInput,
 ): Promise<AddClubCourtResult> {
-  const authorization = await authorizeCurrentHost("host");
+  const authorization = await authorizeCurrentHost("admin");
   if (!authorization.ok) {
     return {
       ok: false,
-      message: HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
+      message:
+        authorization.reason === "NOT_AN_ADMIN"
+          ? ONLY_ADMINS_ADD_COURTS
+          : HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
     };
   }
   const { host } = authorization;
@@ -313,4 +344,152 @@ export async function addClubCourt(
     logWriteFailure("Adding a club court failed", host, error);
     return { ok: false, message: SOMETHING_WENT_WRONG };
   }
+}
+
+/**
+ * Runs one attendance function on the caller's own draft, then reads the
+ * attendee list back. Each function checks in the database, in its own
+ * transaction, that the draft is the caller's and still open, so there is no
+ * separate ownership read here (it would only add a race).
+ */
+async function writeDraftAttendance(
+  host: SignedInHost,
+  sessionId: string,
+  failureLabel: string,
+  callAttendanceFunction: (
+    adminClient: AdminClient,
+  ) => PromiseLike<{ error: { message: string } | null }>,
+): Promise<DraftAttendanceResult> {
+  let adminClient: AdminClient;
+  try {
+    adminClient = createSupabaseAdminClient();
+    const { error } = await callAttendanceFunction(adminClient);
+    if (error?.message === DRAFT_NOT_OPEN_ERROR) {
+      return { ok: false, message: DRAFT_NOT_OPEN };
+    }
+    if (error) throw new Error(`${failureLabel}: ${error.message}`);
+  } catch (error) {
+    logWriteFailure(failureLabel, host, error);
+    return { ok: false, message: SOMETHING_WENT_WRONG };
+  }
+  try {
+    return {
+      ok: true,
+      participants: await listDraftParticipants(adminClient, sessionId),
+    };
+  } catch (error) {
+    logWriteFailure(
+      "Reading the draft's players after a write failed",
+      host,
+      error,
+    );
+    return {
+      ok: true,
+      participants: null,
+      message: SAVED_BUT_LIST_NOT_REFRESHED,
+    };
+  }
+}
+
+/**
+ * Marks members as attending the host's draft, or not. Set semantics: members
+ * already in that state are left alone, so repeats and other tabs are safe.
+ * Only active members can be added; "not attending" never removes guests.
+ */
+export async function setDraftMemberAttendance(
+  input: SetDraftMemberAttendanceInput,
+): Promise<DraftAttendanceResult> {
+  const authorization = await authorizeCurrentHost("host");
+  if (!authorization.ok) {
+    return {
+      ok: false,
+      message: HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
+    };
+  }
+  const { host } = authorization;
+  const parsed = setDraftMemberAttendanceInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: firstIssueMessage(parsed.error) };
+  }
+  const { sessionId, memberIds, attending } = parsed.data;
+  return writeDraftAttendance(
+    host,
+    sessionId,
+    "Changing draft attendance failed",
+    (adminClient) =>
+      adminClient.rpc("set_draft_member_attendance", {
+        p_actor_user_id: host.userId,
+        p_session_id: sessionId,
+        p_member_ids: memberIds,
+        p_attending: attending,
+      }),
+  );
+}
+
+/**
+ * Adds a guest (plays this session only; not added to the members directory).
+ * Repeating the same participant id is a no-op, so a retry is safe.
+ */
+export async function addDraftGuest(
+  input: AddDraftGuestInput,
+): Promise<DraftAttendanceResult> {
+  const authorization = await authorizeCurrentHost("host");
+  if (!authorization.ok) {
+    return {
+      ok: false,
+      message: HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
+    };
+  }
+  const { host } = authorization;
+  const parsed = addDraftGuestInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: firstIssueMessage(parsed.error) };
+  }
+  const { sessionId, participantId, firstName, lastName, skillLevel } =
+    parsed.data;
+  return writeDraftAttendance(
+    host,
+    sessionId,
+    "Adding a draft guest failed",
+    (adminClient) =>
+      adminClient.rpc("add_draft_guest", {
+        p_actor_user_id: host.userId,
+        p_session_id: sessionId,
+        p_session_participant_id: participantId,
+        p_first_name: firstName,
+        p_last_name: lastName,
+        // Generated types can't mark an argument nullable; null = no level.
+        p_skill_level: skillLevel as SkillLevel,
+      }),
+  );
+}
+
+/** Removes a guest from the host's draft (already gone counts as done). */
+export async function removeDraftGuest(
+  input: RemoveDraftGuestInput,
+): Promise<DraftAttendanceResult> {
+  const authorization = await authorizeCurrentHost("host");
+  if (!authorization.ok) {
+    return {
+      ok: false,
+      message: HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
+    };
+  }
+  const { host } = authorization;
+  const parsed = removeDraftGuestInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: firstIssueMessage(parsed.error) };
+  }
+  const { sessionId, participantId } = parsed.data;
+  return writeDraftAttendance(
+    host,
+    sessionId,
+    "Removing a draft guest failed",
+    (adminClient) =>
+      adminClient.rpc("remove_draft_guest", {
+        p_actor_user_id: host.userId,
+        p_session_id: sessionId,
+        p_session_participant_id: participantId,
+      }),
+  );
 }

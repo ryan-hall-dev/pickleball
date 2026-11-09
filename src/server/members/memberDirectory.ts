@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { DATA_API_MAX_ROWS, readAllRows } from "@/lib/supabase/readAllRows";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   MEMBER_DIRECTORY_PAGE_SIZE,
@@ -33,10 +34,6 @@ export interface MemberStatusCounts {
 
 const MEMBER_COLUMNS =
   "id, first_name, last_name, skill_level, is_active, last_checked_in_at";
-
-// The Data API returns at most this many rows per request (supabase/config.toml
-// `max_rows`), so longer lists are read in chunks of this size.
-const DATA_API_MAX_ROWS = 1000;
 
 type MemberRow = {
   id: string;
@@ -133,6 +130,39 @@ export async function listMembers(
   }
 
   return { members: rows.map(toMemberListEntry), matchingMemberCount };
+}
+
+/** What the Setup screen needs to list and pick a member. */
+export type ActiveMemberChoice = Pick<
+  MemberListEntry,
+  "id" | "firstName" | "lastName" | "skillLevel"
+>;
+
+/**
+ * Every active member, ordered by name, for the Setup screen's "Who's
+ * playing?" list (searched and paged in the browser, so filtering is instant
+ * and "Select all" covers every match). No limit: long clubs are read in chunks.
+ */
+export async function listAllActiveMembers(): Promise<ActiveMemberChoice[]> {
+  const supabase = await createSupabaseServerClient();
+  const rows = await readAllRows(
+    (fromRow, toRow) =>
+      supabase
+        .from("members")
+        .select("id, first_name, last_name, skill_level")
+        .eq("is_active", true)
+        .order("first_name")
+        .order("last_name")
+        .order("id")
+        .range(fromRow, toRow),
+    "Listing active members failed",
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    skillLevel: row.skill_level,
+  }));
 }
 
 /** Cached per request: the page header and the directory both need it. */

@@ -130,10 +130,13 @@ describe.skipIf(!localStack)(
       return { userId, client };
     }
 
+    // Scoped to this file's users: other integration files run in parallel
+    // against the same database and add or remove their own hosts.
     async function hostsSnapshot() {
       const { data, error } = await admin
         .from("hosts")
         .select("user_id, display_name, role, checkin_tag")
+        .in("user_id", createdUserIds)
         .order("user_id");
       if (error) throw error;
       return data;
@@ -224,6 +227,12 @@ describe.skipIf(!localStack)(
         expect(await authUserExists((email) => email === inviteeEmail)).toBe(
           false,
         );
+        const { count, error } = await admin
+          .from("hosts")
+          .select("user_id", { count: "exact", head: true })
+          .eq("display_name", "Should Not Exist");
+        if (error) throw error;
+        expect(count).toBe(0);
       },
     );
 

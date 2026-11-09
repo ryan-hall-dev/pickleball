@@ -1,8 +1,14 @@
 // Shared Tailwind classes for the DESIGN.md form controls and buttons.
 
+// Inputs share everything but size and fill (set once per variant, as below).
+const TEXT_INPUT_SHAPE_CLASS_NAME =
+  "w-full border border-inner-border text-text placeholder:text-placeholder aria-invalid:border-2 aria-invalid:border-orange disabled:opacity-60";
+
 /** 48px input; pair with aria-invalid for the orange invalid border. */
-export const TEXT_INPUT_CLASS_NAME =
-  "h-12 w-full rounded-[14px] border border-inner-border bg-inner px-3.5 text-base text-text placeholder:text-placeholder aria-invalid:border-2 aria-invalid:border-orange disabled:opacity-60";
+export const TEXT_INPUT_CLASS_NAME = `${TEXT_INPUT_SHAPE_CLASS_NAME} h-12 rounded-[14px] bg-inner px-3.5 text-base`;
+
+/** 46px input inside an inner box (e.g. the setup guest box), on the card fill. */
+export const INNER_BOX_TEXT_INPUT_CLASS_NAME = `${TEXT_INPUT_SHAPE_CLASS_NAME} h-[46px] rounded-xl bg-card px-3 text-[15px]`;
 
 export const FIELD_LABEL_CLASS_NAME = "text-[13px] font-medium text-muted";
 
@@ -49,3 +55,13 @@ export const UNSELECTED_OPTION_BUTTON_CLASS_NAME = `${OPTION_BUTTON_SHAPE_CLASS_
 /** 44x44 outline icon button (court −/+, close). Needs an aria-label. */
 export const ICON_BUTTON_CLASS_NAME =
   "inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-outline text-[22px] font-semibold text-text hover:bg-inner disabled:cursor-not-allowed disabled:border-inner-border disabled:text-placeholder disabled:hover:bg-transparent";
+
+// Filter chips (skill, status): 44px pills, use aria-pressed.
+const FILTER_CHIP_SHAPE_CLASS_NAME =
+  "inline-flex h-11 items-center rounded-full px-3.5 text-sm";
+
+/** Selected filter chip: light fill. */
+export const SELECTED_FILTER_CHIP_CLASS_NAME = `${FILTER_CHIP_SHAPE_CLASS_NAME} bg-text font-bold text-bg`;
+
+/** Unselected filter chip: outline. */
+export const UNSELECTED_FILTER_CHIP_CLASS_NAME = `${FILTER_CHIP_SHAPE_CLASS_NAME} border border-outline font-semibold text-text hover:bg-inner`;

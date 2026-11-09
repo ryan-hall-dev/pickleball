@@ -32,6 +32,7 @@ export function CourtsCard({
   matchFormat,
   attendingPlayerCount,
   courtsError,
+  canAddCourts,
   onChange,
   onCourtAdded,
 }: {
@@ -40,6 +41,8 @@ export function CourtsCard({
   matchFormat: CourtFormat;
   attendingPlayerCount: number;
   courtsError: string | undefined;
+  /** Only admins add courts to the club; other hosts choose from the list. */
+  canAddCourts: boolean;
   onChange: (patch: Partial<SetupForm>) => void;
   onCourtAdded: (court: ClubCourt) => void;
 }) {
@@ -123,7 +126,7 @@ export function CourtsCard({
             />
           </li>
         ))}
-        {!isAddingCourt && (
+        {canAddCourts && !isAddingCourt && (
           <li>
             <button
               type="button"
@@ -140,7 +143,9 @@ export function CourtsCard({
       </ul>
       {clubCourts.length === 0 && !isAddingCourt && (
         <p className="mt-3 text-sm text-muted">
-          The club has no courts yet. Add the first one.
+          {canAddCourts
+            ? "The club has no courts yet. Add the first one."
+            : "The club has no courts yet. Ask an admin to add them."}
         </p>
       )}
       {isAddingCourt && (

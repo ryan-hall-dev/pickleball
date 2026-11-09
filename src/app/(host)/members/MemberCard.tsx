@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { InitialsAvatar } from "@/components/InitialsAvatar";
+import { SkillChip } from "@/components/SkillChip";
 import type { MemberListEntry } from "@/server/members/memberDirectory";
-import { SKILL_LEVEL_LABELS } from "@/server/members/memberSearch";
 import { formatLastCheckedIn } from "./formatLastCheckedIn";
 
 /** One directory card (the setup design's member row); opens the edit page. */
@@ -33,15 +33,7 @@ export function MemberCard({
             {member.isActive ? lastCheckedIn : `Deactivated · ${lastCheckedIn}`}
           </span>
         </span>
-        {member.skillLevel ? (
-          <span className="shrink-0 rounded-full bg-inner-border px-2 py-[3px] text-xs font-semibold text-text-soft">
-            {SKILL_LEVEL_LABELS[member.skillLevel]}
-          </span>
-        ) : (
-          <span className="shrink-0 rounded-full border border-inner-border px-2 py-[3px] text-xs font-semibold text-muted">
-            No level
-          </span>
-        )}
+        <SkillChip skillLevel={member.skillLevel} />
       </Link>
     </li>
   );

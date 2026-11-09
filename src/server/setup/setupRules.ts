@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { CourtConfig, CourtFormat } from "@/engine/session";
+import { memberInputSchema } from "@/server/members/memberRules";
 
 // Validation and the draft config shape for the Setup screen (plan §4, §7 M4).
 // Shared by the server actions and the client form, so both apply the same
@@ -145,6 +146,37 @@ export const addClubCourtInputSchema = z.object({
 });
 
 export type AddClubCourtInput = z.input<typeof addClubCourtInputSchema>;
+
+/** "Who's playing?": mark members as attending or not (Select all, Clear, one row). */
+export const setDraftMemberAttendanceInputSchema = z.object({
+  sessionId: z.uuid(),
+  // No size limit: any number of members can attend.
+  memberIds: z.array(z.uuid()),
+  attending: z.boolean(),
+});
+
+export type SetDraftMemberAttendanceInput = z.input<
+  typeof setDraftMemberAttendanceInputSchema
+>;
+
+/**
+ * "Quick add a guest": the same name and skill rules as a member (first and
+ * last name required, skill optional, "" = not set).
+ */
+export const addDraftGuestInputSchema = memberInputSchema.extend({
+  sessionId: z.uuid(),
+  // Chosen by the browser so a retried add can't add the guest twice.
+  participantId: z.uuid(),
+});
+
+export type AddDraftGuestInput = z.input<typeof addDraftGuestInputSchema>;
+
+export const removeDraftGuestInputSchema = z.object({
+  sessionId: z.uuid(),
+  participantId: z.uuid(),
+});
+
+export type RemoveDraftGuestInput = z.input<typeof removeDraftGuestInputSchema>;
 
 /**
  * The part of `sessions.config_snapshot` the Setup screen owns while the

@@ -277,7 +277,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "add_guest_mid_session":
+            "add_draft_guest":
+{ Args: { "p_actor_user_id": string,"p_first_name": string,"p_last_name": string,"p_session_id": string,"p_session_participant_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: string
+                           },
+"add_guest_mid_session":
 { Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_last_seq": number,"p_first_name": string,"p_last_name": string,"p_occurred_at": string,"p_session_id": string,"p_session_participant_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
                            },
 "append_session_event":
@@ -298,6 +301,9 @@ isOneToOne: false
 "reject_checkin":
 { Args: { "p_actor_user_id": string,"p_checkin_request_id": string }; Returns: Json
                            },
+"remove_draft_guest":
+{ Args: { "p_actor_user_id": string,"p_session_id": string,"p_session_participant_id": string }; Returns: Json
+                           },
 "remove_draft_participant":
 { Args: { "p_actor_user_id": string,"p_session_participant_id": string }; Returns: Json
                            },
@@ -308,6 +314,9 @@ isOneToOne: false
 { Args: { "p_checkin_tag": string,"p_device_token_hash": string,"p_ip_hash": string,"p_name_query": string }; Returns: {
               "first_name": string,"last_name": string,"member_id": string
             }[]
+                           },
+"set_draft_member_attendance":
+{ Args: { "p_actor_user_id": string,"p_attending": boolean,"p_member_ids": (string)[],"p_session_id": string }; Returns: Json
                            },
 "start_session":
 { Args: { "p_actor_user_id": string,"p_event_id": string,"p_occurred_at": string,"p_payload": Json,"p_session_id": string }; Returns: Json

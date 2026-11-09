@@ -98,10 +98,14 @@ describe("LoginForm", () => {
     render(<LoginForm />);
     submitEmail("host@example.test");
     await screen.findByLabelText("6-digit code");
+    // The code step can render while the send transition is still pending,
+    // when this button is briefly disabled; wait so the click isn't lost.
+    const useDifferentEmailButton = screen.getByRole("button", {
+      name: "Use a different email",
+    });
+    await waitFor(() => expect(useDifferentEmailButton).toBeEnabled());
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Use a different email" }),
-    );
+    fireEvent.click(useDifferentEmailButton);
 
     await waitFor(() =>
       expect(

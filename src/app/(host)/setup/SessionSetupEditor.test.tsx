@@ -12,7 +12,11 @@ import {
   discardSessionDraft,
   saveSessionDraft,
 } from "@/server/setup/setupActions";
-import type { ClubCourt, SessionDraft } from "@/server/setup/setupDraft";
+import type {
+  ClubCourt,
+  DraftParticipant,
+  SessionDraft,
+} from "@/server/setup/setupDraft";
 import { SessionSetupEditor } from "./SessionSetupEditor";
 
 vi.mock("@/server/setup/setupActions", () => ({
@@ -20,6 +24,9 @@ vi.mock("@/server/setup/setupActions", () => ({
   discardSessionDraft: vi.fn(),
   addClubCourt: vi.fn(),
   startSessionDraft: vi.fn(),
+  setDraftMemberAttendance: vi.fn(),
+  addDraftGuest: vi.fn(),
+  removeDraftGuest: vi.fn(),
 }));
 
 const saveSessionDraftMock = vi.mocked(saveSessionDraft);
@@ -45,6 +52,32 @@ const clubCourts: ClubCourt[] = [
   },
 ];
 
+/** An attendee list of `memberCount` members and `guestCount` guests. */
+function participantsFor(
+  memberCount: number,
+  guestCount: number,
+): DraftParticipant[] {
+  const participant = (index: number, isGuest: boolean): DraftParticipant => ({
+    participantId: `e0000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+    memberId: isGuest
+      ? null
+      : `b0000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+    isGuest,
+    firstName: isGuest ? "Guest" : "Member",
+    lastName: String(index),
+    skillLevel: null,
+    isMemberActive: isGuest ? null : true,
+  });
+  return [
+    ...Array.from({ length: memberCount }, (_, index) =>
+      participant(index, false),
+    ),
+    ...Array.from({ length: guestCount }, (_, index) =>
+      participant(memberCount + index, true),
+    ),
+  ];
+}
+
 function draftWith(overrides: Partial<SessionDraft> = {}): SessionDraft {
   return {
     sessionId: SESSION_ID,
@@ -59,15 +92,19 @@ function draftWith(overrides: Partial<SessionDraft> = {}): SessionDraft {
       targetMatchMinutes: 15,
       changeoverMinutes: 2,
     },
-    attendingPlayerCount: 0,
-    attendingGuestCount: 0,
+    participants: [],
     ...overrides,
   };
 }
 
 function renderEditor(draft = draftWith()) {
   return render(
-    <SessionSetupEditor draft={draft} initialClubCourts={clubCourts} />,
+    <SessionSetupEditor
+      draft={draft}
+      initialClubCourts={clubCourts}
+      activeMembers={[]}
+      canAddCourts
+    />,
   );
 }
 
@@ -223,7 +260,7 @@ describe("SessionSetupEditor", () => {
   it("says once, in the summary, when the session is shorter than one round", () => {
     renderEditor(
       draftWith({
-        attendingPlayerCount: 8,
+        participants: participantsFor(8, 0),
         config: {
           courts: [
             { courtId: clubCourts[0].id, name: "Court 1", format: "doubles" },
@@ -367,9 +404,7 @@ describe("SessionSetupEditor", () => {
   });
 
   it("selects courts, updates the capacity line and limits formats to what the courts support", () => {
-    renderEditor(
-      draftWith({ attendingPlayerCount: 10, attendingGuestCount: 2 }),
-    );
+    renderEditor(draftWith({ participants: participantsFor(8, 2) }));
     const courtTile = (name: RegExp) => screen.getByRole("button", { name });
 
     // The singles-only court can't be picked for doubles, and looks disabled
@@ -407,8 +442,7 @@ describe("SessionSetupEditor", () => {
   it("summarises the session with the capacity diagram and the estimate", () => {
     renderEditor(
       draftWith({
-        attendingPlayerCount: 15,
-        attendingGuestCount: 1,
+        participants: participantsFor(14, 1),
         config: {
           courts: clubCourts.slice(0, 2).map((court) => ({
             courtId: court.id,

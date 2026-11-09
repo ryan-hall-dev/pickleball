@@ -75,6 +75,7 @@ select set_eq(
   array[
     'append_session_event', 'start_session', 'end_session', 'add_guest_mid_session',
     'cancel_draft_session', 'remove_draft_participant', 'save_session_draft',
+    'set_draft_member_attendance', 'add_draft_guest', 'remove_draft_guest',
     'approve_checkin', 'reject_checkin', 'search_checkin_names', 'submit_checkin',
     'record_login_attempt'
   ],

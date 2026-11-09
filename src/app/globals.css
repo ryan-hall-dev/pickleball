@@ -33,6 +33,14 @@
   /* Court tile captions on lime surfaces; waiting dots in the capacity diagram. */
   --color-lime-caption: #c9d6a0;
   --color-drag-handle: #5b6b7a;
+  /* Attending member rows: avatar fill and the "Attending" caption. */
+  --color-lime-avatar: #2b3a12;
+  --color-lime-status: #c9e86a;
+  /* Next / guest (blue) surfaces: guest chips. */
+  --color-blue-surface: #13263c;
+  --color-blue-edge: #2f5e8f;
+  --color-blue-avatar: #1d3550;
+  --color-blue-soft: #cfe6ff;
 
   --radius-card: 24px;
 }

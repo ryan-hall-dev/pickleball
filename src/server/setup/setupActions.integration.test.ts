@@ -1,10 +1,11 @@
 // @vitest-environment node
 // The Setup screen's draft writes and reads against the LOCAL Supabase stack
 // (`pnpm db:start`):
-//   * only hosts may create, edit or discard drafts and add courts, and a host
-//     can never edit or discard another host's draft;
-//   * create / load / update / discard a draft, the one-open-session rule, and
-//     adding a club court.
+//   * only hosts may create, edit or discard drafts and change attendance,
+//     only admins add courts, and a host can never edit, discard or change
+//     the attendance of another host's draft;
+//   * create / load / update / discard a draft, the one-open-session rule,
+//     adding a club court, and attendance (members, guests, Clear).
 // Test courts carry a unique token in their name; test sessions belong to
 // test hosts. Everything created is removed afterwards. Skips when the stack
 // isn't running, unless REQUIRE_LOCAL_SUPABASE=1.
@@ -16,8 +17,12 @@ import type { Database } from "@/lib/database.types";
 import { HOST_ACCESS_DENIAL_MESSAGES } from "@/server/auth/hostAccess";
 import {
   addClubCourt,
+  addDraftGuest,
+  type DraftAttendanceResult,
   discardSessionDraft,
+  removeDraftGuest,
   saveSessionDraft,
+  setDraftMemberAttendance,
   startSessionDraft,
 } from "./setupActions";
 import { listActiveClubCourts, readHostOpenSession } from "./setupDraft";
@@ -104,6 +109,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
   let admin: DatabaseClient;
   let hostAlice: { client: DatabaseClient; userId: string };
   let hostBob: { client: DatabaseClient; userId: string };
+  let adminCarol: { client: DatabaseClient; userId: string };
   let nonHostClient: DatabaseClient;
   let signedOutClient: DatabaseClient;
   const createdUserIds: string[] = [];
@@ -114,6 +120,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
 
   async function signedInUser(
     displayName: string | null,
+    role: "host" | "admin" = "host",
   ): Promise<{ client: DatabaseClient; userId: string }> {
     const email = `integration-setup-${randomUUID()}@example.test`;
     const password = `pw-${randomUUID()}`;
@@ -128,7 +135,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     if (displayName) {
       const { error } = await admin
         .from("hosts")
-        .insert({ user_id: userId, display_name: displayName, role: "host" });
+        .insert({ user_id: userId, display_name: displayName, role });
       if (error) throw error;
     }
     const client = createClient<Database>(
@@ -213,6 +220,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     });
     hostAlice = await signedInUser("Alice Setup");
     hostBob = await signedInUser("Bob Setup");
+    adminCarol = await signedInUser("Carol Admin", "admin");
     nonHostClient = (await signedInUser(null)).client;
     signedOutClient = createClient<Database>(
       localStack!.apiUrl,
@@ -229,9 +237,20 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     const hostIds = createdUserIds;
     const { data: sessions } = await admin
       .from("sessions")
-      .select("id")
+      .select("id, status")
       .in("host_id", hostIds);
     const sessionIds = (sessions ?? []).map((session) => session.id);
+    const draftIds = (sessions ?? [])
+      .filter((session) => session.status === "draft")
+      .map((session) => session.id);
+    if (draftIds.length > 0) {
+      // Attendees first (they reference the session and members); the
+      // database only allows that while a session is a draft.
+      await admin
+        .from("session_participants")
+        .delete()
+        .in("session_id", draftIds);
+    }
     if (sessionIds.length > 0) {
       await admin.from("sessions").delete().in("id", sessionIds);
     }
@@ -294,10 +313,37 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
             supportedFormats: ["doubles"],
           }),
         ).toEqual(expected);
+        expect(
+          await setDraftMemberAttendance({
+            sessionId: aliceDraftBefore[0].id,
+            memberIds: [],
+            attending: true,
+          }),
+        ).toEqual(expected);
+        expect(
+          await addDraftGuest({
+            sessionId: aliceDraftBefore[0].id,
+            participantId: randomUUID(),
+            firstName: "Sneaky",
+            lastName: "Guest",
+            skillLevel: "",
+          }),
+        ).toEqual(expected);
+        expect(
+          await removeDraftGuest({
+            sessionId: aliceDraftBefore[0].id,
+            participantId: randomUUID(),
+          }),
+        ).toEqual(expected);
 
         expect(await openSessionRows(hostAlice.userId)).toEqual(
           aliceDraftBefore,
         );
+        const { count: attendeeCount } = await admin
+          .from("session_participants")
+          .select("id", { count: "exact", head: true })
+          .eq("session_id", aliceDraftBefore[0].id);
+        expect(attendeeCount).toBe(0);
         const { count } = await admin
           .from("courts")
           .select("id", { count: "exact", head: true })
@@ -383,8 +429,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       expect(draft).toMatchObject({
         sessionId: sessions[0].id,
         name: "Bob social",
-        attendingPlayerCount: 0,
-        attendingGuestCount: 0,
+        participants: [],
       });
     });
 
@@ -480,7 +525,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       });
     });
 
-    it("counts the draft's attending players and guests", async () => {
+    it("lists the draft's attending members and guests", async () => {
       const draft = await openDraftFor(hostBob);
       const { data: member, error: memberError } = await admin
         .from("members")
@@ -507,15 +552,32 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       ]);
       if (error) throw error;
 
-      expect(await openDraftFor(hostBob)).toMatchObject({
-        attendingPlayerCount: 2,
-        attendingGuestCount: 1,
-      });
-      // Participants can only be removed while the session is a draft.
-      await admin
-        .from("session_participants")
-        .delete()
-        .eq("session_id", draft.sessionId);
+      try {
+        // Added in one statement, so in either order.
+        const { participants } = await openDraftFor(hostBob);
+        expect(participants).toHaveLength(2);
+        expect(participants).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              memberId: member.id,
+              isGuest: false,
+              isMemberActive: true,
+            }),
+            expect.objectContaining({
+              memberId: null,
+              isGuest: true,
+              isMemberActive: null,
+            }),
+          ]),
+        );
+      } finally {
+        // Participants can only be removed while the session is a draft, and
+        // the next test discards it.
+        await admin
+          .from("session_participants")
+          .delete()
+          .eq("session_id", draft.sessionId);
+      }
     });
 
     it("discards the draft; it can't be saved afterwards and a new one can start", async () => {
@@ -575,8 +637,26 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
   });
 
   describe("club courts", () => {
-    it("adds a court after the others, lists it, and refuses a duplicate name", async () => {
+    it("lets only admins add a court", async () => {
       actingClient = hostAlice.client;
+      expect(
+        await addClubCourt({
+          name: `${RUN_TOKEN} Host court`,
+          supportedFormats: ["doubles"],
+        }),
+      ).toEqual({
+        ok: false,
+        message: "Only admins can add courts to the club.",
+      });
+      const { count } = await admin
+        .from("courts")
+        .select("id", { count: "exact", head: true })
+        .eq("name", `${RUN_TOKEN} Host court`);
+      expect(count).toBe(0);
+    });
+
+    it("adds a court after the others, lists it, and refuses a duplicate name", async () => {
+      actingClient = adminCarol.client;
       const name = `${RUN_TOKEN} New court`;
       const result = await addClubCourt({
         name: `  ${name} `,
@@ -618,6 +698,290 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       expect(
         await addClubCourt({ name: `${RUN_TOKEN} x`, supportedFormats: [] }),
       ).toEqual({ ok: false, message: "Choose at least one format." });
+    });
+  });
+  describe("attendance", () => {
+    let graceId: string;
+    let kofiId: string;
+    let inactiveMemberId: string;
+
+    async function insertMember(
+      firstName: string,
+      isActive = true,
+    ): Promise<string> {
+      const { data, error } = await admin
+        .from("members")
+        .insert({
+          first_name: firstName,
+          last_name: RUN_TOKEN,
+          skill_level: "intermediate",
+          is_active: isActive,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      createdMemberIds.push(data.id);
+      return data.id;
+    }
+
+    async function attendeeRows(sessionId: string) {
+      const { data, error } = await admin
+        .from("session_participants")
+        .select("id, member_id, is_guest, first_name, last_name, skill_level")
+        .eq("session_id", sessionId)
+        .order("created_at")
+        .order("id");
+      if (error) throw error;
+      return data;
+    }
+
+    async function testMemberCount(): Promise<number> {
+      const { count, error } = await admin
+        .from("members")
+        .select("id", { count: "exact", head: true })
+        .eq("last_name", RUN_TOKEN);
+      if (error) throw error;
+      return count ?? 0;
+    }
+
+    /** The attendee list from a successful write that read it back. */
+    function listFrom(result: DraftAttendanceResult) {
+      if (!result.ok) throw new Error(result.message);
+      if (!result.participants) throw new Error(result.message);
+      return result.participants;
+    }
+
+    beforeAll(async () => {
+      graceId = await insertMember("Grace");
+      kofiId = await insertMember("Kofi");
+      inactiveMemberId = await insertMember("Ina", false);
+    });
+
+    it("marks active members as attending with a name snapshot, idempotently", async () => {
+      const draft = await openDraftFor(hostAlice);
+      actingClient = hostAlice.client;
+      const participants = listFrom(
+        await setDraftMemberAttendance({
+          sessionId: draft.sessionId,
+          memberIds: [graceId, kofiId, inactiveMemberId],
+          attending: true,
+        }),
+      );
+      expect(
+        participants.map((participant) => participant.memberId).sort(),
+      ).toEqual([graceId, kofiId].sort());
+      expect(participants[0]).toMatchObject({
+        isGuest: false,
+        lastName: RUN_TOKEN,
+        skillLevel: "intermediate",
+        isMemberActive: true,
+      });
+      const rowsAfterFirst = await attendeeRows(draft.sessionId);
+
+      // Again (another tab, a retry): nothing changes.
+      expect(
+        await setDraftMemberAttendance({
+          sessionId: draft.sessionId,
+          memberIds: [graceId],
+          attending: true,
+        }),
+      ).toMatchObject({ ok: true });
+      expect(await attendeeRows(draft.sessionId)).toEqual(rowsAfterFirst);
+      // Reloading the page shows the same list.
+      expect((await openDraftFor(hostAlice)).participants).toEqual(
+        participants,
+      );
+    });
+
+    it("adds guests without touching the members directory, and removes them", async () => {
+      const draft = await openDraftFor(hostAlice);
+      const membersBefore = await testMemberCount();
+      actingClient = hostAlice.client;
+      const firstGuestInput = {
+        sessionId: draft.sessionId,
+        participantId: randomUUID(),
+        firstName: "  Kai ",
+        lastName: RUN_TOKEN,
+        skillLevel: "",
+      };
+      listFrom(await addDraftGuest(firstGuestInput));
+      // A retry of the same add (same id) doesn't add the guest twice.
+      listFrom(await addDraftGuest(firstGuestInput));
+      // A second guest with the same name is fine.
+      const afterSecondGuest = listFrom(
+        await addDraftGuest({
+          sessionId: draft.sessionId,
+          participantId: randomUUID(),
+          firstName: "Kai",
+          lastName: RUN_TOKEN,
+          skillLevel: "beginner",
+        }),
+      );
+      const guests = afterSecondGuest.filter(
+        (participant) => participant.isGuest,
+      );
+      expect(guests).toEqual([
+        expect.objectContaining({
+          participantId: firstGuestInput.participantId,
+          memberId: null,
+          firstName: "Kai",
+          skillLevel: null,
+        }),
+        expect.objectContaining({ firstName: "Kai", skillLevel: "beginner" }),
+      ]);
+      expect(await testMemberCount()).toBe(membersBefore);
+
+      const removed = listFrom(
+        await removeDraftGuest({
+          sessionId: draft.sessionId,
+          participantId: guests[0].participantId,
+        }),
+      );
+      expect(
+        removed.map((participant) => participant.participantId),
+      ).not.toContain(guests[0].participantId);
+      // The members are still attending; removing again is fine.
+      expect(
+        removed.filter((participant) => !participant.isGuest),
+      ).toHaveLength(2);
+      expect(
+        await removeDraftGuest({
+          sessionId: draft.sessionId,
+          participantId: guests[0].participantId,
+        }),
+      ).toMatchObject({ ok: true });
+      // A member's row is never removed as a guest.
+      const graceRow = removed.find(
+        (participant) => participant.memberId === graceId,
+      )!;
+      await removeDraftGuest({
+        sessionId: draft.sessionId,
+        participantId: graceRow.participantId,
+      });
+      expect(
+        (await attendeeRows(draft.sessionId)).map((row) => row.id),
+      ).toContain(graceRow.participantId);
+    });
+
+    it("keeps a deactivated member attending until removed", async () => {
+      await admin.from("members").update({ is_active: false }).eq("id", kofiId);
+      try {
+        const draft = await openDraftFor(hostAlice);
+        expect(
+          draft.participants.find(
+            (participant) => participant.memberId === kofiId,
+          ),
+        ).toMatchObject({ isMemberActive: false });
+
+        actingClient = hostAlice.client;
+        const afterRemoval = listFrom(
+          await setDraftMemberAttendance({
+            sessionId: draft.sessionId,
+            memberIds: [kofiId],
+            attending: false,
+          }),
+        );
+        expect(
+          afterRemoval.find((participant) => participant.memberId === kofiId),
+        ).toBeUndefined();
+        expect(
+          (await attendeeRows(draft.sessionId)).find(
+            (row) => row.member_id === kofiId,
+          ),
+        ).toBeUndefined();
+        // While deactivated, they can't be added back.
+        listFrom(
+          await setDraftMemberAttendance({
+            sessionId: draft.sessionId,
+            memberIds: [kofiId],
+            attending: true,
+          }),
+        );
+        expect(
+          (await attendeeRows(draft.sessionId)).find(
+            (row) => row.member_id === kofiId,
+          ),
+        ).toBeUndefined();
+      } finally {
+        await admin
+          .from("members")
+          .update({ is_active: true })
+          .eq("id", kofiId);
+      }
+    });
+
+    it("never changes another host's draft attendance", async () => {
+      const draft = await openDraftFor(hostAlice);
+      const before = await attendeeRows(draft.sessionId);
+      actingClient = hostBob.client;
+      const draftNotOpen = { ok: false, message: DRAFT_NOT_OPEN };
+      expect(
+        await setDraftMemberAttendance({
+          sessionId: draft.sessionId,
+          memberIds: [graceId, kofiId],
+          attending: false,
+        }),
+      ).toEqual(draftNotOpen);
+      expect(
+        await addDraftGuest({
+          sessionId: draft.sessionId,
+          participantId: randomUUID(),
+          firstName: "Bob's",
+          lastName: "Friend",
+          skillLevel: "",
+        }),
+      ).toEqual(draftNotOpen);
+      const guestId = before.find((row) => row.is_guest)!.id;
+      expect(
+        await removeDraftGuest({
+          sessionId: draft.sessionId,
+          participantId: guestId,
+        }),
+      ).toEqual(draftNotOpen);
+      expect(await attendeeRows(draft.sessionId)).toEqual(before);
+    });
+
+    it("rejects invalid attendance input before touching the database", async () => {
+      const draft = await openDraftFor(hostAlice);
+      const before = await attendeeRows(draft.sessionId);
+      actingClient = hostAlice.client;
+      expect(
+        await addDraftGuest({
+          sessionId: draft.sessionId,
+          participantId: randomUUID(),
+          firstName: "Kai",
+          lastName: "   ",
+          skillLevel: "",
+        }),
+      ).toEqual({ ok: false, message: "Enter a last name." });
+      expect(
+        await setDraftMemberAttendance({
+          sessionId: draft.sessionId,
+          memberIds: ["not-a-uuid"],
+          attending: true,
+        }),
+      ).toMatchObject({ ok: false });
+      expect(await attendeeRows(draft.sessionId)).toEqual(before);
+    });
+
+    it("Clear removes every attending member and keeps the guests", async () => {
+      const draft = await openDraftFor(hostAlice);
+      const attendingIds = draft.participants.flatMap((participant) =>
+        participant.isGuest || !participant.memberId
+          ? []
+          : [participant.memberId],
+      );
+      actingClient = hostAlice.client;
+      const cleared = listFrom(
+        await setDraftMemberAttendance({
+          sessionId: draft.sessionId,
+          memberIds: attendingIds,
+          attending: false,
+        }),
+      );
+      expect(cleared).toEqual([
+        expect.objectContaining({ isGuest: true, firstName: "Kai" }),
+      ]);
     });
   });
 });

@@ -1,18 +1,24 @@
 // Session setup (/setup) against the LOCAL Supabase stack: Session details,
-// Courts and the Session summary. Runs on desktop and on a phone (the
-// `mobile` project). Test courts carry a unique token in their name; test
-// sessions belong to the test's own admin. Everything is removed afterwards.
+// Courts, Who's playing and the Session summary. Runs on desktop and on a
+// phone (the `mobile` project). Test courts and members carry a unique token
+// in their name; test sessions belong to the test's own host. Everything is
+// removed afterwards.
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import {
+  addHostRow,
   adminClient,
+  createLogin,
   deleteCreatedLogins,
   findUserIdByEmail,
+  signIn,
   signInAsNewAdmin,
+  uniqueEmail,
   useRandomClientIp,
 } from "./support/localHostSession";
 
 const courtNameTokens: string[] = [];
+const memberNameTokens: string[] = [];
 const testHostUserIds: string[] = [];
 
 function uniqueCourtToken(): string {
@@ -53,6 +59,10 @@ test.afterAll(async () => {
   }
   for (const token of courtNameTokens.splice(0)) {
     await adminClient.from("courts").delete().like("name", `${token}%`);
+  }
+  // After the sessions, whose attendee rows point at the members.
+  for (const token of memberNameTokens.splice(0)) {
+    await adminClient.from("members").delete().eq("last_name", token);
   }
   await deleteCreatedLogins();
 });
@@ -287,4 +297,115 @@ test("setup works from the keyboard with a visible focus ring", async ({
   await expect(page.getByLabel("End time")).toBeFocused();
   await expectSaved(page);
   await expectNoHorizontalScroll(page);
+});
+
+async function startNewDraft(page: Page) {
+  await page.goto("/setup");
+  await page.getByRole("button", { name: "Start a new session" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Who's playing?" }),
+  ).toBeVisible();
+}
+
+async function expectAttendanceSaved(page: Page) {
+  await expect(page.getByText("Saving attendance…")).toHaveCount(0);
+  await expect(page.getByText(/not saved/i)).toHaveCount(0);
+}
+
+test("a host picks members and guests for a draft, and they persist", async ({
+  page,
+}) => {
+  const memberToken = `Zqmember${randomUUID().slice(0, 8)}`;
+  memberNameTokens.push(memberToken);
+  const { error: membersError } = await adminClient.from("members").insert([
+    { first_name: "Grace", last_name: memberToken, skill_level: "advanced" },
+    { first_name: "Kofi", last_name: memberToken },
+  ]);
+  if (membersError) throw membersError;
+  const email = await signInAsNewAdmin(page, "setup-players");
+  testHostUserIds.push((await findUserIdByEmail(email))!);
+  await startNewDraft(page);
+
+  const card = page.getByRole("region", { name: "Who's playing?" });
+  const summary = page.getByRole("complementary", {
+    name: "Session summary and start",
+  });
+  await card.getByLabel("Search members by name").fill(memberToken);
+  await expect(card.getByText("Showing 2 of 2 matching members")).toBeVisible();
+  const grace = card.getByRole("button", {
+    name: new RegExp(`^Grace ${memberToken}`),
+  });
+  await grace.click();
+  await expect(grace).toHaveAttribute("aria-pressed", "true");
+  await expect(grace).toContainText("Attending");
+
+  // A guest: the last name is required.
+  await card.getByLabel("First name").fill("Kai");
+  await card.getByRole("button", { name: "Add guest" }).click();
+  await expect(card.getByLabel("Last name")).toHaveAccessibleDescription(
+    "Enter a last name.",
+  );
+  await card.getByLabel("Last name").fill(memberToken);
+  await card.getByLabel("Skill (optional)").selectOption("beginner");
+  await card.getByRole("button", { name: "Add guest" }).click();
+  const removeKai = card.getByRole("button", {
+    name: `Remove guest Kai ${memberToken}`,
+  });
+  await expect(removeKai).toBeEnabled();
+  await expect(card.getByText("Guest · Beginner")).toBeVisible();
+  await expectAttendanceSaved(page);
+  await expect(summary).toContainText("2 (1 member + 1 guest)");
+
+  // Reload: both persisted, and the summary counts them.
+  await page.reload();
+  await card.getByLabel("Search members by name").fill(memberToken);
+  await expect(grace).toHaveAttribute("aria-pressed", "true");
+  await expect(removeKai).toBeVisible();
+  await expect(summary).toContainText("2 (1 member + 1 guest)");
+  await expect(card.getByText("1 attending", { exact: true })).toBeVisible();
+  await expect(card.getByText(/^\d+ registered$/)).toBeVisible();
+  await expect(card.getByText(/^\d+ not attending$/)).toBeVisible();
+  await expect(card.getByText("+1 guest")).toBeVisible();
+  await expectNoHorizontalScroll(page);
+
+  // Remove the guest; add another, then Clear removes members only.
+  await removeKai.click();
+  await expect(removeKai).toHaveCount(0);
+  await expectAttendanceSaved(page);
+  await expect(summary).toContainText("1 (1 member + 0 guests)");
+  await card.getByLabel("First name").fill("Ben");
+  await card.getByLabel("Last name").fill(memberToken);
+  await card.getByRole("button", { name: "Add guest" }).click();
+  await expectAttendanceSaved(page);
+  await card
+    .getByRole("button", { name: "Clear 1 attending member (guests stay)" })
+    .click();
+  await expect(grace).toHaveAttribute("aria-pressed", "false");
+  await expectAttendanceSaved(page);
+  await expect(
+    card.getByRole("button", { name: `Remove guest Ben ${memberToken}` }),
+  ).toBeVisible();
+  await expect(summary).toContainText("1 (0 members + 1 guest)");
+
+  // The guest never joined the members directory.
+  const { count } = await adminClient
+    .from("members")
+    .select("id", { count: "exact", head: true })
+    .eq("last_name", memberToken);
+  expect(count).toBe(2);
+});
+
+test("a host who isn't an admin can't add courts to the club", async ({
+  page,
+}) => {
+  const email = uniqueEmail("setup-host");
+  const hostUserId = await createLogin(email);
+  await addHostRow(hostUserId, "E2E setup host", "host");
+  testHostUserIds.push(hostUserId);
+  await signIn(page, email);
+  await startNewDraft(page);
+  await expect(page.getByRole("heading", { name: "Courts" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add court", exact: true }),
+  ).toHaveCount(0);
 });
