@@ -99,6 +99,22 @@ async function expectSaved(page: Page) {
   await expect(saveStatus(page)).toHaveText("Saved");
 }
 
+/** Discards the open draft through both steps of the confirmation dialog. */
+async function discardDraftForAllHosts(page: Page, draftName: string) {
+  await page.getByRole("button", { name: "Discard draft" }).click();
+  const discardDialog = page.getByRole("dialog", {
+    name: `Discard “${draftName}”?`,
+  });
+  await discardDialog
+    .getByRole("checkbox", {
+      name: `I understand this discards “${draftName}” for all hosts`,
+    })
+    .check();
+  await discardDialog
+    .getByRole("button", { name: "Discard for all hosts" })
+    .click();
+}
+
 async function openDraftSessionId(hostUserId: string): Promise<string> {
   const { data, error } = await adminClient
     .from("sessions")
@@ -279,8 +295,28 @@ test("a host sets up a draft's details and courts, sees the summary, reloads and
     .from("session_participants")
     .delete()
     .eq("session_id", sessionId);
+  // The dialog names the draft and the co-host impact; Esc keeps the draft.
   await page.getByRole("button", { name: "Discard draft" }).click();
-  await page.getByRole("button", { name: "Yes, discard" }).click();
+  const discardDialog = page.getByRole("dialog", {
+    name: "Discard “E2E Saturday social”?",
+  });
+  await expect(discardDialog).toContainText("for every host of");
+  await expect(
+    discardDialog.getByRole("button", { name: "Keep draft" }),
+  ).toBeFocused();
+  await expect(
+    discardDialog.getByRole("button", { name: "Discard for all hosts" }),
+  ).toBeDisabled();
+  await expectNoHorizontalScroll(page);
+  await page.keyboard.press("Escape");
+  await expect(discardDialog).toBeHidden();
+  const { data: kept } = await adminClient
+    .from("sessions")
+    .select("status")
+    .eq("id", sessionId)
+    .single();
+  expect(kept?.status).toBe("draft");
+  await discardDraftForAllHosts(page, "E2E Saturday social");
   await expect(
     page.getByRole("heading", { name: "No session in progress" }),
   ).toBeVisible();
@@ -708,8 +744,7 @@ test("a host saves a setup, discards the draft, and reuses the setup in a new on
   await expect(page.getByText("Saved “E2E Thursday ladder”.")).toBeVisible();
 
   // A fresh draft starts from the defaults and offers the setup.
-  await page.getByRole("button", { name: "Discard draft" }).click();
-  await page.getByRole("button", { name: "Yes, discard" }).click();
+  await discardDraftForAllHosts(page, "E2E Thursday ladder");
   await page.getByRole("button", { name: "Start a new session" }).click();
   const banner = page.getByRole("region", { name: "Reuse a saved setup" });
   await expect(banner).toContainText("Reuse “E2E Thursday ladder” · last used");

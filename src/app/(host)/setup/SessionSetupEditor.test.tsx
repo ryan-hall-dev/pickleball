@@ -26,6 +26,7 @@ import type {
 } from "@/server/setup/setupDraft";
 import type { RotationObjective } from "@/engine";
 import { recommendedRotationPreferences } from "@/server/setup/setupRules";
+import { polyfillDialogForTests } from "./dialogTestPolyfill";
 import { forgetOwnDraftWrites } from "./ownDraftWrites";
 import { SessionSetupEditor } from "./SessionSetupEditor";
 
@@ -41,6 +42,8 @@ vi.mock("@/server/setup/setupActions", () => ({
   applySavedSetup: vi.fn(),
   readSessionDraft: vi.fn(),
 }));
+
+polyfillDialogForTests();
 
 const saveSessionDraftMock = vi.mocked(saveSessionDraft);
 const discardSessionDraftMock = vi.mocked(discardSessionDraft);
@@ -138,6 +141,7 @@ function renderEditor(
       activeMembers={[]}
       canAddCourts
       initialSavedSetups={savedSetups}
+      socialName="Riverside Picklers"
     />,
   );
 }
@@ -687,16 +691,45 @@ describe("SessionSetupEditor", () => {
     ).toHaveAttribute("aria-checked", "false");
   });
 
-  it("discards only after confirming", async () => {
+  it("discards only after a confirmation that identifies the draft on screen", async () => {
     discardSessionDraftMock.mockResolvedValue({ ok: true });
-    renderEditor();
+    renderEditor(draftWith({ participants: participantsFor(3, 1) }));
+    fireEvent.change(screen.getByLabelText("Session name"), {
+      target: { value: "Late social" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAccessibleName("Discard \u201cLate social\u201d?");
+    expect(dialog).toHaveTextContent(
+      "Sat 7 Nov \u00b7 18:00 \u2013 20:00 \u00b7 4 attending \u00b7 Hosted by Ryan H.",
+    );
+    expect(dialog).toHaveAccessibleDescription(
+      /for every host of Riverside Picklers, including anyone editing it right now/,
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "Keep draft" }));
     expect(discardSessionDraftMock).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Keep it" }));
+    // Cancelling left autosave running: the rename still saves.
+    await waitFor(
+      () =>
+        expect(saveSessionDraftMock).toHaveBeenCalledWith(
+          expect.objectContaining({ name: "Late social" }),
+          0,
+        ),
+      SAVE_WAIT,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
-    fireEvent.click(screen.getByRole("button", { name: "Yes, discard" }));
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I understand this discards \u201cLate social\u201d for all hosts",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Discard for all hosts" }),
+    );
     await waitFor(() =>
-      expect(discardSessionDraftMock).toHaveBeenCalledWith(SESSION_ID),
+      expect(discardSessionDraftMock).toHaveBeenCalledExactlyOnceWith(
+        SESSION_ID,
+      ),
     );
   });
 
@@ -781,6 +814,7 @@ describe("SessionSetupEditor", () => {
             activeMembers={[]}
             canAddCourts
             initialSavedSetups={[]}
+            socialName="Riverside Picklers"
           />
         </Activity>
       );
@@ -907,6 +941,7 @@ describe("SessionSetupEditor", () => {
             activeMembers={[]}
             canAddCourts
             initialSavedSetups={[]}
+            socialName="Riverside Picklers"
           />
         );
         const { rerender } = render(editor("A"));

@@ -543,6 +543,46 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       expect((await openDraftFor(hostAlice)).name).toBe("Edited by Ana");
     });
 
+    it("lets a co-host who didn't start the draft discard it for every host", async () => {
+      // Its own social: the shared Alice draft stays open for later tests.
+      const discardSocialId = await createTestSocial(
+        "Integration setup discard social",
+      );
+      const creatorDana = await signedInUser(
+        "Dana Creator",
+        "host",
+        discardSocialId,
+      );
+      const coHostEli = await signedInUser(
+        "Eli Cohost",
+        "host",
+        discardSocialId,
+      );
+      actingClient = creatorDana.client;
+      expect(
+        await startSessionDraft({ name: "Dana's draft", ...plannedTimes(30) }),
+      ).toEqual({ ok: true, notice: null });
+      const draft = await openDraftFor(coHostEli);
+
+      actingClient = coHostEli.client;
+      expect(await discardSessionDraft(draft.sessionId)).toEqual({ ok: true });
+
+      const [row] = await socialSessionRows(creatorDana);
+      expect(row).toMatchObject({
+        id: draft.sessionId,
+        host_id: creatorDana.userId,
+        status: "cancelled",
+      });
+      // Gone for the creator too: no open draft, and their next save is refused.
+      actingClient = creatorDana.client;
+      expect(await readSocialOpenSession(discardSocialId)).toEqual({
+        status: "none",
+      });
+      expect(
+        await saveAtCurrentRevision(saveInputFor(draft.sessionId)),
+      ).toEqual({ ok: false, message: DRAFT_NOT_OPEN });
+    });
+
     it("rejects invalid input before touching the database", async () => {
       const aliceDraft = await openDraftFor(hostAlice);
       const before = await socialSessionRows(hostAlice);

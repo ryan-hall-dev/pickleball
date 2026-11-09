@@ -61,6 +61,7 @@ async function SessionSetupContent() {
         activeMembers={activeMembers}
         canAddCourts={hostAccess.host.role === "manager"}
         initialSavedSetups={savedSetups}
+        socialName={hostAccess.host.socialName}
       />
     );
   }

@@ -537,6 +537,8 @@ interface SessionSetupFormProps {
   canAddCourts: boolean;
   /** The host's own saved setups, most recently used first. */
   initialSavedSetups: SavedSetupSummary[];
+  /** Named in the discard dialog: discarding affects every host of the social. */
+  socialName: string;
 }
 
 /** What happened after saving or applying a setup (shown under the header). */
@@ -568,6 +570,7 @@ function SessionSetupForm({
   activeMembers,
   canAddCourts,
   initialSavedSetups,
+  socialName,
   earlierOwnWrites,
 }: SessionSetupFormProps & { earlierOwnWrites: EarlierOwnWrites }) {
   const isWaitingForEarlierWrites = earlierOwnWrites === "pending";
@@ -802,6 +805,12 @@ function SessionSetupForm({
             />
             <DiscardDraftButton
               sessionId={draft.sessionId}
+              draftName={form.name}
+              plannedStart={validation.plannedStart}
+              plannedEnd={validation.plannedEnd}
+              attendingPlayerCount={attendingPlayerCount}
+              hostName={form.hostName}
+              socialName={socialName}
               onAutosavePausedChange={setIsAutosavePaused}
             />
           </>

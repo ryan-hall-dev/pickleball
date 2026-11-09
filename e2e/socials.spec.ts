@@ -1,7 +1,8 @@
 // Socials (M4.5 A3, docs/plans/socials.md) against the LOCAL Supabase stack:
 // a social's hosts co-edit its one draft ("Start a new session" opens a
 // co-host's draft and says so), a stale tab is told another host changed it,
-// and another social's manager sees none of it. Three browser
+// and another social's manager sees none of it. A co-host who didn't start
+// the draft discards it after a two-step confirmation. Three browser
 // contexts = three signed-in people. Everything is removed afterwards.
 import { randomUUID } from "node:crypto";
 import { expect, test, type Browser, type Page } from "@playwright/test";
@@ -45,7 +46,8 @@ test("a social's hosts share its draft, a stale tab hears about the co-host's ch
 
   // Social A: a manager and a host. The host is created first so cleanup
   // (in creation order) never leaves the social with a host but no manager.
-  const socialAId = await createSocial(uniqueSocialName("socials-a"));
+  const socialAName = uniqueSocialName("socials-a");
+  const socialAId = await createSocial(socialAName);
   const coHostEmail = uniqueEmail("socials-cohost");
   await addHostRow(
     await createLogin(coHostEmail),
@@ -126,6 +128,67 @@ test("a social's hosts share its draft, a stale tab hears about the co-host's ch
     otherPage.getByRole("heading", { name: "No session in progress" }),
   ).toBeVisible();
   await expect(otherPage.getByText(token)).toHaveCount(0);
+
+  // The co-host, who didn't start the draft, may discard it, but only after
+  // a dialog that names it and says it goes for every host.
+  const readDraftRow = async () => {
+    const { data, error: readError } = await adminClient
+      .from("sessions")
+      .select("id, status, name, draft_revision")
+      .eq("social_id", socialAId)
+      .neq("status", "live")
+      .single();
+    if (readError) throw readError;
+    return data;
+  };
+  const rowBeforeDiscard = await readDraftRow();
+  expect(rowBeforeDiscard.status).toBe("draft");
+  await coHostPage.getByRole("button", { name: "Discard draft" }).click();
+  const coHostDialog = coHostPage.getByRole("dialog", {
+    name: `Discard \u201c${draftName}\u201d?`,
+  });
+  await expect(coHostDialog).toContainText(
+    `This discards the draft for every host of ${socialAName}, including anyone editing it right now.`,
+  );
+  await expect(coHostDialog).toContainText("Hosted by E2E manager");
+  await coHostDialog.getByRole("button", { name: "Keep draft" }).click();
+  await expect(coHostDialog).toBeHidden();
+  expect(await readDraftRow()).toEqual(rowBeforeDiscard);
+
+  await coHostPage.getByRole("button", { name: "Discard draft" }).click();
+  await expect(
+    coHostDialog.getByRole("button", { name: "Discard for all hosts" }),
+  ).toBeDisabled();
+  await coHostDialog
+    .getByRole("checkbox", {
+      name: `I understand this discards \u201c${draftName}\u201d for all hosts`,
+    })
+    .check();
+  await coHostDialog
+    .getByRole("button", { name: "Discard for all hosts" })
+    .click();
+  await expect(
+    coHostPage.getByRole("heading", { name: "No session in progress" }),
+  ).toBeVisible();
+  expect(await readDraftRow()).toMatchObject({
+    id: rowBeforeDiscard.id,
+    status: "cancelled",
+  });
+
+  // The manager's tab still shows the draft: discarding it there is refused
+  // inside the dialog, which stays open.
+  await managerPage.getByRole("button", { name: "Discard draft" }).click();
+  const managerDialog = managerPage.getByRole("dialog", {
+    name: `Discard \u201c${draftName}\u201d?`,
+  });
+  await managerDialog.getByRole("checkbox").check();
+  await managerDialog
+    .getByRole("button", { name: "Discard for all hosts" })
+    .click();
+  await expect(managerDialog).toContainText(
+    "This draft is no longer open (it was discarded or started). Reload the page.",
+  );
+  await expect(managerDialog).toBeVisible();
 
   for (const page of [managerPage, coHostPage, otherPage]) {
     await page.context().close();
