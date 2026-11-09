@@ -1,6 +1,6 @@
 # Pickleball Social Session Manager
 
-Web app for pickleball clubs. Hosts run social sessions (setup, live court rotation, final report); players only use a public phone check-in page (`/t/<tag>`, opened by a per-host NFC sticker or QR code). A pure TypeScript engine recommends who plays next using continuous weighted fairness scoring. The live session is an append-only action log. Plan: `docs/plans/session-manager-mvp.md`. Roadmap: `docs/ROADMAP.md`. Decisions: `docs/decisions/`. UI rules: `DESIGN.md`.
+Web app for pickleball clubs. Hosts run social sessions (setup, live court rotation, final report); players only use a public phone check-in page (`/t/<tag>`, opened by the social's NFC sticker or QR code). A pure TypeScript engine recommends who plays next using continuous weighted fairness scoring. The live session is an append-only action log. Plan: `docs/plans/session-manager-mvp.md`. Roadmap: `docs/ROADMAP.md`. Decisions: `docs/decisions/`. UI rules: `DESIGN.md`.
 
 @DESIGN.md
 
@@ -34,8 +34,10 @@ Web app for pickleball clubs. Hosts run social sessions (setup, live court rotat
 
 ## Data and architecture rules
 
-- RLS on every table. Only users in the `hosts` allow-list can read (`authenticated` has SELECT only); the only public surface is the `/t/<tag>` check-in page, whose server code calls `submit_checkin` / `search_checkin_names`
-- All writes are server-only (`docs/decisions/0002-server-only-writes.md`): verify the user with `auth.getUser()` and their role, then write with the service-role client (`src/lib/supabase/admin.ts`), passing `p_actor_user_id`. Write functions are executable by `service_role` only; `anon` can execute nothing
+- Socials (`docs/decisions/0003-socials-and-data-isolation.md`): an installation holds independent socials; one login = one social (`hosts.social_id`, immutable), as `manager` or `host`. Managers also invite/remove hosts, add courts and rename the social. No venue concept; nothing is shared between socials
+- RLS on every table. A host reads only their own social's rows (`social_id = private.current_social_id()`; `authenticated` has SELECT only). The only public surface is the `/t/<tag>` check-in page (one tag per social, `socials.checkin_tag`), whose server code calls `submit_checkin` / `search_checkin_names`
+- All writes are server-only (`docs/decisions/0002-server-only-writes.md`): verify the user with `auth.getUser()` and their role, then write with the service-role client (`src/lib/supabase/admin.ts`), passing `p_actor_user_id`. Write functions are executable by `service_role` only; `anon` can execute nothing. They derive the actor's social from `p_actor_user_id` (never from the caller) and only touch its rows
+- Review checklist: every admin-client query filters `.eq("social_id", host.socialId)` and every insert sets `social_id`; `session_events` and `matches` are scoped by a join to `sessions`
 - Session flow: server action → validate with the engine (`applyEvent`) → one Postgres function (single transaction), via `src/server/submitSessionAction.ts`
 - Every action carries a client-generated `event_id` (idempotency, looked up before the sequence check) and `expected_seq`
 - The log is append-only. Undo appends a compensating action targeting a `target_seq`; rows are never edited or deleted. Undo actions are not undoable
