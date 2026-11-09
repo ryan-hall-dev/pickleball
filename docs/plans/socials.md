@@ -1,6 +1,6 @@
 # M4.5 — Socials and data isolation
 
-Status: **draft, awaiting Ryan's approval** (2026-11-09). Runs before M5. Implements `docs/decisions/0003-socials-and-data-isolation.md` with Ryan's answers and clarification of 2026-11-09. Nothing is in production; local and dev data move into one default social.
+Status: **awaiting Ryan's approval** (2026-11-09). Runs before M5. Implements `docs/decisions/0003-socials-and-data-isolation.md` with Ryan's answers and clarification of 2026-11-09. Nothing is in production; local and dev data move into one default social.
 
 ## 0. Decisions this plan rests on
 
@@ -99,7 +99,7 @@ Grants restated at the end: every public function revoked from public/anon/authe
 
 - `auth/hostAccess.ts`, `auth/currentHost.ts`: `SignedInHost` gains `socialId`, `socialName`; role `'manager' | 'host'`; `NOT_AN_ADMIN` → `NOT_A_MANAGER` ("Only the social manager can do this."); not-a-host copy "Ask your social manager for an invite."
 - **Rule:** cookie-client reads rely on RLS; **every service-role query filters `.eq("social_id", host.socialId)` and every insert sets `social_id`** (added to CLAUDE.md as a review checklist item).
-- `hosts/hostActions.ts`: invites go into the manager's social; an email that already has a login → "That email can't be invited here. Use a different email." (neutral: doesn't reveal another social); `removeHost` reads, counts managers and deletes within the social, and deletes the auth user only if a row was deleted (today it would delete any user id given).
+- `hosts/hostActions.ts`: invites go into the manager's social; `removeHost` refuses to remove a manager (`CANNOT_REMOVE_MANAGER`: "Only the operator can remove a social manager."); an email that already has a login → "That email can't be invited here. Use a different email." (neutral: doesn't reveal another social); `removeHost` reads, counts managers and deletes within the social, and deletes the auth user only if a row was deleted (today it would delete any user id given).
 - `hosts/hostRules.ts`: manager count, `LAST_MANAGER` copy.
 - New `socials/socialActions.ts`: `updateSocialName` (manager only, `short_label` rules).
 - `members/memberActions.ts`: insert `social_id`; reads/updates/duplicate check scoped (another social's member → `MEMBER_NOT_FOUND`).
@@ -163,7 +163,12 @@ Split vertically (review), so every increment has its own migration, pgTAP, serv
 - Editing, renaming or deactivating courts (managers can only add, as today).
 - Check-in page, tray, sticker/QR page and tag reissue (M5).
 
-## Decisions Ryan still needs to make before implementation
+## Decisions (Ryan, 2026-11-09)
 
-- **D1. Header:** only the social's name in the host header, with "Pickleball Social Manager" kept on `/login` and in browser tab titles? (Plan assumes yes.)
-- **D2. Saved setups:** any host of the social can save, replace and apply them (plan), or saving/replacing is manager-only and hosts only apply?
+- **D1 Header:** the host header shows the social's name; "Pickleball Social Manager" stays on `/login` and in browser tab titles.
+- **D2 Saved setups:** any host of the social can save, replace and apply them. Existing private setups merge into one list per social (duplicate names get " (n)").
+- **D3 Managers:** a social can have one or more managers with equal rights. Managers cannot remove (or demote) another manager in the app; only the operator can, with the script (`--social-id` adds a manager to an existing social). Existing admins all become managers of the default social.
+- **D4 Members:** any host (and the manager) can add, edit and deactivate the social's members.
+- Decided on review (technical, no product change): leftover open sessions are closed through the log (`SessionEnded` / cancel), not silently; increments split A1–A4; the cross-social invite message is neutral and reveals nothing.
+
+Status: ready for Ryan's approval. Implementation starts only after approval.
