@@ -9,11 +9,13 @@ import {
   addHostRow,
   adminClient,
   createLogin,
+  createSocial,
   deleteCreatedLogins,
   findUserIdByEmail,
   signIn,
-  signInAsNewAdmin,
+  signInAsNewManager,
   uniqueEmail,
+  uniqueSocialName,
   useRandomClientIp,
 } from "./support/localHostSession";
 
@@ -108,7 +110,7 @@ test("a host sets up a draft's details and courts, sees the summary, reloads and
     { name: `${courtToken} B`, sort_order: 900_002 },
   ]);
   if (courtsError) throw courtsError;
-  const email = await signInAsNewAdmin(page, "setup");
+  const { email } = await signInAsNewManager(page, "setup");
   const hostUserId = (await findUserIdByEmail(email))!;
   testHostUserIds.push(hostUserId);
 
@@ -283,7 +285,7 @@ test("a host sets up a draft's details and courts, sees the summary, reloads and
 test("setup works from the keyboard with a visible focus ring", async ({
   page,
 }) => {
-  const email = await signInAsNewAdmin(page, "setup-keys");
+  const { email } = await signInAsNewManager(page, "setup-keys");
   testHostUserIds.push((await findUserIdByEmail(email))!);
   await page.goto("/setup");
   await page.getByRole("button", { name: "Start a new session" }).click();
@@ -330,7 +332,7 @@ test("a host picks members and guests for a draft, and they persist", async ({
     { first_name: "Kofi", last_name: memberToken },
   ]);
   if (membersError) throw membersError;
-  const email = await signInAsNewAdmin(page, "setup-players");
+  const { email } = await signInAsNewManager(page, "setup-players");
   testHostUserIds.push((await findUserIdByEmail(email))!);
   await startNewDraft(page);
 
@@ -403,12 +405,17 @@ test("a host picks members and guests for a draft, and they persist", async ({
   expect(count).toBe(2);
 });
 
-test("a host who isn't an admin can't add courts to the club", async ({
+test("a host who isn't the social manager can't add courts", async ({
   page,
 }) => {
   const email = uniqueEmail("setup-host");
   const hostUserId = await createLogin(email);
-  await addHostRow(hostUserId, "E2E setup host", "host");
+  await addHostRow(
+    hostUserId,
+    "E2E setup host",
+    "host",
+    await createSocial(uniqueSocialName("setup-host")),
+  );
   testHostUserIds.push(hostUserId);
   await signIn(page, email);
   await startNewDraft(page);
@@ -452,7 +459,7 @@ test("a host reorders the rotation and switches rules; it persists across naviga
   page,
   context,
 }) => {
-  const email = await signInAsNewAdmin(page, "setup-rotation");
+  const { email } = await signInAsNewManager(page, "setup-rotation");
   const hostUserId = (await findUserIdByEmail(email))!;
   testHostUserIds.push(hostUserId);
   await startNewDraft(page);
@@ -608,7 +615,7 @@ test("a host saves a setup, discards the draft, and reuses the setup in a new on
     { name: `${courtToken} B`, sort_order: 900_002 },
   ]);
   if (courtsError) throw courtsError;
-  const email = await signInAsNewAdmin(page, "setup-saved");
+  const { email } = await signInAsNewManager(page, "setup-saved");
   const hostUserId = (await findUserIdByEmail(email))!;
   testHostUserIds.push(hostUserId);
   await startNewDraft(page);
@@ -693,7 +700,7 @@ test("a host saves a setup, discards the draft, and reuses the setup in a new on
 test("the stepper and checklist flag a half-filled guest form", async ({
   page,
 }) => {
-  const email = await signInAsNewAdmin(page, "setup-stepper");
+  const { email } = await signInAsNewManager(page, "setup-stepper");
   const hostUserId = (await findUserIdByEmail(email))!;
   testHostUserIds.push(hostUserId);
   await startNewDraft(page);
@@ -743,7 +750,7 @@ test("a stale tab can't overwrite newer settings: it says so, and saves again af
   page,
   context,
 }) => {
-  const email = await signInAsNewAdmin(page, "setup-two-tabs");
+  const { email } = await signInAsNewManager(page, "setup-two-tabs");
   const hostUserId = (await findUserIdByEmail(email))!;
   testHostUserIds.push(hostUserId);
   await startNewDraft(page);
@@ -826,7 +833,7 @@ test("a stale tab can't overwrite newer settings: it says so, and saves again af
 test("coming back while the save made on leaving is still on its way: it lands, then the next edit saves", async ({
   page,
 }) => {
-  const email = await signInAsNewAdmin(page, "setup-slow-leave");
+  const { email } = await signInAsNewManager(page, "setup-slow-leave");
   const hostUserId = (await findUserIdByEmail(email))!;
   testHostUserIds.push(hostUserId);
   await startNewDraft(page);

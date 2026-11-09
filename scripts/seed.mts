@@ -2,9 +2,10 @@
 //
 //   pnpm seed --members 30 --courts 4 --attending 16
 //
-// Creates (or updates in place, so it is safe to re-run): club settings, an
-// admin host bound to the local user host@example.test (sign in with the email
-// code from Mailpit), courts, members and a draft session with attendees.
+// Creates (or updates in place, so it is safe to re-run): a social managed by
+// the local user host@example.test (sign in with the email code from Mailpit;
+// an existing host keeps their social), courts, members and a draft session
+// with attendees.
 // Reads NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY from the environment
 // (.env.local is loaded automatically) and refuses any non-local URL.
 import { createHash } from "node:crypto";
@@ -17,6 +18,8 @@ type SkillLevel = Database["public"]["Enums"]["skill_level"];
 
 const LOCAL_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const SEED_HOST_EMAIL = "host@example.test";
+const SEED_HOST_DISPLAY_NAME = "Local Manager";
+const SEED_SOCIAL_NAME = "Riverside Pickleball Club";
 const SEED_RANDOM_SEED = 20261107;
 const LIMITS = {
   members: { min: 0, max: 5000, default: 30 },
@@ -213,22 +216,32 @@ async function seed() {
     },
   );
 
-  check(
-    await client
-      .from("club_settings")
-      .upsert({ id: true, club_name: "Riverside Pickleball Club" }),
-    "saving club settings",
-  );
-
   const hostUserId = await findOrCreateHostUser(client);
+  const existingHost = check(
+    await client
+      .from("hosts")
+      .select("social_id")
+      .eq("user_id", hostUserId)
+      .maybeSingle(),
+    "reading the seed host",
+  );
+  const socialId =
+    existingHost?.social_id ??
+    check(
+      await client.rpc("create_social_with_manager", {
+        p_name: SEED_SOCIAL_NAME,
+        p_manager_user_id: hostUserId,
+        p_manager_display_name: SEED_HOST_DISPLAY_NAME,
+      }),
+      "creating the seed social",
+    );
+  if (!socialId) fail("creating the seed social returned no id.");
   check(
     await client
       .from("hosts")
-      .upsert(
-        { user_id: hostUserId, display_name: "Local Admin", role: "admin" },
-        { onConflict: "user_id" },
-      ),
-    "saving the admin host",
+      .update({ display_name: SEED_HOST_DISPLAY_NAME, role: "manager" })
+      .eq("user_id", hostUserId),
+    "saving the seed manager",
   );
 
   const courts = Array.from({ length: options.courts }, (_, index) => ({
@@ -275,7 +288,7 @@ async function seed() {
       host_id: hostUserId,
       name: "Evening social",
       location: "Riverside courts",
-      host_name: "Local Admin",
+      host_name: SEED_HOST_DISPLAY_NAME,
       planned_start: plannedStart.toISOString(),
       planned_end: new Date(
         plannedStart.getTime() + 2 * 3_600_000,
@@ -320,20 +333,21 @@ async function seed() {
     );
   }
 
-  const host = check(
+  const social = check(
     await client
-      .from("hosts")
-      .select("checkin_tag")
-      .eq("user_id", hostUserId)
+      .from("socials")
+      .select("name, checkin_tag")
+      .eq("id", socialId)
       .single(),
-    "reading the host's check-in tag",
+    "reading the social's check-in tag",
   );
-  if (!host) fail("the admin host row is missing after saving it.");
+  if (!social) fail("the seed social is missing after saving it.");
   console.log(
     [
       `Seeded ${supabaseUrl}:`,
-      `  admin host  ${SEED_HOST_EMAIL} (sign in with the email code from Mailpit)`,
-      `  check-in    /t/${host.checkin_tag}`,
+      `  social      "${social.name}"`,
+      `  manager     ${SEED_HOST_EMAIL} (sign in with the email code from Mailpit)`,
+      `  check-in    /t/${social.checkin_tag}`,
       `  courts      ${options.courts}`,
       `  members     ${options.members}`,
       `  session     "Evening social" (draft) with ${options.attending} attending`,

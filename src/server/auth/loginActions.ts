@@ -38,7 +38,7 @@ async function throttleLoginAttempt(
   }
 }
 
-/** Emails a 6-digit sign-in code. Never creates users: hosts are invited by an admin. */
+/** Emails a 6-digit sign-in code. Never creates users: hosts are invited by their social manager. */
 export async function requestLoginCode(
   rawEmail: string,
 ): Promise<RequestLoginCodeOutcome> {

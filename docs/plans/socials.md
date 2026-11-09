@@ -15,7 +15,7 @@ Status: **approved by Ryan 2026-11-09; in progress**. Runs before M5. Implements
 - `socials.name` replaces `club_settings.club_name` (table dropped).
 - Ryan (operator) creates socials and their first manager with `pnpm create-social` (secret key). No operator UI.
 
-## 1. Schema (`supabase/migrations/20261110090000_socials_schema.sql`)
+## 1. Schema (`supabase/migrations/20261110090000_socials_and_hosts.sql`)
 
 Additive, no `db:reset`. Order: create `socials`; rename the enum value; add nullable `social_id` columns; backfill; then `NOT NULL`, foreign keys, indexes, triggers, RLS; drop `club_settings` and `hosts.checkin_tag`. On an empty database the backfill does nothing; the first social comes from the script.
 

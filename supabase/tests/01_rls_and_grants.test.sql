@@ -1,20 +1,22 @@
 -- Row-level security and grants (docs/decisions/0002-server-only-writes.md):
 -- anon reads and executes nothing; a signed-in non-host reads nothing; hosts
--- read everything but write nothing with their own session; only service_role
--- executes the public functions; the log is append-only for every role.
+-- read everything (their own social and its hosts; the tables not yet scoped
+-- to socials installation-wide) but write nothing with their own session; only
+-- service_role executes the public functions; the log is append-only for
+-- every role. Isolation between socials: 11_social_isolation.test.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
 select plan(58);
 
 -- Fixtures (as the table owner) -----------------------------------------------
 insert into auth.users (id, email) values
-  ('a0000000-0000-4000-8000-000000000001', 'pgtap-admin@example.test'),
+  ('a0000000-0000-4000-8000-000000000001', 'pgtap-manager@example.test'),
   ('a0000000-0000-4000-8000-000000000002', 'pgtap-host@example.test'),
   ('a0000000-0000-4000-8000-000000000003', 'pgtap-outsider@example.test');
-insert into public.hosts (user_id, display_name, role) values
-  ('a0000000-0000-4000-8000-000000000001', 'Ada Admin', 'admin'),
-  ('a0000000-0000-4000-8000-000000000002', 'Hal Host', 'host');
-insert into public.club_settings (club_name) values ('Test Club') on conflict (id) do nothing;
+insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000001', 'pgTAP Social');
+insert into public.hosts (user_id, display_name, role, social_id) values
+  ('a0000000-0000-4000-8000-000000000001', 'Mia Manager', 'manager', '50000000-0000-4000-8000-000000000001'),
+  ('a0000000-0000-4000-8000-000000000002', 'Hal Host', 'host', '50000000-0000-4000-8000-000000000001');
 insert into public.members (id, first_name, last_name, skill_level) values
   ('b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'advanced');
 insert into public.member_devices (token_hash, member_id) values
@@ -63,11 +65,11 @@ select is(
   'anon can execute no public or private function'
 );
 select is(
-  (select string_agg(pronamespace::regnamespace::text || '.' || proname::text, ',') from pg_proc
+  (select string_agg(pronamespace::regnamespace::text || '.' || proname::text, ',' order by proname) from pg_proc
    where pronamespace in ('public'::regnamespace, 'private'::regnamespace)
      and has_function_privilege('authenticated', oid, 'execute')),
-  'private.is_host',
-  'authenticated can execute only private.is_host (used by RLS)'
+  'private.current_social_id,private.is_host',
+  'authenticated can execute only the RLS helpers (is_host stays until A2/A3 scope the other tables)'
 );
 select set_eq(
   $$select proname::text from pg_proc
@@ -78,7 +80,7 @@ select set_eq(
     'set_draft_member_attendance', 'add_draft_guest', 'remove_draft_guest',
     'save_setup', 'apply_saved_setup',
     'approve_checkin', 'reject_checkin', 'search_checkin_names', 'submit_checkin',
-    'record_login_attempt'
+    'record_login_attempt', 'create_social_with_manager'
   ],
   'service_role executes exactly the public functions'
 );
@@ -86,7 +88,7 @@ select is(
   (select count(*) from pg_proc
    where pronamespace = 'private'::regnamespace and has_function_privilege('service_role', oid, 'execute')),
   0::bigint,
-  'nobody but the owner executes private helpers (besides is_host for RLS)'
+  'nobody but the owner executes private helpers (besides the RLS helpers)'
 );
 select is(
   (select count(*)
@@ -100,7 +102,7 @@ select is(
 
 -- anon: no table is readable --------------------------------------------------
 set local role anon;
-select throws_ok('select * from public.club_settings', '42501', null, 'anon cannot read club_settings');
+select throws_ok('select * from public.socials', '42501', null, 'anon cannot read socials');
 select throws_ok('select * from public.hosts', '42501', null, 'anon cannot read hosts');
 select throws_ok('select * from public.members', '42501', null, 'anon cannot read members');
 select throws_ok('select * from public.member_devices', '42501', null, 'anon cannot read member_devices');
@@ -125,7 +127,7 @@ reset role;
 -- Signed in but not a host: every row is filtered out ---------------------------
 select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
 set local role authenticated;
-select is_empty('select * from public.club_settings', 'non-host sees no club_settings');
+select is_empty('select * from public.socials', 'non-host sees no socials');
 select is_empty('select * from public.hosts', 'non-host sees no hosts');
 select is_empty('select * from public.members', 'non-host sees no members');
 select is_empty('select * from public.courts', 'non-host sees no courts');
@@ -141,7 +143,7 @@ reset role;
 -- Host: reads everything except the private device and attempt tables ------------
 select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000002","role":"authenticated"}', true);
 set local role authenticated;
-select isnt_empty('select * from public.club_settings', 'host reads club_settings');
+select isnt_empty('select * from public.socials', 'host reads their social');
 select isnt_empty('select * from public.hosts', 'host reads hosts');
 select isnt_empty('select * from public.members', 'host reads members');
 select isnt_empty('select * from public.courts', 'host reads courts');
@@ -182,16 +184,16 @@ select throws_ok(
 );
 reset role;
 
--- Not even an admin writes with their session (invites go through server code).
+-- Not even a social manager writes with their session (invites go through server code).
 select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 set local role authenticated;
 select throws_ok(
-  $$insert into public.hosts (user_id, display_name) values ('a0000000-0000-4000-8000-000000000003', 'New Host')$$,
-  '42501', null, 'an admin cannot add hosts with their session'
+  $$insert into public.hosts (user_id, display_name, social_id) values ('a0000000-0000-4000-8000-000000000003', 'New Host', '50000000-0000-4000-8000-000000000001')$$,
+  '42501', null, 'a manager cannot add hosts with their session'
 );
 select throws_ok(
-  $$update public.club_settings set club_name = 'Renamed'$$,
-  '42501', null, 'an admin cannot edit club settings with their session'
+  $$update public.socials set name = 'Renamed'$$,
+  '42501', null, 'a manager cannot rename their social with their session'
 );
 reset role;
 

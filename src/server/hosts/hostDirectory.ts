@@ -9,10 +9,13 @@ export interface HostListEntry {
   role: HostRole;
 }
 
-// One club has a handful of hosts; the cap only guards against runaway lists.
+// One social has a handful of hosts; the cap only guards against runaway lists.
 const HOST_LIST_LIMIT = 200;
 
-/** The hosts allow-list, read with the caller's session (RLS: hosts only). */
+/**
+ * The caller's social's hosts, managers first, read with the caller's session
+ * (RLS: a host reads only their own social's rows).
+ */
 export async function listHosts(): Promise<HostListEntry[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -30,11 +33,11 @@ export async function listHosts(): Promise<HostListEntry[]> {
 }
 
 /**
- * Whether anyone at all is on the hosts list. Used by the signed-out login
- * page (which RLS gives no read access) to explain how to create the first admin.
- * Reveals one bit and nothing else.
+ * Whether anyone at all, in any social, is on the hosts list. Used by the
+ * signed-out login page (which RLS gives no read access) to explain how to
+ * create the first social. Reveals one bit and nothing else.
  */
-export async function clubHasAnyHost(): Promise<boolean> {
+export async function installationHasAnyHost(): Promise<boolean> {
   const { count, error } = await createSupabaseAdminClient()
     .from("hosts")
     .select("user_id", { count: "exact", head: true });

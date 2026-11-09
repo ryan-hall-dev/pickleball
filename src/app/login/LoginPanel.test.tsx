@@ -1,11 +1,13 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readHostAccess } from "@/server/auth/currentHost";
-import { clubHasAnyHost } from "@/server/hosts/hostDirectory";
+import { installationHasAnyHost } from "@/server/hosts/hostDirectory";
 import { LoginPanel } from "./LoginPanel";
 
 vi.mock("@/server/auth/currentHost", () => ({ readHostAccess: vi.fn() }));
-vi.mock("@/server/hosts/hostDirectory", () => ({ clubHasAnyHost: vi.fn() }));
+vi.mock("@/server/hosts/hostDirectory", () => ({
+  installationHasAnyHost: vi.fn(),
+}));
 vi.mock("@/server/auth/loginActions", () => ({
   requestLoginCode: vi.fn(),
   verifyLoginCode: vi.fn(),
@@ -17,27 +19,27 @@ vi.mock("next/navigation", () => ({
 }));
 
 const readHostAccessMock = vi.mocked(readHostAccess);
-const clubHasAnyHostMock = vi.mocked(clubHasAnyHost);
+const installationHasAnyHostMock = vi.mocked(installationHasAnyHost);
 
 describe("LoginPanel", () => {
   afterEach(cleanup);
 
-  it("explains how to create the first admin when there are no hosts", async () => {
+  it("explains how to create the first social when there are no hosts", async () => {
     readHostAccessMock.mockResolvedValue({ status: "signed_out" });
-    clubHasAnyHostMock.mockResolvedValue(false);
+    installationHasAnyHostMock.mockResolvedValue(false);
 
     render(await LoginPanel());
 
     expect(
       screen.getByRole("heading", { name: "No hosts yet" }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/pnpm create-admin --email/)).toBeInTheDocument();
+    expect(screen.getByText(/pnpm create-social --name/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
   });
 
   it("shows the sign-in form when hosts exist", async () => {
     readHostAccessMock.mockResolvedValue({ status: "signed_out" });
-    clubHasAnyHostMock.mockResolvedValue(true);
+    installationHasAnyHostMock.mockResolvedValue(true);
 
     render(await LoginPanel());
 
@@ -51,7 +53,14 @@ describe("LoginPanel", () => {
     { status: "not_a_host", email: "x@example.test" } as const,
     {
       status: "host",
-      host: { userId: "u1", email: null, displayName: "Ada", role: "host" },
+      host: {
+        userId: "u1",
+        email: null,
+        displayName: "Ada",
+        role: "host",
+        socialId: "s1",
+        socialName: "Riverside Social",
+      },
     } as const,
   ])("sends a signed-in visitor ($status) to the host area", async (access) => {
     readHostAccessMock.mockResolvedValue(access);

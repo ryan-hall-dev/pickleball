@@ -132,7 +132,7 @@ function draftRevisionFrom(data: unknown): number {
   }
   return parsed.data.draftRevision;
 }
-const ONLY_ADMINS_ADD_COURTS = "Only admins can add courts to the club.";
+const ONLY_MANAGERS_ADD_COURTS = "Only the social manager can add courts.";
 const LIVE_SESSION_EXISTS =
   "You already have a live session. End it before setting up a new one.";
 
@@ -384,19 +384,19 @@ export async function discardSessionDraft(
 }
 
 /**
- * Adds a court to the club. Admins only (Ryan, 2026-11-09): courts are shared
+ * Adds a court to the club. Social managers only (Ryan, 2026-11-09): courts are shared
  * by every session, so other hosts only choose from the existing ones.
  */
 export async function addClubCourt(
   input: AddClubCourtInput,
 ): Promise<AddClubCourtResult> {
-  const authorization = await authorizeCurrentHost("admin");
+  const authorization = await authorizeCurrentHost("manager");
   if (!authorization.ok) {
     return {
       ok: false,
       message:
-        authorization.reason === "NOT_AN_ADMIN"
-          ? ONLY_ADMINS_ADD_COURTS
+        authorization.reason === "NOT_A_MANAGER"
+          ? ONLY_MANAGERS_ADD_COURTS
           : HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
     };
   }

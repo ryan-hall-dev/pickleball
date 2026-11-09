@@ -1,8 +1,10 @@
--- An empty database works: no club settings, hosts, members or sessions. Rows
--- left by `pnpm seed` are cleared inside this (rolled back) transaction first.
+-- An empty database works: no socials, hosts, members or sessions. Rows left
+-- by `pnpm seed` and other runs are cleared inside this (rolled back)
+-- transaction first. The first social and its manager come from
+-- create_social_with_manager (`pnpm create-social`).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(8);
+select plan(10);
 
 alter table public.session_events disable trigger session_events_block_update_delete;
 delete from public.session_events;
@@ -18,10 +20,9 @@ delete from public.saved_setups;
 delete from public.member_devices;
 delete from public.members;
 delete from public.courts;
-alter table public.hosts disable trigger hosts_keep_one_admin;
+-- Emptying every social at once passes the last-manager guard.
 delete from public.hosts;
-alter table public.hosts enable trigger hosts_keep_one_admin;
-delete from public.club_settings;
+delete from public.socials;
 
 insert into auth.users (id, email) values ('a0000000-0000-4000-8000-000000000009', 'pgtap-first-login@example.test');
 
@@ -43,24 +44,38 @@ reset role;
 
 select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000009","role":"authenticated"}', true);
 set local role authenticated;
-select is_empty('select * from public.club_settings', 'a signed-in user sees no club settings (none yet)');
+select is_empty('select * from public.socials', 'a signed-in user sees no socials (none yet)');
 select is_empty('select * from public.sessions', 'a signed-in user sees no sessions');
 reset role;
 
--- The first admin is bootstrapped by the owner (seed script or SQL), then works normally.
-insert into public.hosts (user_id, display_name, role) values ('a0000000-0000-4000-8000-000000000009', 'First Admin', 'admin');
+-- The operator creates the first social and its manager in one call, then it works normally.
 set local role service_role;
+select isnt(
+  public.create_social_with_manager('First Social', 'a0000000-0000-4000-8000-000000000009', 'First Manager'),
+  null,
+  'the server can create the first social with its manager'
+);
+select throws_ok(
+  $$select public.create_social_with_manager('Second Social', 'a0000000-0000-4000-8000-000000000009', 'First Manager')$$,
+  '23505', null, 'a login that already hosts a social cannot manage a second one'
+);
 select throws_ok(
   $$select public.append_session_event('a0000000-0000-4000-8000-000000000009', gen_random_uuid(), gen_random_uuid(), 0, 'Paused', '{}', now())$$,
   'P0002', 'SESSION_NOT_FOUND', 'a host writing to a missing session gets a clear error'
 );
-select lives_ok(
-  $$insert into public.club_settings (club_name) values ('New Club')$$,
-  'the server can create the club settings row'
+reset role;
+
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000009","role":"authenticated"}', true);
+set local role authenticated;
+select results_eq(
+  $$select name::text, checkin_tag ~ '^[a-z0-9]{32}$' from public.socials$$,
+  $$values ('First Social', true)$$,
+  'the manager reads exactly their new social, which has a fresh check-in tag'
 );
-select throws_ok(
-  $$insert into public.club_settings (club_name) values ('Second Club')$$,
-  '23505', null, 'club_settings holds a single row'
+select results_eq(
+  $$select role::text from public.hosts$$,
+  $$values ('manager')$$,
+  'the first login is the social''s manager'
 );
 reset role;
 

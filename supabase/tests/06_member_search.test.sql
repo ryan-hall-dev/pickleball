@@ -8,8 +8,9 @@ select plan(11);
 insert into auth.users (id, email) values
   ('a0000000-0000-4000-8000-000000000061', 'pgtap-members-host@example.test'),
   ('a0000000-0000-4000-8000-000000000062', 'pgtap-members-outsider@example.test');
-insert into public.hosts (user_id, display_name, role) values
-  ('a0000000-0000-4000-8000-000000000061', 'Mel Members', 'host');
+insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000006', 'pgTAP Social');
+insert into public.hosts (user_id, display_name, role, social_id) values
+  ('a0000000-0000-4000-8000-000000000061', 'Mel Members', 'host', '50000000-0000-4000-8000-000000000006');
 insert into public.members (id, first_name, last_name, skill_level) values
   ('b0000000-0000-4000-8000-000000000061', 'Élodie', 'Durand-Çelik', 'advanced'),
   ('b0000000-0000-4000-8000-000000000062', 'Anne  Marie', 'O''Brien', null),

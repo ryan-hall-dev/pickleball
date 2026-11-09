@@ -2,13 +2,15 @@
 import { describe, expect, it } from "vitest";
 import { authorizeHostAccess, type SignedInHost } from "./hostAccess";
 
-const adminHost: SignedInHost = {
+const managerHost: SignedInHost = {
   userId: "00000000-0000-4000-8000-000000000001",
-  email: "admin@example.test",
+  email: "manager@example.test",
   displayName: "Ada",
-  role: "admin",
+  role: "manager",
+  socialId: "00000000-0000-4000-8000-0000000000a1",
+  socialName: "Riverside Social",
 };
-const regularHost: SignedInHost = { ...adminHost, role: "host" };
+const regularHost: SignedInHost = { ...managerHost, role: "host" };
 
 describe("authorizeHostAccess", () => {
   it("denies a signed-out visitor for every role", () => {
@@ -16,7 +18,7 @@ describe("authorizeHostAccess", () => {
       ok: false,
       reason: "SIGNED_OUT",
     });
-    expect(authorizeHostAccess({ status: "signed_out" }, "admin")).toEqual({
+    expect(authorizeHostAccess({ status: "signed_out" }, "manager")).toEqual({
       ok: false,
       reason: "SIGNED_OUT",
     });
@@ -28,33 +30,33 @@ describe("authorizeHostAccess", () => {
       ok: false,
       reason: "NOT_A_HOST",
     });
-    expect(authorizeHostAccess(access, "admin")).toEqual({
+    expect(authorizeHostAccess(access, "manager")).toEqual({
       ok: false,
       reason: "NOT_A_HOST",
     });
   });
 
-  it("lets a regular host do host things but not admin things", () => {
+  it("lets a regular host do host things but not manager things", () => {
     const access = { status: "host", host: regularHost } as const;
     expect(authorizeHostAccess(access, "host")).toEqual({
       ok: true,
       host: regularHost,
     });
-    expect(authorizeHostAccess(access, "admin")).toEqual({
+    expect(authorizeHostAccess(access, "manager")).toEqual({
       ok: false,
-      reason: "NOT_AN_ADMIN",
+      reason: "NOT_A_MANAGER",
     });
   });
 
-  it("lets an admin do both", () => {
-    const access = { status: "host", host: adminHost } as const;
+  it("lets a social manager do both", () => {
+    const access = { status: "host", host: managerHost } as const;
     expect(authorizeHostAccess(access, "host")).toEqual({
       ok: true,
-      host: adminHost,
+      host: managerHost,
     });
-    expect(authorizeHostAccess(access, "admin")).toEqual({
+    expect(authorizeHostAccess(access, "manager")).toEqual({
       ok: true,
-      host: adminHost,
+      host: managerHost,
     });
   });
 });

@@ -24,7 +24,7 @@ export const DEFAULT_CHANGEOVER_MINUTES = 2;
 export const TARGET_MATCH_MINUTES_RANGE = { min: 1, max: 180 } as const;
 export const CHANGEOVER_MINUTES_RANGE = { min: 0, max: 60 } as const;
 
-/** Mirrors the `short_label` domain (session, host and court names). */
+/** Mirrors the `short_label` domain (social, session, host and court names). */
 export const SHORT_LABEL_MAX_LENGTH = 80;
 /** Mirrors the `sessions.location` check. */
 export const LOCATION_MAX_LENGTH = 120;
@@ -35,7 +35,7 @@ function collapseSpaces(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function shortLabelSchema(emptyMessage: string) {
+export function shortLabelSchema(emptyMessage: string) {
   return z
     .string()
     .transform(collapseSpaces)

@@ -51,15 +51,15 @@ async function HostGate({ children }: { children: ReactNode }) {
             className="flex min-h-11 items-center gap-3 rounded-xl"
           >
             <ClubLogo />
-            <span className="text-[19px] font-bold">
-              Pickleball Social Manager
-            </span>
+            {/* The social's own name (decision D1); the app name stays on
+                /login and in tab titles. */}
+            <span className="text-[19px] font-bold">{host.socialName}</span>
           </Link>
           <HostNav />
           <div className="ml-auto flex items-center gap-3">
             <InitialsAvatar name={host.displayName} />
             <span className="text-sm text-muted">
-              {host.role === "admin" ? "Admin" : "Host"} ·{" "}
+              {host.role === "manager" ? "Social manager" : "Host"} ·{" "}
               <span className="font-semibold text-text">
                 {host.displayName}
               </span>
@@ -103,7 +103,7 @@ function NotAHostNotice({ email }: { email: string | null }) {
           ) : (
             "This account isn't on the hosts list."
           )}{" "}
-          Ask an admin for an invite.
+          Ask your social manager for an invite.
         </p>
         <form action={signOut}>
           <button

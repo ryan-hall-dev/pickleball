@@ -12,8 +12,10 @@ import {
   inviteHostInputSchema,
 } from "./hostRules";
 
-// Writes use the service-role client, always after the caller is verified as an
-// admin with getUser() (docs/decisions/0002-server-only-writes.md).
+// Writes use the service-role client, always after the caller is verified as a
+// social manager with getUser() (docs/decisions/0002-server-only-writes.md).
+// Every query is scoped to the manager's own social: the service-role client
+// bypasses RLS, so the social_id filter is the isolation.
 
 export type InviteHostFormState =
   | { status: "idle" }
@@ -31,6 +33,9 @@ export type RemoveHostFormState =
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 const HOSTS_PATH = "/hosts";
 const SOMETHING_WENT_WRONG = "Something went wrong. Try again in a moment.";
+// Neutral on purpose: it must not reveal that the email hosts another social.
+const EMAIL_CANNOT_BE_INVITED =
+  "That email can't be invited here. Use a different email.";
 
 function formText(formData: FormData, fieldName: string): string {
   const value = formData.get(fieldName);
@@ -55,10 +60,11 @@ export async function inviteHost(
     submittedValues,
   });
 
-  const authorization = await authorizeCurrentHost("admin");
+  const authorization = await authorizeCurrentHost("manager");
   if (!authorization.ok) {
     return formError(HOST_ACCESS_DENIAL_MESSAGES[authorization.reason]);
   }
+  const { socialId } = authorization.host;
 
   const parsed = inviteHostInputSchema.safeParse(submittedValues);
   if (!parsed.success) {
@@ -73,16 +79,32 @@ export async function inviteHost(
   try {
     const adminClient = createSupabaseAdminClient();
     const invitedUserId = await findOrCreateAuthUser(adminClient, email);
-    // checkin_tag is left to the database default: 122 random bits.
     const { error } = await adminClient.from("hosts").insert({
       user_id: invitedUserId,
       display_name: displayName,
       role: "host",
+      social_id: socialId,
     });
     if (error?.code === POSTGRES_UNIQUE_VIOLATION) {
-      return formError("That person is already a host.", {
-        email: "Already on the hosts list.",
-      });
+      // One login, one social: they already host this social or another one.
+      const { data: hostOfThisSocial, error: readError } = await adminClient
+        .from("hosts")
+        .select("user_id")
+        .eq("user_id", invitedUserId)
+        .eq("social_id", socialId)
+        .maybeSingle();
+      if (readError) {
+        throw new Error(
+          `Reading the existing host failed: ${readError.message}`,
+        );
+      }
+      return hostOfThisSocial
+        ? formError("That person is already a host.", {
+            email: "Already on the hosts list.",
+          })
+        : formError(EMAIL_CANNOT_BE_INVITED, {
+            email: "Use a different email.",
+          });
     }
     if (error) throw new Error(`Adding the host failed: ${error.message}`);
   } catch (error) {
@@ -104,13 +126,14 @@ export async function removeHost(
   _previousState: RemoveHostFormState,
   formData: FormData,
 ): Promise<RemoveHostFormState> {
-  const authorization = await authorizeCurrentHost("admin");
+  const authorization = await authorizeCurrentHost("manager");
   if (!authorization.ok) {
     return {
       status: "error",
       message: HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
     };
   }
+  const { socialId } = authorization.host;
 
   const parsedUserId = z.uuid().safeParse(formText(formData, "hostUserId"));
   if (!parsedUserId.success) {
@@ -123,29 +146,21 @@ export async function removeHost(
 
   try {
     const adminClient = createSupabaseAdminClient();
-    const [targetResult, adminCountResult] = await Promise.all([
-      adminClient
-        .from("hosts")
-        .select("user_id, role")
-        .eq("user_id", targetUserId)
-        .maybeSingle(),
-      adminClient
-        .from("hosts")
-        .select("user_id", { count: "exact", head: true })
-        .eq("role", "admin"),
-    ]);
-    if (targetResult.error || adminCountResult.error) {
-      throw new Error(
-        `Reading hosts failed: ${targetResult.error?.message ?? adminCountResult.error?.message}`,
-      );
-    }
+    // Another social's host reads as "not found": nothing is revealed about it.
+    const { data: targetHost, error: readError } = await adminClient
+      .from("hosts")
+      .select("user_id, role")
+      .eq("user_id", targetUserId)
+      .eq("social_id", socialId)
+      .maybeSingle();
+    if (readError)
+      throw new Error(`Reading the host failed: ${readError.message}`);
 
     const removalCheck = checkHostRemoval({
       actorUserId: authorization.host.userId,
-      targetHost: targetResult.data
-        ? { userId: targetResult.data.user_id, role: targetResult.data.role }
+      targetHost: targetHost
+        ? { userId: targetHost.user_id, role: targetHost.role }
         : null,
-      adminCount: adminCountResult.count ?? 0,
     });
     if (!removalCheck.ok) {
       return {
@@ -154,22 +169,25 @@ export async function removeHost(
       };
     }
 
-    // Removing the hosts row revokes access at once (RLS). It goes first so the
-    // database's last-admin guard can refuse it with a clear error.
-    const { error: deleteHostError } = await adminClient
+    // Removing the hosts row revokes access at once (RLS). The filters repeat
+    // the checks above, so a concurrent change can't widen what is deleted.
+    const { data: deletedHosts, error: deleteHostError } = await adminClient
       .from("hosts")
       .delete()
-      .eq("user_id", targetUserId);
-    if (deleteHostError?.message.includes("LAST_ADMIN")) {
-      return {
-        status: "error",
-        message: HOST_REMOVAL_DENIAL_MESSAGES.LAST_ADMIN,
-      };
-    }
+      .eq("user_id", targetUserId)
+      .eq("social_id", socialId)
+      .eq("role", "host")
+      .select("user_id");
     if (deleteHostError) {
       throw new Error(
         `Deleting the host row failed: ${deleteHostError.message}`,
       );
+    }
+    if (deletedHosts.length === 0) {
+      return {
+        status: "error",
+        message: HOST_REMOVAL_DENIAL_MESSAGES.HOST_NOT_FOUND,
+      };
     }
 
     // Then delete the login itself, so a removed host can't get a session at all.

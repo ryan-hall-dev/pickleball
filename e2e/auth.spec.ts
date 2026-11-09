@@ -5,6 +5,7 @@ import { expect, test } from "@playwright/test";
 import {
   addHostRow,
   createLogin,
+  createSocial,
   deleteCreatedLogins,
   findUserIdByEmail,
   mailpitSearchUrl,
@@ -14,10 +15,11 @@ import {
   signOut,
   trackCreatedLogin,
   uniqueEmail,
+  uniqueSocialName,
   useRandomClientIp,
 } from "./support/localHostSession";
 
-const SEEDED_ADMIN_EMAIL = "host@example.test";
+const SEEDED_MANAGER_EMAIL = "host@example.test";
 
 test.beforeEach(async ({ page }) => {
   await useRandomClientIp(page);
@@ -40,15 +42,15 @@ test("the public check-in path is not gated by login", async ({ page }) => {
   await expect(page).toHaveURL(/\/t\/some-sticker-tag-1234$/);
 });
 
-test("the seeded admin signs in with an emailed code", async ({
+test("the seeded social manager signs in with an emailed code", async ({
   page,
 }, testInfo) => {
   // One project only: parallel code requests for the same email replace each other's codes.
   test.skip(testInfo.project.name !== "chromium", "runs once, on desktop");
-  const seededAdminId = await findUserIdByEmail(SEEDED_ADMIN_EMAIL);
-  test.skip(!seededAdminId, "run `pnpm seed` to create the local admin");
+  const seededManagerId = await findUserIdByEmail(SEEDED_MANAGER_EMAIL);
+  test.skip(!seededManagerId, "run `pnpm seed` to create the local manager");
 
-  await signIn(page, SEEDED_ADMIN_EMAIL);
+  await signIn(page, SEEDED_MANAGER_EMAIL);
 
   await expect(
     page.getByRole("heading", { name: "Set up a session" }),
@@ -99,7 +101,9 @@ test("a signed-in non-host is told to ask for an invite", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "You're not a host here" }),
   ).toBeVisible();
-  await expect(page.getByText("Ask an admin for an invite.")).toBeVisible();
+  await expect(
+    page.getByText("Ask your social manager for an invite."),
+  ).toBeVisible();
   await page.goto("/hosts");
   await expect(
     page.getByRole("heading", { name: "You're not a host here" }),
@@ -107,23 +111,54 @@ test("a signed-in non-host is told to ask for an invite", async ({ page }) => {
   await signOut(page);
 });
 
-test("an admin invites a host, who can then sign in, and removes them", async ({
+test("a social manager invites a host, who can then sign in, and removes them", async ({
   page,
 }) => {
-  const adminEmail = uniqueEmail("admin");
-  await addHostRow(await createLogin(adminEmail), "E2E Admin", "admin");
+  const managerEmail = uniqueEmail("manager");
+  const socialName = uniqueSocialName("auth");
+  const socialId = await createSocial(socialName);
+  await addHostRow(
+    await createLogin(managerEmail),
+    "E2E Manager",
+    "manager",
+    socialId,
+  );
+  // A host of another social: their email can't be invited here.
+  const otherSocialHostEmail = uniqueEmail("other-social-host");
+  await addHostRow(
+    await createLogin(otherSocialHostEmail),
+    "E2E Other Host",
+    "host",
+    await createSocial(uniqueSocialName("other")),
+  );
   const inviteeEmail = uniqueEmail("invitee");
   const inviteeName = `Invitee ${randomUUID().slice(0, 6)}`;
 
-  await signIn(page, adminEmail);
+  await signIn(page, managerEmail);
+  // The header shows the social's own name and the manager's role.
+  const header = page.getByRole("banner");
+  await expect(header).toContainText(socialName);
+  await expect(header).not.toContainText("Pickleball Social Manager");
+  await expect(header).toContainText("Social manager · E2E Manager");
   await page.goto("/hosts");
-  // An admin can't remove themselves.
   await expect(
-    page.getByRole("button", { name: "Remove E2E Admin" }),
+    page.getByRole("listitem").filter({ hasText: "E2E Manager" }),
+  ).toContainText("MANAGER");
+  await expect(page.getByText("E2E Other Host")).toHaveCount(0);
+  // A manager can't remove themselves.
+  await expect(
+    page.getByRole("button", { name: "Remove E2E Manager" }),
   ).toHaveCount(0);
 
   await page.getByRole("button", { name: "Invite host" }).click();
   await expect(page.getByText("Enter a valid email address.")).toBeVisible();
+
+  await page.getByLabel("Email").fill(otherSocialHostEmail);
+  await page.getByLabel("Display name").fill("Poached Host");
+  await page.getByRole("button", { name: "Invite host" }).click();
+  await expect(
+    page.getByText("That email can't be invited here. Use a different email."),
+  ).toBeVisible();
 
   await page.getByLabel("Email").fill(inviteeEmail.toUpperCase());
   await page.getByLabel("Display name").fill(inviteeName);
@@ -141,18 +176,31 @@ test("an admin invites a host, who can then sign in, and removes them", async ({
   await page.getByLabel("Display name").fill(inviteeName);
   await page.getByRole("button", { name: "Invite host" }).click();
   await expect(page.getByText("That person is already a host.")).toBeVisible();
+
+  // The manager renames the social; the header follows.
+  const renamedSocialName = uniqueSocialName("renamed");
+  await page.getByLabel("Name", { exact: true }).fill(renamedSocialName);
+  await page.getByRole("button", { name: "Save name" }).click();
+  await expect(
+    page.getByText(`The social is now ${renamedSocialName}.`),
+  ).toBeVisible();
+  await expect(header).toContainText(renamedSocialName);
   await signOut(page);
 
   await signIn(page, inviteeEmail);
+  await expect(page.getByRole("banner")).toContainText(renamedSocialName);
   await expect(page.getByRole("banner")).toContainText(`Host · ${inviteeName}`);
   await page.goto("/hosts");
   await expect(
-    page.getByText("Only admins can invite or remove hosts."),
+    page.getByText("Only the social manager can invite or remove hosts."),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: /^Remove / })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Social name" })).toHaveCount(
+    0,
+  );
   await signOut(page);
 
-  await signIn(page, adminEmail);
+  await signIn(page, managerEmail);
   await page.goto("/hosts");
   await page.getByRole("button", { name: `Remove ${inviteeName}` }).click();
   await page

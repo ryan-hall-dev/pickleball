@@ -8,9 +8,10 @@ insert into auth.users (id, email) values
   ('a7000000-0000-4000-8000-000000000001', 'pgtap-draft-owner@example.test'),
   ('a7000000-0000-4000-8000-000000000002', 'pgtap-draft-other@example.test'),
   ('a7000000-0000-4000-8000-000000000003', 'pgtap-draft-outsider@example.test');
-insert into public.hosts (user_id, display_name, role) values
-  ('a7000000-0000-4000-8000-000000000001', 'Owner Host', 'host'),
-  ('a7000000-0000-4000-8000-000000000002', 'Other Host', 'host');
+insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000007', 'pgTAP Social');
+insert into public.hosts (user_id, display_name, role, social_id) values
+  ('a7000000-0000-4000-8000-000000000001', 'Owner Host', 'host', '50000000-0000-4000-8000-000000000007'),
+  ('a7000000-0000-4000-8000-000000000002', 'Other Host', 'host', '50000000-0000-4000-8000-000000000007');
 insert into public.members (id, first_name, last_name) values
   ('b7000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
 insert into public.sessions (id, host_id, name, host_name, planned_start, planned_end, status, started_at, config_snapshot) values

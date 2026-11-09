@@ -2,8 +2,8 @@
 // The Setup screen's draft writes and reads against the LOCAL Supabase stack
 // (`pnpm db:start`):
 //   * only hosts may create, edit or discard drafts and change attendance,
-//     only admins add courts, and a host can never edit, discard or change
-//     the attendance of another host's draft;
+//     only the social manager adds courts, and a host can never edit, discard
+//     or change the attendance of another host's draft;
 //   * create / load / update / discard a draft, the one-open-session rule,
 //     adding a club court, and attendance (members, guests, Clear).
 // Test courts carry a unique token in their name; test sessions belong to
@@ -124,7 +124,10 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
   let admin: DatabaseClient;
   let hostAlice: { client: DatabaseClient; userId: string };
   let hostBob: { client: DatabaseClient; userId: string };
-  let adminCarol: { client: DatabaseClient; userId: string };
+  let managerCarol: { client: DatabaseClient; userId: string };
+  // Every host here shares one social (sessions, courts and setups aren't
+  // scoped to socials until A2/A3).
+  let socialId: string;
   let nonHostClient: DatabaseClient;
   let signedOutClient: DatabaseClient;
   const createdUserIds: string[] = [];
@@ -135,7 +138,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
 
   async function signedInUser(
     displayName: string | null,
-    role: "host" | "admin" = "host",
+    role: "host" | "manager" = "host",
   ): Promise<{ client: DatabaseClient; userId: string }> {
     const email = `integration-setup-${randomUUID()}@example.test`;
     const password = `pw-${randomUUID()}`;
@@ -148,9 +151,12 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     const userId = created.data.user.id;
     createdUserIds.push(userId);
     if (displayName) {
-      const { error } = await admin
-        .from("hosts")
-        .insert({ user_id: userId, display_name: displayName, role });
+      const { error } = await admin.from("hosts").insert({
+        user_id: userId,
+        display_name: displayName,
+        role,
+        social_id: socialId,
+      });
       if (error) throw error;
     }
     const client = createClient<Database>(
@@ -268,9 +274,16 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     admin = createClient<Database>(localStack!.apiUrl, localStack!.secretKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    const { data: social, error: socialError } = await admin
+      .from("socials")
+      .insert({ name: "Integration setup social" })
+      .select("id")
+      .single();
+    if (socialError) throw socialError;
+    socialId = social.id;
     hostAlice = await signedInUser("Alice Setup");
     hostBob = await signedInUser("Bob Setup");
-    adminCarol = await signedInUser("Carol Admin", "admin");
+    managerCarol = await signedInUser("Carol Manager", "manager");
     nonHostClient = (await signedInUser(null)).client;
     signedOutClient = createClient<Database>(
       localStack!.apiUrl,
@@ -312,6 +325,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     for (const userId of hostIds) {
       await admin.auth.admin.deleteUser(userId);
     }
+    if (socialId) await admin.from("socials").delete().eq("id", socialId);
     vi.unstubAllEnvs();
   });
 
@@ -792,7 +806,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
   });
 
   describe("club courts", () => {
-    it("lets only admins add a court", async () => {
+    it("lets only the social manager add a court", async () => {
       actingClient = hostAlice.client;
       expect(
         await addClubCourt({
@@ -801,7 +815,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         }),
       ).toEqual({
         ok: false,
-        message: "Only admins can add courts to the club.",
+        message: "Only the social manager can add courts.",
       });
       const { count } = await admin
         .from("courts")
@@ -811,7 +825,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     });
 
     it("adds a court after the others, lists it, and refuses a duplicate name", async () => {
-      actingClient = adminCarol.client;
+      actingClient = managerCarol.client;
       const name = `${RUN_TOKEN} New court`;
       const result = await addClubCourt({
         name: `  ${name} `,

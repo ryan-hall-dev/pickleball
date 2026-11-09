@@ -145,7 +145,7 @@ export function LoginForm() {
           </h1>
           <p className="text-muted">
             We&apos;ll email you a {LOGIN_CODE_LENGTH}-digit code. Hosts are
-            invited by an admin.
+            invited by their social manager.
           </p>
         </div>
         <div className="flex flex-col gap-1.5">

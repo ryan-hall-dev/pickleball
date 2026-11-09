@@ -5,6 +5,7 @@ import { readHostAccess } from "@/server/auth/currentHost";
 import { listHosts } from "@/server/hosts/hostDirectory";
 import { InviteHostForm } from "./InviteHostForm";
 import { RemoveHostButton } from "./RemoveHostButton";
+import { SocialNameForm } from "./SocialNameForm";
 
 export const metadata: Metadata = {
   title: "Hosts · Pickleball Social Manager",
@@ -34,7 +35,7 @@ async function HostsManagement() {
   // Fails closed: only hosts see the list (RLS also returns nothing otherwise).
   if (hostAccess.status !== "host") return null;
   const currentHost = hostAccess.host;
-  const isAdmin = currentHost.role === "admin";
+  const isManager = currentHost.role === "manager";
   const hosts = await listHosts();
 
   return (
@@ -62,14 +63,14 @@ async function HostsManagement() {
                 </span>
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                    host.role === "admin"
+                    host.role === "manager"
                       ? "bg-lime text-on-lime"
                       : "bg-inner-border text-text"
                   }`}
                 >
-                  {host.role === "admin" ? "ADMIN" : "HOST"}
+                  {host.role === "manager" ? "MANAGER" : "HOST"}
                 </span>
-                {isAdmin && !isCurrentHost && (
+                {isManager && !isCurrentHost && (
                   <RemoveHostButton
                     hostUserId={host.userId}
                     hostDisplayName={host.displayName}
@@ -79,22 +80,33 @@ async function HostsManagement() {
             );
           })}
         </ul>
-        {!isAdmin && (
+        {!isManager && (
           <p className="text-sm text-muted">
-            Only admins can invite or remove hosts.
+            Only the social manager can invite or remove hosts.
           </p>
         )}
       </section>
-      {isAdmin && (
-        <section
-          aria-labelledby="invite-host-heading"
-          className={`${CARD_CLASS_NAME} flex flex-[1_1_360px] flex-col gap-4`}
-        >
-          <h2 id="invite-host-heading" className="text-xl font-bold">
-            Invite a host
-          </h2>
-          <InviteHostForm />
-        </section>
+      {isManager && (
+        <div className="flex flex-[1_1_360px] flex-col gap-4">
+          <section
+            aria-labelledby="invite-host-heading"
+            className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
+          >
+            <h2 id="invite-host-heading" className="text-xl font-bold">
+              Invite a host
+            </h2>
+            <InviteHostForm />
+          </section>
+          <section
+            aria-labelledby="social-name-heading"
+            className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
+          >
+            <h2 id="social-name-heading" className="text-xl font-bold">
+              Social name
+            </h2>
+            <SocialNameForm socialName={currentHost.socialName} />
+          </section>
+        </div>
       )}
     </div>
   );

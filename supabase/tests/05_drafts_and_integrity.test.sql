@@ -1,24 +1,22 @@
 -- Draft housekeeping (cancel_draft_session, remove_draft_participant) and the
 -- integrity triggers: config snapshot locked after the start, participants
--- removable only from a draft, and at least one admin always.
+-- removable only from a draft, and at least one social manager per social
+-- with hosts (more cases in 11_social_isolation.test.sql).
 begin;
 create extension if not exists pgtap with schema extensions;
 select plan(19);
 
 insert into auth.users (id, email) values
-  ('a0000000-0000-4000-8000-000000000001', 'pgtap-admin@example.test'),
+  ('a0000000-0000-4000-8000-000000000001', 'pgtap-manager@example.test'),
   ('a0000000-0000-4000-8000-000000000002', 'pgtap-host@example.test'),
   ('a0000000-0000-4000-8000-000000000003', 'pgtap-outsider@example.test');
--- Make the fixture admin the only admin (seeded admins are demoted inside this rolled-back transaction).
-alter table public.hosts disable trigger hosts_keep_one_admin;
-update public.hosts set role = 'host' where role = 'admin';
-alter table public.hosts enable trigger hosts_keep_one_admin;
-insert into public.hosts (user_id, display_name, role) values
-  ('a0000000-0000-4000-8000-000000000001', 'Ada Admin', 'admin'),
-  ('a0000000-0000-4000-8000-000000000002', 'Hal Host', 'host');
+insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000005', 'pgTAP Social');
+insert into public.hosts (user_id, display_name, role, social_id) values
+  ('a0000000-0000-4000-8000-000000000001', 'Mia Manager', 'manager', '50000000-0000-4000-8000-000000000005'),
+  ('a0000000-0000-4000-8000-000000000002', 'Hal Host', 'host', '50000000-0000-4000-8000-000000000005');
 insert into public.sessions (id, host_id, name, host_name, planned_start, planned_end) values
   ('d0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', 'Hal Host', now(), now() + interval '2 hours'),
-  ('d0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001', 'Admin social', 'Ada Admin', now(), now() + interval '2 hours');
+  ('d0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001', 'Manager social', 'Mia Manager', now(), now() + interval '2 hours');
 insert into public.members (id, first_name, last_name) values
   ('b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim'),
   ('b0000000-0000-4000-8000-000000000002', 'Kofi', 'Mensah');
@@ -92,7 +90,7 @@ select is(
   public.start_session('a0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000002', gen_random_uuid(), now(),
     '{"config":{"participants":[{"participantId":"e0000000-0000-4000-8000-000000000002"}]},"initialAttendeeIds":["e0000000-0000-4000-8000-000000000002"]}') ->> 'status',
   'appended',
-  'the admin starts their session'
+  'the manager starts their session'
 );
 select throws_ok(
   $$select public.cancel_draft_session('a0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000002')$$,
@@ -112,19 +110,21 @@ select throws_ok(
 );
 reset role;
 
--- At least one admin ------------------------------------------------------------------------------
+-- At least one manager per social with hosts ------------------------------------------------------
+-- The guard is deferred to commit; this rolled-back test checks at each statement instead.
+set constraints hosts_keep_one_manager_per_social immediate;
 select throws_ok(
   $$update public.hosts set role = 'host' where user_id = 'a0000000-0000-4000-8000-000000000001'$$,
-  'P0001', 'LAST_ADMIN', 'the last admin cannot be demoted'
+  'P0001', 'LAST_MANAGER', 'the social''s last manager cannot be demoted'
 );
 select throws_ok(
   $$delete from auth.users where id = 'a0000000-0000-4000-8000-000000000001'$$,
-  'P0001', 'LAST_ADMIN', 'the last admin cannot be removed, even by deleting their user'
+  'P0001', 'LAST_MANAGER', 'the social''s last manager cannot be removed, even by deleting their user'
 );
-update public.hosts set role = 'admin' where user_id = 'a0000000-0000-4000-8000-000000000002';
+update public.hosts set role = 'manager' where user_id = 'a0000000-0000-4000-8000-000000000002';
 select lives_ok(
   $$update public.hosts set role = 'host' where user_id = 'a0000000-0000-4000-8000-000000000001'$$,
-  'an admin can be demoted once another admin exists'
+  'a manager can be demoted once the social has another manager'
 );
 
 select * from finish();

@@ -11,8 +11,11 @@ update public.members set is_active = false;
 insert into auth.users (id, email) values
   ('a0000000-0000-4000-8000-000000000002', 'pgtap-host@example.test'),
   ('a0000000-0000-4000-8000-000000000003', 'pgtap-outsider@example.test');
-insert into public.hosts (user_id, display_name, checkin_tag) values
-  ('a0000000-0000-4000-8000-000000000002', 'Hal Host', 'tag0000000000000001');
+-- The sticker tag belongs to the social; its host's open session answers it.
+insert into public.socials (id, name, checkin_tag) values
+  ('50000000-0000-4000-8000-000000000003', 'pgTAP Social', 'tag0000000000000001');
+insert into public.hosts (user_id, display_name, social_id) values
+  ('a0000000-0000-4000-8000-000000000002', 'Hal Host', '50000000-0000-4000-8000-000000000003');
 insert into public.sessions (id, host_id, name, host_name, planned_start, planned_end) values
   ('d0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', 'Hal Host', now(), now() + interval '2 hours');
 insert into public.members (id, first_name, last_name, skill_level, is_active) values

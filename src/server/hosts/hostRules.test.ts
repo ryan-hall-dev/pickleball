@@ -11,48 +11,31 @@ describe("checkHostRemoval", () => {
       checkHostRemoval({
         actorUserId: ACTOR_ID,
         targetHost: { userId: OTHER_ID, role: "host" },
-        adminCount: 1,
       }),
     ).toEqual({ ok: true });
   });
 
-  it("allows removing another admin while another admin remains", () => {
+  it("refuses to remove another social manager", () => {
     expect(
       checkHostRemoval({
         actorUserId: ACTOR_ID,
-        targetHost: { userId: OTHER_ID, role: "admin" },
-        adminCount: 2,
+        targetHost: { userId: OTHER_ID, role: "manager" },
       }),
-    ).toEqual({ ok: true });
+    ).toEqual({ ok: false, reason: "CANNOT_REMOVE_MANAGER" });
   });
 
-  it("refuses to let an admin remove themselves", () => {
+  it("refuses to let a manager remove themselves", () => {
     expect(
       checkHostRemoval({
         actorUserId: ACTOR_ID,
-        targetHost: { userId: ACTOR_ID, role: "admin" },
-        adminCount: 3,
+        targetHost: { userId: ACTOR_ID, role: "manager" },
       }),
     ).toEqual({ ok: false, reason: "CANNOT_REMOVE_SELF" });
   });
 
-  it("refuses to remove the last admin", () => {
+  it("reports a host that is not on the social's list", () => {
     expect(
-      checkHostRemoval({
-        actorUserId: ACTOR_ID,
-        targetHost: { userId: OTHER_ID, role: "admin" },
-        adminCount: 1,
-      }),
-    ).toEqual({ ok: false, reason: "LAST_ADMIN" });
-  });
-
-  it("reports a host that is no longer on the list", () => {
-    expect(
-      checkHostRemoval({
-        actorUserId: ACTOR_ID,
-        targetHost: null,
-        adminCount: 1,
-      }),
+      checkHostRemoval({ actorUserId: ACTOR_ID, targetHost: null }),
     ).toEqual({ ok: false, reason: "HOST_NOT_FOUND" });
   });
 });

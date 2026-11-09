@@ -44,19 +44,41 @@ export const adminClient: SupabaseClient<Database> = createClient<Database>(
 );
 
 const createdUserIds: string[] = [];
+const createdSocialIds: string[] = [];
 
 /** Remembers a login so `deleteCreatedLogins` removes it after the tests. */
 export function trackCreatedLogin(userId: string) {
   createdUserIds.push(userId);
 }
 
+/** Deletes the tracked logins (and so their hosts rows), then their socials. */
 export async function deleteCreatedLogins() {
   for (const userId of createdUserIds.splice(0)) {
     const { error } = await adminClient.auth.admin.deleteUser(userId);
-    // e.g. the database refuses to delete its last admin.
+    // e.g. the database refuses to leave a social with hosts but no manager.
     if (error)
       console.warn(`Couldn't delete e2e user ${userId}: ${error.message}`);
   }
+  const socialIds = createdSocialIds.splice(0);
+  if (socialIds.length === 0) return;
+  const { error } = await adminClient
+    .from("socials")
+    .delete()
+    .in("id", socialIds);
+  // e.g. a social that still has hosts.
+  if (error) console.warn(`Couldn't delete e2e socials: ${error.message}`);
+}
+
+/** A new social, removed by `deleteCreatedLogins` after the tests. */
+export async function createSocial(name: string): Promise<string> {
+  const { data, error } = await adminClient
+    .from("socials")
+    .insert({ name })
+    .select("id")
+    .single();
+  if (error) throw error;
+  createdSocialIds.push(data.id);
+  return data.id;
 }
 
 export function uniqueEmail(label: string): string {
@@ -85,14 +107,15 @@ export async function createLogin(email: string): Promise<string> {
 export async function addHostRow(
   userId: string,
   displayName: string,
-  role: "admin" | "host",
+  role: "manager" | "host",
+  socialId: string,
 ) {
-  const { error } = await adminClient
-    .from("hosts")
-    .upsert(
-      { user_id: userId, display_name: displayName, role },
-      { onConflict: "user_id" },
-    );
+  const { error } = await adminClient.from("hosts").insert({
+    user_id: userId,
+    display_name: displayName,
+    role,
+    social_id: socialId,
+  });
   if (error) throw error;
 }
 
@@ -164,10 +187,25 @@ export async function useRandomClientIp(page: Page) {
   });
 }
 
-/** Creates an admin login with a hosts row and signs it in. */
-export async function signInAsNewAdmin(page: Page, label: string) {
+/** Social names for e2e socials, unique per run so tests can tell them apart. */
+export function uniqueSocialName(label: string): string {
+  return `E2E ${label} social ${randomUUID().slice(0, 6)}`;
+}
+
+/**
+ * Creates a social of its own with a new manager login and signs it in.
+ * Returns the manager's email and the social's id and name.
+ */
+export async function signInAsNewManager(page: Page, label: string) {
   const email = uniqueEmail(label);
-  await addHostRow(await createLogin(email), `E2E ${label}`, "admin");
+  const socialName = uniqueSocialName(label);
+  const socialId = await createSocial(socialName);
+  await addHostRow(
+    await createLogin(email),
+    `E2E ${label}`,
+    "manager",
+    socialId,
+  );
   await signIn(page, email);
-  return email;
+  return { email, socialId, socialName };
 }

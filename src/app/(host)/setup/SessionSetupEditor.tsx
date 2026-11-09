@@ -532,7 +532,7 @@ interface SessionSetupFormProps {
   draft: SessionDraft;
   initialClubCourts: ClubCourt[];
   activeMembers: ActiveMemberChoice[];
-  /** Only admins add courts to the club. */
+  /** Only the social manager adds courts. */
   canAddCourts: boolean;
   /** The host's own saved setups, most recently used first. */
   initialSavedSetups: SavedSetupSummary[];

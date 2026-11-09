@@ -7,7 +7,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   adminClient,
   deleteCreatedLogins,
-  signInAsNewAdmin,
+  signInAsNewManager,
   useRandomClientIp,
 } from "./support/localHostSession";
 
@@ -77,7 +77,7 @@ test("a host adds, finds, edits, deactivates and reactivates a member", async ({
   const fullName = `Ana ${lastName}`;
   const memberCard = page.getByRole("link", { name: new RegExp(fullName) });
 
-  await signInAsNewAdmin(page, "members");
+  await signInAsNewManager(page, "members");
   await page.getByRole("link", { name: "Members", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Members", exact: true }),
@@ -171,7 +171,7 @@ test("a host adds, finds, edits, deactivates and reactivates a member", async ({
 
 test("a duplicate name warns before saving", async ({ page }) => {
   const lastName = uniqueLastName();
-  await signInAsNewAdmin(page, "members-dup");
+  await signInAsNewManager(page, "members-dup");
 
   async function submitKofi() {
     await page.goto("/members/new");
@@ -205,7 +205,7 @@ test("a duplicate name warns before saving", async ({ page }) => {
 test("an empty search shows a clear state, the page fits the screen and focus is visible", async ({
   page,
 }) => {
-  await signInAsNewAdmin(page, "members-empty");
+  await signInAsNewManager(page, "members-empty");
   const unmatchedText = uniqueLastName();
 
   await page.goto("/members");

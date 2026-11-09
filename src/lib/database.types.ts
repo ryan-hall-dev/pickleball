@@ -75,20 +75,6 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"club_settings": {
-                  Row: {
-                    "club_name": string,"id": boolean,"updated_at": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "club_name": string,"id"?: boolean,"updated_at"?: string
-                  }
-                  Update: {
-                    "club_name"?: string,"id"?: boolean,"updated_at"?: string
-                  }
-                  Relationships: [
-                    
-                  ]
                 },"courts": {
                   Row: {
                     "created_at": string,"id": string,"is_active": boolean,"name": string,"sort_order": number,"supported_formats": (Database["public"]['Enums']["court_format"])[],"updated_at": string
@@ -105,17 +91,23 @@ isOneToOne: false
                   ]
                 },"hosts": {
                   Row: {
-                    "checkin_tag": string,"created_at": string,"display_name": string,"role": Database["public"]['Enums']["host_role"],"updated_at": string,"user_id": string
+                    "created_at": string,"display_name": string,"role": Database["public"]['Enums']["host_role"],"social_id": string,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "checkin_tag"?: string,"created_at"?: string,"display_name": string,"role"?: Database["public"]['Enums']["host_role"],"updated_at"?: string,"user_id": string
+                    "created_at"?: string,"display_name": string,"role"?: Database["public"]['Enums']["host_role"],"social_id": string,"updated_at"?: string,"user_id": string
                   }
                   Update: {
-                    "checkin_tag"?: string,"created_at"?: string,"display_name"?: string,"role"?: Database["public"]['Enums']["host_role"],"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"display_name"?: string,"role"?: Database["public"]['Enums']["host_role"],"social_id"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
-                    
+                    {
+      foreignKeyName: "hosts_social_id_fkey"
+      columns: ["social_id"]
+isOneToOne: false
+      referencedRelation: "socials"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"login_attempts": {
                   Row: {
@@ -271,6 +263,20 @@ isOneToOne: false
       referencedColumns: ["user_id"]
     }
                   ]
+                },"socials": {
+                  Row: {
+                    "checkin_tag": string,"created_at": string,"id": string,"name": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "checkin_tag"?: string,"created_at"?: string,"id"?: string,"name": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "checkin_tag"?: string,"created_at"?: string,"id"?: string,"name"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 }
           }
           Views: {
@@ -294,6 +300,9 @@ isOneToOne: false
                            },
 "cancel_draft_session":
 { Args: { "p_actor_user_id": string,"p_session_id": string }; Returns: Json
+                           },
+"create_social_with_manager":
+{ Args: { "p_manager_display_name": string,"p_manager_user_id": string,"p_name": string }; Returns: string
                            },
 "end_session":
 { Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_last_seq": number,"p_final_stats"?: Json,"p_occurred_at": string,"p_session_id": string }; Returns: Json
@@ -332,7 +341,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "checkin_attempt_kind": "search"|"submit","checkin_request_status": "pending"|"approved"|"rejected"|"withdrawn","court_format": "doubles"|"singles","host_role": "admin"|"host","match_row_status": "completed"|"abandoned"|"reverted","session_event_type": "SessionStarted"|"PlayerJoined"|"PlayerJoinReverted"|"PlayerLeft"|"PlayerLeaveReverted"|"PlayerSkipped"|"PlayerUnskipped"|"PlayerLocked"|"PlayerUnlocked"|"CourtAdded"|"CourtAddReverted"|"CourtClosed"|"CourtReopened"|"MatchStarted"|"MatchStartReverted"|"MatchCompleted"|"MatchCompletionReverted"|"PlayerReplaced"|"PlayerReplacementReverted"|"PlayerRemovedMidMatch"|"PlayerRemovalReverted"|"MatchAbandoned"|"MatchAbandonReverted"|"QueueReordered"|"SuggestionsShuffled"|"Paused"|"Resumed"|"SessionEnded","session_status": "draft"|"live"|"ended"|"cancelled","skill_level": "beginner"|"intermediate"|"advanced"
+            "checkin_attempt_kind": "search"|"submit","checkin_request_status": "pending"|"approved"|"rejected"|"withdrawn","court_format": "doubles"|"singles","host_role": "manager"|"host","match_row_status": "completed"|"abandoned"|"reverted","session_event_type": "SessionStarted"|"PlayerJoined"|"PlayerJoinReverted"|"PlayerLeft"|"PlayerLeaveReverted"|"PlayerSkipped"|"PlayerUnskipped"|"PlayerLocked"|"PlayerUnlocked"|"CourtAdded"|"CourtAddReverted"|"CourtClosed"|"CourtReopened"|"MatchStarted"|"MatchStartReverted"|"MatchCompleted"|"MatchCompletionReverted"|"PlayerReplaced"|"PlayerReplacementReverted"|"PlayerRemovedMidMatch"|"PlayerRemovalReverted"|"MatchAbandoned"|"MatchAbandonReverted"|"QueueReordered"|"SuggestionsShuffled"|"Paused"|"Resumed"|"SessionEnded","session_status": "draft"|"live"|"ended"|"cancelled","skill_level": "beginner"|"intermediate"|"advanced"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -452,7 +461,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "checkin_attempt_kind": ["search", "submit"],"checkin_request_status": ["pending", "approved", "rejected", "withdrawn"],"court_format": ["doubles", "singles"],"host_role": ["admin", "host"],"match_row_status": ["completed", "abandoned", "reverted"],"session_event_type": ["SessionStarted", "PlayerJoined", "PlayerJoinReverted", "PlayerLeft", "PlayerLeaveReverted", "PlayerSkipped", "PlayerUnskipped", "PlayerLocked", "PlayerUnlocked", "CourtAdded", "CourtAddReverted", "CourtClosed", "CourtReopened", "MatchStarted", "MatchStartReverted", "MatchCompleted", "MatchCompletionReverted", "PlayerReplaced", "PlayerReplacementReverted", "PlayerRemovedMidMatch", "PlayerRemovalReverted", "MatchAbandoned", "MatchAbandonReverted", "QueueReordered", "SuggestionsShuffled", "Paused", "Resumed", "SessionEnded"],"session_status": ["draft", "live", "ended", "cancelled"],"skill_level": ["beginner", "intermediate", "advanced"]
+            "checkin_attempt_kind": ["search", "submit"],"checkin_request_status": ["pending", "approved", "rejected", "withdrawn"],"court_format": ["doubles", "singles"],"host_role": ["manager", "host"],"match_row_status": ["completed", "abandoned", "reverted"],"session_event_type": ["SessionStarted", "PlayerJoined", "PlayerJoinReverted", "PlayerLeft", "PlayerLeaveReverted", "PlayerSkipped", "PlayerUnskipped", "PlayerLocked", "PlayerUnlocked", "CourtAdded", "CourtAddReverted", "CourtClosed", "CourtReopened", "MatchStarted", "MatchStartReverted", "MatchCompleted", "MatchCompletionReverted", "PlayerReplaced", "PlayerReplacementReverted", "PlayerRemovedMidMatch", "PlayerRemovalReverted", "MatchAbandoned", "MatchAbandonReverted", "QueueReordered", "SuggestionsShuffled", "Paused", "Resumed", "SessionEnded"],"session_status": ["draft", "live", "ended", "cancelled"],"skill_level": ["beginner", "intermediate", "advanced"]
           }
         }
 } as const

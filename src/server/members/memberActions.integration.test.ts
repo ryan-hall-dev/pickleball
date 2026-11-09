@@ -136,6 +136,8 @@ describe.skipIf(!localStack)("members directory (local Supabase)", () => {
   let signedOutClient: DatabaseClient;
   const createdUserIds: string[] = [];
   const createdMemberTokens: string[] = [];
+  // The hosts' own social (members aren't scoped to socials until A2).
+  let socialId: string;
 
   async function signedInUser(isHost: boolean): Promise<DatabaseClient> {
     const email = `integration-members-${randomUUID()}@example.test`;
@@ -152,6 +154,7 @@ describe.skipIf(!localStack)("members directory (local Supabase)", () => {
         user_id: created.data.user.id,
         display_name: "Members Host",
         role: "host",
+        social_id: socialId,
       });
       if (error) throw error;
     }
@@ -231,6 +234,13 @@ describe.skipIf(!localStack)("members directory (local Supabase)", () => {
     admin = createClient<Database>(localStack!.apiUrl, localStack!.secretKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    const { data: social, error: socialError } = await admin
+      .from("socials")
+      .insert({ name: "Integration members social" })
+      .select("id")
+      .single();
+    if (socialError) throw socialError;
+    socialId = social.id;
     hostClient = await signedInUser(true);
     nonHostClient = await signedInUser(false);
     signedOutClient = createClient<Database>(
@@ -249,6 +259,7 @@ describe.skipIf(!localStack)("members directory (local Supabase)", () => {
     for (const userId of createdUserIds) {
       await admin.auth.admin.deleteUser(userId);
     }
+    if (socialId) await admin.from("socials").delete().eq("id", socialId);
     vi.unstubAllEnvs();
   });
 

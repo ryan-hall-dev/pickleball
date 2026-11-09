@@ -80,6 +80,7 @@ function requireData<T>(
 /** Creates a user and returns a client signed in as them. */
 /** Auth users this run created; deleted (with their hosts rows) after all tests. */
 const createdAuthUserIds: string[] = [];
+const createdSocialIds: string[] = [];
 
 async function signedInClient(
   stack: LocalStack,
@@ -153,10 +154,24 @@ async function createHostedDraftSession(
   courtCount: number,
 ): Promise<HostedDraftSession> {
   const hostUser = await signedInClient(stack, admin);
+  // Each host gets its own social (sessions aren't scoped to socials until A3).
+  const socialId = requireData(
+    await admin
+      .from("socials")
+      .insert({ name: "Integration social" })
+      .select("id")
+      .single(),
+    "Creating the social",
+  ).id;
+  createdSocialIds.push(socialId);
   requireData(
     await admin
       .from("hosts")
-      .insert({ user_id: hostUser.userId, display_name: "Integration Host" })
+      .insert({
+        user_id: hostUser.userId,
+        display_name: "Integration Host",
+        social_id: socialId,
+      })
       .select()
       .single(),
     "Adding the host",
@@ -234,7 +249,8 @@ function createAdminClient(stack: LocalStack): DatabaseClient {
 }
 
 // Deleting the auth users also deletes their hosts rows (on delete cascade);
-// their sessions keep the history with host_id set to null.
+// their sessions keep the history with host_id set to null. Then the emptied
+// socials go.
 afterAll(async () => {
   if (!localStack || createdAuthUserIds.length === 0) return;
   const admin = createAdminClient(localStack);
@@ -242,6 +258,13 @@ afterAll(async () => {
   for (const userId of createdAuthUserIds) {
     const { error } = await admin.auth.admin.deleteUser(userId);
     if (error) failures.push(`${userId}: ${error.message}`);
+  }
+  if (createdSocialIds.length > 0) {
+    const { error } = await admin
+      .from("socials")
+      .delete()
+      .in("id", createdSocialIds);
+    if (error) failures.push(`socials: ${error.message}`);
   }
   if (failures.length > 0) {
     throw new Error(`Cleaning up test users failed: ${failures.join("; ")}`);

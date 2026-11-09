@@ -56,7 +56,7 @@ async function SessionSetupContent() {
         draft={openSession.draft}
         initialClubCourts={clubCourts}
         activeMembers={activeMembers}
-        canAddCourts={hostAccess.host.role === "admin"}
+        canAddCourts={hostAccess.host.role === "manager"}
         initialSavedSetups={savedSetups}
       />
     );
