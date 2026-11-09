@@ -1,8 +1,8 @@
 -- Row-level security and grants (docs/decisions/0002-server-only-writes.md):
--- anon reads and executes nothing; a signed-in non-host reads nothing; hosts
--- read everything (their own social and its hosts; the tables not yet scoped
--- to socials installation-wide) but write nothing with their own session; only
--- service_role executes the public functions; the log is append-only for
+-- anon reads and executes nothing; a signed-in non-host reads nothing; a host
+-- reads their own social, its hosts, members and courts (the session tables
+-- stay installation-wide until A3) but writes nothing with their own session;
+-- only service_role executes the public functions; the log is append-only for
 -- every role. Isolation between socials: 11_social_isolation.test.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -17,11 +17,12 @@ insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000
 insert into public.hosts (user_id, display_name, role, social_id) values
   ('a0000000-0000-4000-8000-000000000001', 'Mia Manager', 'manager', '50000000-0000-4000-8000-000000000001'),
   ('a0000000-0000-4000-8000-000000000002', 'Hal Host', 'host', '50000000-0000-4000-8000-000000000001');
-insert into public.members (id, first_name, last_name, skill_level) values
-  ('b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'advanced');
-insert into public.member_devices (token_hash, member_id) values
-  (repeat('a', 64), 'b0000000-0000-4000-8000-000000000001');
-insert into public.courts (id, name) values ('c0000000-0000-4000-8000-000000000001', 'pgTAP Court');
+insert into public.members (social_id, id, first_name, last_name, skill_level) values
+  ('50000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'advanced');
+insert into public.member_devices (social_id, token_hash, member_id) values
+  ('50000000-0000-4000-8000-000000000001', repeat('a', 64), 'b0000000-0000-4000-8000-000000000001');
+insert into public.courts (id, social_id, name) values
+  ('c0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 'pgTAP Court');
 insert into public.saved_setups (host_id, name, config) values
   ('a0000000-0000-4000-8000-000000000002', 'Tuesday social', '{}');
 insert into public.sessions (id, host_id, name, host_name, planned_start, planned_end) values
@@ -69,7 +70,7 @@ select is(
    where pronamespace in ('public'::regnamespace, 'private'::regnamespace)
      and has_function_privilege('authenticated', oid, 'execute')),
   'private.current_social_id,private.is_host',
-  'authenticated can execute only the RLS helpers (is_host stays until A2/A3 scope the other tables)'
+  'authenticated can execute only the RLS helpers (is_host stays until A3 scopes the session tables)'
 );
 select set_eq(
   $$select proname::text from pg_proc
@@ -158,7 +159,7 @@ select throws_ok('select * from public.checkin_attempts', '42501', null, 'host c
 
 -- ...and writes nothing with their own session.
 select throws_ok(
-  $$insert into public.members (first_name, last_name) values ('Kofi', 'Mensah')$$,
+  $$insert into public.members (social_id, first_name, last_name) values ('50000000-0000-4000-8000-000000000001', 'Kofi', 'Mensah')$$,
   '42501', null, 'host cannot insert members with their session'
 );
 select throws_ok(
@@ -200,7 +201,8 @@ reset role;
 -- The server (service_role) writes tables directly, after its own host check.
 set local role service_role;
 select lives_ok(
-  $$insert into public.members (first_name, last_name, skill_level) values ('Kofi', 'Mensah', 'intermediate')$$,
+  $$insert into public.members (social_id, first_name, last_name, skill_level)
+    values ('50000000-0000-4000-8000-000000000001', 'Kofi', 'Mensah', 'intermediate')$$,
   'service_role can add a member'
 );
 select throws_ok(

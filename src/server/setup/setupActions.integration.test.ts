@@ -19,6 +19,7 @@ import {
 } from "@/engine/session";
 import type { Database, Json } from "@/lib/database.types";
 import { HOST_ACCESS_DENIAL_MESSAGES } from "@/server/auth/hostAccess";
+import { deleteTestSocials } from "@/server/testing/deleteTestSocials";
 import {
   addClubCourt,
   addDraftGuest,
@@ -125,13 +126,17 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
   let hostAlice: { client: DatabaseClient; userId: string };
   let hostBob: { client: DatabaseClient; userId: string };
   let managerCarol: { client: DatabaseClient; userId: string };
-  // Every host here shares one social (sessions, courts and setups aren't
-  // scoped to socials until A2/A3).
+  // Alice, Bob and Carol share one social (sessions and setups aren't scoped
+  // to socials until A3). Dan manages another social, whose courts and
+  // members Alice's social must never see or use.
   let socialId: string;
+  let otherSocialId: string;
+  let otherSocialManager: { client: DatabaseClient; userId: string };
+  // The other social's court, named like Alice's doubles court.
+  let otherSocialCourtId: string;
   let nonHostClient: DatabaseClient;
   let signedOutClient: DatabaseClient;
   const createdUserIds: string[] = [];
-  const createdMemberIds: string[] = [];
   let doublesCourtId: string;
   let singlesOnlyCourtId: string;
   let inactiveCourtId: string;
@@ -139,6 +144,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
   async function signedInUser(
     displayName: string | null,
     role: "host" | "manager" = "host",
+    hostSocialId = socialId,
   ): Promise<{ client: DatabaseClient; userId: string }> {
     const email = `integration-setup-${randomUUID()}@example.test`;
     const password = `pw-${randomUUID()}`;
@@ -155,7 +161,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         user_id: userId,
         display_name: displayName,
         role,
-        social_id: socialId,
+        social_id: hostSocialId,
       });
       if (error) throw error;
     }
@@ -173,10 +179,12 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     label: string,
     supportedFormats: ("doubles" | "singles")[],
     isActive = true,
+    courtSocialId = socialId,
   ): Promise<string> {
     const { data, error } = await admin
       .from("courts")
       .insert({
+        social_id: courtSocialId,
         name: `${RUN_TOKEN} ${label}`,
         supported_formats: supportedFormats,
         is_active: isActive,
@@ -281,6 +289,18 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       .single();
     if (socialError) throw socialError;
     socialId = social.id;
+    const { data: otherSocial, error: otherSocialError } = await admin
+      .from("socials")
+      .insert({ name: "Integration setup other social" })
+      .select("id")
+      .single();
+    if (otherSocialError) throw otherSocialError;
+    otherSocialId = otherSocial.id;
+    otherSocialManager = await signedInUser(
+      "Omar Other",
+      "manager",
+      otherSocialId,
+    );
     hostAlice = await signedInUser("Alice Setup");
     hostBob = await signedInUser("Bob Setup");
     managerCarol = await signedInUser("Carol Manager", "manager");
@@ -293,6 +313,12 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     doublesCourtId = await insertCourt("Doubles", ["doubles", "singles"]);
     singlesOnlyCourtId = await insertCourt("Singles only", ["singles"]);
     inactiveCourtId = await insertCourt("Closed", ["doubles"], false);
+    otherSocialCourtId = await insertCourt(
+      "Doubles",
+      ["doubles", "singles"],
+      true,
+      otherSocialId,
+    );
   });
 
   afterAll(async () => {
@@ -317,15 +343,15 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     if (sessionIds.length > 0) {
       await admin.from("sessions").delete().in("id", sessionIds);
     }
-    if (createdMemberIds.length > 0) {
-      await admin.from("members").delete().in("id", createdMemberIds);
-    }
-    await admin.from("courts").delete().like("name", `${RUN_TOKEN}%`);
     await admin.from("hosts").delete().in("user_id", hostIds);
     for (const userId of hostIds) {
       await admin.auth.admin.deleteUser(userId);
     }
-    if (socialId) await admin.from("socials").delete().eq("id", socialId);
+    // Then both socials, with their courts and members.
+    await deleteTestSocials(
+      admin,
+      [socialId, otherSocialId].filter((id) => id !== undefined),
+    );
     vi.unstubAllEnvs();
   });
 
@@ -611,6 +637,39 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       });
     });
 
+    it("refuses another social's court as unavailable, even with the same name", async () => {
+      const draft = await openDraftFor(hostBob);
+      const before = await openSessionRows(hostBob.userId);
+      actingClient = hostBob.client;
+      const unavailable = {
+        ok: false,
+        message:
+          "A chosen court was removed or doesn't support doubles. Reload the page.",
+      };
+      expect(
+        await saveAtCurrentRevision(
+          saveInputFor(draft.sessionId, {
+            courtIds: [doublesCourtId, otherSocialCourtId],
+          }),
+        ),
+      ).toEqual(unavailable);
+      expect(await openSessionRows(hostBob.userId)).toEqual(before);
+
+      expect(
+        await saveSetup({
+          setupName: `${RUN_TOKEN} Other court`,
+          draft: saveInputFor(draft.sessionId, {
+            courtIds: [otherSocialCourtId],
+          }),
+        }),
+      ).toEqual(unavailable);
+      const { count } = await admin
+        .from("saved_setups")
+        .select("id", { count: "exact", head: true })
+        .eq("name", `${RUN_TOKEN} Other court`);
+      expect(count).toBe(0);
+    });
+
     it("round-trips the rotation as the engine's RotationPreferences, and only the owner can write it", async () => {
       const draft = await openDraftFor(hostBob);
       const rotation = {
@@ -694,11 +753,14 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       const draft = await openDraftFor(hostBob);
       const { data: member, error: memberError } = await admin
         .from("members")
-        .insert({ first_name: "Setup", last_name: RUN_TOKEN })
+        .insert({
+          social_id: socialId,
+          first_name: "Setup",
+          last_name: RUN_TOKEN,
+        })
         .select("id")
         .single();
       if (memberError) throw memberError;
-      createdMemberIds.push(member.id);
       const { error } = await admin.from("session_participants").insert([
         {
           session_id: draft.sessionId,
@@ -839,6 +901,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       const { data: rows } = await admin
         .from("courts")
         .select("name, sort_order")
+        .eq("social_id", socialId)
         .order("sort_order", { ascending: false })
         .limit(1);
       expect(rows?.[0]?.name).toBe(name);
@@ -868,6 +931,51 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         await addClubCourt({ name: `${RUN_TOKEN} x`, supportedFormats: [] }),
       ).toEqual({ ok: false, message: "Choose at least one format." });
     });
+
+    it("keeps each social's courts to itself: same names allowed, ordered and listed per social", async () => {
+      const name = `${RUN_TOKEN} Court 1`;
+      actingClient = managerCarol.client;
+      const carolResult = await addClubCourt({
+        name,
+        supportedFormats: ["doubles"],
+      });
+      if (!carolResult.ok) throw new Error(carolResult.message);
+
+      // The other social's manager adds a court of the same name.
+      actingClient = otherSocialManager.client;
+      const otherResult = await addClubCourt({
+        name,
+        supportedFormats: ["doubles"],
+      });
+      if (!otherResult.ok) throw new Error(otherResult.message);
+      const { data: otherCourt, error } = await admin
+        .from("courts")
+        .select("social_id, sort_order")
+        .eq("id", otherResult.court.id)
+        .single();
+      if (error) throw error;
+      // After the other social's own last court, whatever Alice's social has.
+      expect(otherCourt).toEqual({
+        social_id: otherSocialId,
+        sort_order: 900_001,
+      });
+
+      const otherListedIds = (await listActiveClubCourts()).map(
+        (court) => court.id,
+      );
+      expect(otherListedIds.sort()).toEqual(
+        [otherSocialCourtId, otherResult.court.id].sort(),
+      );
+
+      actingClient = managerCarol.client;
+      const carolListedIds = (await listActiveClubCourts()).map(
+        (court) => court.id,
+      );
+      expect(carolListedIds).toContain(carolResult.court.id);
+      expect(carolListedIds).toContain(doublesCourtId);
+      expect(carolListedIds).not.toContain(otherResult.court.id);
+      expect(carolListedIds).not.toContain(otherSocialCourtId);
+    });
   });
   describe("attendance", () => {
     let graceId: string;
@@ -877,10 +985,12 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     async function insertMember(
       firstName: string,
       isActive = true,
+      memberSocialId = socialId,
     ): Promise<string> {
       const { data, error } = await admin
         .from("members")
         .insert({
+          social_id: memberSocialId,
           first_name: firstName,
           last_name: RUN_TOKEN,
           skill_level: "intermediate",
@@ -889,7 +999,6 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         .select("id")
         .single();
       if (error) throw error;
-      createdMemberIds.push(data.id);
       return data.id;
     }
 
@@ -1077,6 +1186,28 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           .update({ is_active: true })
           .eq("id", kofiId);
       }
+    });
+
+    it("skips another social's member, like an inactive one", async () => {
+      const otherSocialMemberId = await insertMember(
+        "Omari",
+        true,
+        otherSocialId,
+      );
+      const draft = await openDraftFor(hostAlice);
+      const before = await attendeeRows(draft.sessionId);
+      actingClient = hostAlice.client;
+      const participants = listFrom(
+        await setDraftMemberAttendance({
+          sessionId: draft.sessionId,
+          memberIds: [otherSocialMemberId],
+          attending: true,
+        }),
+      );
+      expect(
+        participants.map((participant) => participant.memberId),
+      ).not.toContain(otherSocialMemberId);
+      expect(await attendeeRows(draft.sessionId)).toEqual(before);
     });
 
     it("never changes another host's draft attendance", async () => {

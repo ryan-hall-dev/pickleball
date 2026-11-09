@@ -3,7 +3,10 @@
 //   * only hosts may add, edit, deactivate or reactivate members, and a
 //     refused call changes nothing;
 //   * listing, search, filters and paging are correct for 0, 5, 30, 300 and
-//     1,200 members (past the Data API's 1,000-row page).
+//     1,200 members (past the Data API's 1,000-row page);
+//   * a host only reads and changes their own social's members: another
+//     social's member is invisible and answered like a missing one, and its
+//     namesakes never trigger the duplicate-name warning.
 // Test members carry a unique token in their last name and every query
 // searches for it, so other data in the database doesn't interfere. Skips when
 // the stack isn't running, unless REQUIRE_LOCAL_SUPABASE=1.
@@ -13,6 +16,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/lib/database.types";
 import { HOST_ACCESS_DENIAL_MESSAGES } from "@/server/auth/hostAccess";
+import { deleteTestSocials } from "@/server/testing/deleteTestSocials";
 import { createMember, setMemberActive, updateMember } from "./memberActions";
 import {
   countMembersByStatus,
@@ -135,9 +139,9 @@ describe.skipIf(!localStack)("members directory (local Supabase)", () => {
   let nonHostClient: DatabaseClient;
   let signedOutClient: DatabaseClient;
   const createdUserIds: string[] = [];
-  const createdMemberTokens: string[] = [];
-  // The hosts' own social (members aren't scoped to socials until A2).
+  // The hosts' own social, and another social whose members they never see.
   let socialId: string;
+  let otherSocialId: string;
 
   async function signedInUser(isHost: boolean): Promise<DatabaseClient> {
     const email = `integration-members-${randomUUID()}@example.test`;
@@ -177,11 +181,12 @@ describe.skipIf(!localStack)("members directory (local Supabase)", () => {
       skillLevel?: SkillLevel | null;
       isActive?: boolean;
     } = () => ({}),
+    memberSocialId = socialId,
   ) {
-    createdMemberTokens.push(token);
     const rows = Array.from({ length: count }, (_, index) => {
       const overrides = memberAt(index);
       return {
+        social_id: memberSocialId,
         first_name:
           overrides.firstName ?? `Member${String(index).padStart(4, "0")}`,
         last_name: token,
@@ -206,7 +211,9 @@ describe.skipIf(!localStack)("members directory (local Supabase)", () => {
     for (let start = 0; ; start += 1000) {
       const { data, error } = await admin
         .from("members")
-        .select("id, first_name, last_name, skill_level, is_active, updated_at")
+        .select(
+          "id, social_id, first_name, last_name, skill_level, is_active, updated_at",
+        )
         .ilike("last_name", `%${token}%`)
         .order("id")
         .range(start, start + 999);
@@ -241,6 +248,13 @@ describe.skipIf(!localStack)("members directory (local Supabase)", () => {
       .single();
     if (socialError) throw socialError;
     socialId = social.id;
+    const { data: otherSocial, error: otherSocialError } = await admin
+      .from("socials")
+      .insert({ name: "Integration members other social" })
+      .select("id")
+      .single();
+    if (otherSocialError) throw otherSocialError;
+    otherSocialId = otherSocial.id;
     hostClient = await signedInUser(true);
     nonHostClient = await signedInUser(false);
     signedOutClient = createClient<Database>(
@@ -251,15 +265,15 @@ describe.skipIf(!localStack)("members directory (local Supabase)", () => {
   });
 
   afterAll(async () => {
-    // Test-only cleanup with the secret key; the app itself never deletes members.
-    for (const token of createdMemberTokens) {
-      await admin.from("members").delete().ilike("last_name", `%${token}%`);
-    }
     await admin.from("hosts").delete().in("user_id", createdUserIds);
     for (const userId of createdUserIds) {
       await admin.auth.admin.deleteUser(userId);
     }
-    if (socialId) await admin.from("socials").delete().eq("id", socialId);
+    // Both socials, with every member the tests added.
+    await deleteTestSocials(
+      admin,
+      [socialId, otherSocialId].filter((id) => id !== undefined),
+    );
     vi.unstubAllEnvs();
   });
 
@@ -379,7 +393,6 @@ describe.skipIf(!localStack)("members directory (local Supabase)", () => {
     it("adds, warns about a duplicate name, edits, deactivates and reactivates", async () => {
       actingClient = hostClient;
       const token = uniqueNameToken("Flow");
-      createdMemberTokens.push(token);
 
       // Validation errors come back per field, and nothing is written.
       const invalid = await createMember(
@@ -505,7 +518,6 @@ describe.skipIf(!localStack)("members directory (local Supabase)", () => {
     it("spots duplicates ignoring case, accents and spacing, treats * literally, and binds 'Save anyway' to the warned name", async () => {
       actingClient = hostClient;
       const token = uniqueNameToken("Dup");
-      createdMemberTokens.push(token);
       const add = (firstName: string, lastName: string, confirmKey = "") =>
         createMember(
           { status: "idle" },
@@ -616,6 +628,107 @@ describe.skipIf(!localStack)("members directory (local Supabase)", () => {
           message: "This member no longer exists. Go back to Members.",
         });
       }
+    });
+  });
+
+  describe("another social's members", () => {
+    const otherToken = uniqueNameToken("Other");
+    let otherMemberId: string;
+
+    beforeAll(async () => {
+      await insertTestMembers(
+        otherToken,
+        1,
+        () => ({ firstName: "Omari" }),
+        otherSocialId,
+      );
+      otherMemberId = (await membersSnapshot(otherToken))[0].id;
+    });
+
+    it("are invisible to the host (RLS)", async () => {
+      actingClient = hostClient;
+      expect(await listMembers(queryFor(otherToken))).toEqual({
+        members: [],
+        matchingMemberCount: 0,
+      });
+      expect(
+        await listMembers(queryFor(otherToken, { status: "deactivated" })),
+      ).toEqual({ members: [], matchingMemberCount: 0 });
+      expect(await getMember(otherMemberId)).toBeNull();
+    });
+
+    it("can't be edited, deactivated or reactivated: answered like a missing member", async () => {
+      actingClient = hostClient;
+      const before = await membersSnapshot(otherToken);
+      const memberNotFound =
+        "This member no longer exists. Go back to Members.";
+
+      expect(
+        await updateMember(
+          { status: "idle" },
+          memberForm({
+            memberId: otherMemberId,
+            firstName: "Hijacked",
+            lastName: otherToken,
+            skillLevel: "advanced",
+          }),
+        ),
+      ).toMatchObject({ status: "error", message: memberNotFound });
+      for (const isActive of ["false", "true"]) {
+        expect(
+          await setMemberActive(
+            { status: "idle" },
+            memberForm({ memberId: otherMemberId, isActive }),
+          ),
+        ).toEqual({ status: "error", message: memberNotFound });
+      }
+      expect(await membersSnapshot(otherToken)).toEqual(before);
+    });
+
+    it("never trigger the duplicate-name warning, and new members join the host's social", async () => {
+      actingClient = hostClient;
+      // Adding a namesake of the other social's Omari: no warning.
+      const location = await expectRedirect(
+        createMember(
+          { status: "idle" },
+          memberForm({
+            firstName: "Omari",
+            lastName: otherToken,
+            skillLevel: "",
+          }),
+        ),
+      );
+      const rows = await membersSnapshot(otherToken);
+      expect(rows).toHaveLength(2);
+      const created = rows.find((row) => row.id !== otherMemberId)!;
+      expect(location).toBe(`/members?saved=${created.id}`);
+      expect(created.social_id).toBe(socialId);
+      expect(rows.find((row) => row.id === otherMemberId)?.social_id).toBe(
+        otherSocialId,
+      );
+
+      // Renaming one of ours onto a name only the other social has: no warning.
+      await insertTestMembers(
+        otherToken,
+        1,
+        () => ({ firstName: "Priya" }),
+        otherSocialId,
+      );
+      await insertTestMembers(otherToken, 1, () => ({ firstName: "Rena" }));
+      const rena = (await membersSnapshot(otherToken)).find(
+        (row) => row.first_name === "Rena",
+      )!;
+      await expectRedirect(
+        updateMember(
+          { status: "idle" },
+          memberForm({
+            memberId: rena.id,
+            firstName: "Priya",
+            lastName: otherToken,
+            skillLevel: "",
+          }),
+        ),
+      );
     });
   });
 

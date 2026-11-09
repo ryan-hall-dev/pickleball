@@ -5,9 +5,6 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(46);
 
--- Hide members left by `pnpm seed` or integration tests so search results are exact (rolled back).
-update public.members set is_active = false;
-
 insert into auth.users (id, email) values
   ('a0000000-0000-4000-8000-000000000002', 'pgtap-host@example.test'),
   ('a0000000-0000-4000-8000-000000000003', 'pgtap-outsider@example.test');
@@ -18,15 +15,15 @@ insert into public.hosts (user_id, display_name, social_id) values
   ('a0000000-0000-4000-8000-000000000002', 'Hal Host', '50000000-0000-4000-8000-000000000003');
 insert into public.sessions (id, host_id, name, host_name, planned_start, planned_end) values
   ('d0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', 'Hal Host', now(), now() + interval '2 hours');
-insert into public.members (id, first_name, last_name, skill_level, is_active) values
-  ('b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'advanced', true),
-  ('b0000000-0000-4000-8000-000000000002', 'Grant', 'Lee', null, true),
-  ('b0000000-0000-4000-8000-000000000003', 'Gregory', 'Hill', 'beginner', true),
-  ('b0000000-0000-4000-8000-000000000004', 'Greer', 'Moss', 'beginner', true),
-  ('b0000000-0000-4000-8000-000000000005', 'Gray', 'Ng', 'beginner', true),
-  ('b0000000-0000-4000-8000-000000000006', 'Gretchen', 'Ode', 'beginner', true),
-  ('b0000000-0000-4000-8000-000000000007', 'Greta', 'Gone', 'beginner', false),
-  ('b0000000-0000-4000-8000-000000000008', 'Kofi', 'Grady', 'intermediate', true);
+insert into public.members (social_id, id, first_name, last_name, skill_level, is_active) values
+  ('50000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'advanced', true),
+  ('50000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000002', 'Grant', 'Lee', null, true),
+  ('50000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000003', 'Gregory', 'Hill', 'beginner', true),
+  ('50000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000004', 'Greer', 'Moss', 'beginner', true),
+  ('50000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000005', 'Gray', 'Ng', 'beginner', true),
+  ('50000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000006', 'Gretchen', 'Ode', 'beginner', true),
+  ('50000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000007', 'Greta', 'Gone', 'beginner', false),
+  ('50000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000008', 'Kofi', 'Grady', 'intermediate', true);
 
 -- Test-only shorthands.
 -- The device token hash the server passes (SHA-256 of the cookie token).

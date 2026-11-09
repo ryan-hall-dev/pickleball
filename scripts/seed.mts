@@ -246,6 +246,7 @@ async function seed() {
 
   const courts = Array.from({ length: options.courts }, (_, index) => ({
     id: seedUuid(`court-${index + 1}`),
+    social_id: socialId,
     name: `Court ${index + 1}`,
     sort_order: index + 1,
     is_active: true,
@@ -258,6 +259,7 @@ async function seed() {
     values[Math.floor(random() * values.length)];
   const members = Array.from({ length: options.members }, (_, index) => ({
     id: seedUuid(`member-${index + 1}`),
+    social_id: socialId,
     first_name: pick(FIRST_NAMES),
     // The number keeps names unique so hosts can tell members apart in demos.
     last_name: `${pick(LAST_NAMES)} ${index + 1}`,

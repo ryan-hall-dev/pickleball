@@ -12,8 +12,8 @@ insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000
 insert into public.hosts (user_id, display_name, role, social_id) values
   ('a9000000-0000-4000-8000-000000000001', 'Owner Host', 'host', '50000000-0000-4000-8000-000000000009'),
   ('a9000000-0000-4000-8000-000000000002', 'Other Host', 'host', '50000000-0000-4000-8000-000000000009');
-insert into public.members (id, first_name, last_name) values
-  ('b9000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
+insert into public.members (social_id, id, first_name, last_name) values
+  ('50000000-0000-4000-8000-000000000009', 'b9000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
 insert into public.sessions (id, host_id, name, location, host_name, planned_start, planned_end, status, config_snapshot) values
   ('d9000000-0000-4000-8000-000000000001', 'a9000000-0000-4000-8000-000000000001', 'Owner draft', null, 'Owner Host',
    '2026-12-05 18:00+00', '2026-12-05 20:00+00', 'draft', '{"matchFormat": "doubles", "laterStep": {"kept": true}}'),

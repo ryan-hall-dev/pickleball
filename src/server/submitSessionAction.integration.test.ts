@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { replay, type SessionConfig } from "@/engine/session";
 import type { Database } from "@/lib/database.types";
+import { deleteTestSocials } from "@/server/testing/deleteTestSocials";
 import { loadSessionLog, type DatabaseClient } from "./sessionLog";
 import {
   submitSessionAction,
@@ -106,10 +107,9 @@ async function signedInClient(
   return { client, userId };
 }
 
-// One fixed set of test members, reused by every run (members referenced by a
-// session log can never be deleted, so new ones per run would pile up). The
-// ids are reserved for this test.
-const SHARED_MEMBER_ID_PREFIX = "7e570000-0000-4000-8000-0000000000";
+// The players are guests: rows referenced by a session log can never be
+// deleted, and guests add no members (and so nothing to a social's directory)
+// on every run.
 const PLAYER_FIRST_NAMES = [
   "Ines",
   "Otto",
@@ -146,7 +146,7 @@ interface HostedDraftSession {
   config: SessionConfig;
 }
 
-/** A new host with a draft session of `playerCount` attending members on `courtCount` doubles courts. */
+/** A new host with a draft session of `playerCount` attending guests on `courtCount` doubles courts. */
 async function createHostedDraftSession(
   stack: LocalStack,
   admin: DatabaseClient,
@@ -190,31 +190,15 @@ async function createHostedDraftSession(
       .single(),
     "Creating the draft session",
   ).id;
-  const sharedMembers = PLAYER_FIRST_NAMES.slice(0, playerCount).map(
-    (firstName, index) => ({
-      id: `${SHARED_MEMBER_ID_PREFIX}${String(index + 1).padStart(2, "0")}`,
-      first_name: firstName,
-      last_name: "Tester",
-      skill_level: "intermediate" as const,
-    }),
-  );
-  // Create the shared members once; later runs leave the existing rows untouched.
-  const upserted = await admin
-    .from("members")
-    .upsert(sharedMembers, { onConflict: "id", ignoreDuplicates: true });
-  if (upserted.error) {
-    throw new Error(`Creating members failed: ${upserted.error.message}`);
-  }
-  const members = sharedMembers;
   const participants = requireData(
     await admin
       .from("session_participants")
       .insert(
-        members.map((member) => ({
+        PLAYER_FIRST_NAMES.slice(0, playerCount).map((firstName) => ({
           session_id: sessionId,
-          member_id: member.id,
-          first_name: member.first_name,
-          last_name: member.last_name,
+          is_guest: true,
+          first_name: firstName,
+          last_name: "Tester",
           skill_level: "intermediate" as const,
         })),
       )
@@ -236,7 +220,7 @@ async function createHostedDraftSession(
       firstName: participant.first_name,
       lastName: participant.last_name,
       skill: "intermediate",
-      isGuest: false,
+      isGuest: true,
     })),
   };
   return { host: hostUser.client, sessionId, config };
@@ -259,13 +243,7 @@ afterAll(async () => {
     const { error } = await admin.auth.admin.deleteUser(userId);
     if (error) failures.push(`${userId}: ${error.message}`);
   }
-  if (createdSocialIds.length > 0) {
-    const { error } = await admin
-      .from("socials")
-      .delete()
-      .in("id", createdSocialIds);
-    if (error) failures.push(`socials: ${error.message}`);
-  }
+  failures.push(...(await deleteTestSocials(admin, createdSocialIds)));
   if (failures.length > 0) {
     throw new Error(`Cleaning up test users failed: ${failures.join("; ")}`);
   }

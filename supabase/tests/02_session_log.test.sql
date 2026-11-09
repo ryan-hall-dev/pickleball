@@ -12,11 +12,11 @@ insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000
 insert into public.hosts (user_id, display_name, social_id) values ('a0000000-0000-4000-8000-000000000002', 'Hal Host', '50000000-0000-4000-8000-000000000002');
 insert into public.sessions (id, host_id, name, host_name, planned_start, planned_end) values
   ('d0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', 'Hal Host', now(), now() + interval '2 hours');
-insert into public.members (id, first_name, last_name) values
-  ('b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim'),
-  ('b0000000-0000-4000-8000-000000000002', 'Kofi', 'Mensah'),
-  ('b0000000-0000-4000-8000-000000000003', 'Zoe', 'Park'),
-  ('b0000000-0000-4000-8000-000000000004', 'Ravi', 'Patel');
+insert into public.members (social_id, id, first_name, last_name) values
+  ('50000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim'),
+  ('50000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000002', 'Kofi', 'Mensah'),
+  ('50000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000003', 'Zoe', 'Park'),
+  ('50000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000004', 'Ravi', 'Patel');
 insert into public.session_participants (id, session_id, member_id, first_name, last_name) values
   ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim'),
   ('e0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002', 'Kofi', 'Mensah'),

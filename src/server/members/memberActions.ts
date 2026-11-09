@@ -18,10 +18,13 @@ import {
   type MemberInput,
 } from "./memberRules";
 
-// Any host may manage the member directory (plan §4: "Hosts can search, edit
-// and deactivate"). Members are never deleted. Writes use the service-role
-// client, always after the caller is verified as a host with getUser()
-// (docs/decisions/0002-server-only-writes.md).
+// Any host may manage their social's member directory (plan §4: "Hosts can
+// search, edit and deactivate"). Members are never deleted. Writes use the
+// service-role client, always after the caller is verified as a host with
+// getUser() (docs/decisions/0002-server-only-writes.md). The service-role
+// client bypasses RLS, so every query here filters by the host's social and
+// every insert sets it: another social's member is answered like a missing
+// one (docs/plans/socials.md §4).
 
 export interface MemberFormValues {
   firstName: string;
@@ -149,17 +152,20 @@ async function validateMemberForm(
 }
 
 /**
- * Whether another active member has the same name once case, accents and
- * spacing are ignored (an exact match on the generated `search_name`).
+ * Whether another active member of the social has the same name once case,
+ * accents and spacing are ignored (an exact match on the generated
+ * `search_name`). Other socials' namesakes don't count.
  */
 async function activeMemberWithSameNameExists(
   adminClient: AdminClient,
+  socialId: string,
   memberInput: MemberInput,
   excludedMemberId: string | null,
 ): Promise<boolean> {
   let builder = adminClient
     .from("members")
     .select("id")
+    .eq("social_id", socialId)
     .eq("is_active", true)
     .eq("search_name", memberFullNameKey(memberInput))
     .limit(1);
@@ -191,13 +197,19 @@ export async function createMember(
     const adminClient = createSupabaseAdminClient();
     if (
       !validated.isDuplicateNameConfirmed &&
-      (await activeMemberWithSameNameExists(adminClient, memberInput, null))
+      (await activeMemberWithSameNameExists(
+        adminClient,
+        host.socialId,
+        memberInput,
+        null,
+      ))
     ) {
       return validated.duplicateNameState();
     }
     const { data, error } = await adminClient
       .from("members")
       .insert({
+        social_id: host.socialId,
         first_name: memberInput.firstName,
         last_name: memberInput.lastName,
         skill_level: memberInput.skillLevel,
@@ -236,6 +248,7 @@ export async function updateMember(
       .from("members")
       .select("first_name, last_name")
       .eq("id", memberId)
+      .eq("social_id", host.socialId)
       .maybeSingle();
     if (readError) {
       throw new Error(`Reading the member failed: ${readError.message}`);
@@ -251,7 +264,12 @@ export async function updateMember(
     if (
       isNameChanged &&
       !validated.isDuplicateNameConfirmed &&
-      (await activeMemberWithSameNameExists(adminClient, memberInput, memberId))
+      (await activeMemberWithSameNameExists(
+        adminClient,
+        host.socialId,
+        memberInput,
+        memberId,
+      ))
     ) {
       return validated.duplicateNameState();
     }
@@ -264,6 +282,7 @@ export async function updateMember(
         skill_level: memberInput.skillLevel,
       })
       .eq("id", memberId)
+      .eq("social_id", host.socialId)
       .select("id");
     if (error?.code === POSTGRES_CHECK_VIOLATION) {
       return formError(NAME_REFUSED_BY_DATABASE);
@@ -312,6 +331,7 @@ export async function setMemberActive(
       .from("members")
       .update({ is_active: parsedInput.data.isActive === "true" })
       .eq("id", memberId)
+      .eq("social_id", authorization.host.socialId)
       .select("id");
     if (error) {
       throw new Error(`Changing member status failed: ${error.message}`);

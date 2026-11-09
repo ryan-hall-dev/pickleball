@@ -11,10 +11,10 @@ insert into auth.users (id, email) values
 insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000006', 'pgTAP Social');
 insert into public.hosts (user_id, display_name, role, social_id) values
   ('a0000000-0000-4000-8000-000000000061', 'Mel Members', 'host', '50000000-0000-4000-8000-000000000006');
-insert into public.members (id, first_name, last_name, skill_level) values
-  ('b0000000-0000-4000-8000-000000000061', 'Élodie', 'Durand-Çelik', 'advanced'),
-  ('b0000000-0000-4000-8000-000000000062', 'Anne  Marie', 'O''Brien', null),
-  ('b0000000-0000-4000-8000-000000000063', 'ZOË', 'Ñúñez', 'beginner');
+insert into public.members (social_id, id, first_name, last_name, skill_level) values
+  ('50000000-0000-4000-8000-000000000006', 'b0000000-0000-4000-8000-000000000061', 'Élodie', 'Durand-Çelik', 'advanced'),
+  ('50000000-0000-4000-8000-000000000006', 'b0000000-0000-4000-8000-000000000062', 'Anne  Marie', 'O''Brien', null),
+  ('50000000-0000-4000-8000-000000000006', 'b0000000-0000-4000-8000-000000000063', 'ZOË', 'Ñúñez', 'beginner');
 
 select has_column('public', 'members', 'search_name', 'members has search_name');
 select col_not_null('public', 'members', 'search_name', 'search_name is never null');

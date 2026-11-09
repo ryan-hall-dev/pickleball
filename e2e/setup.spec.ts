@@ -19,14 +19,28 @@ import {
   useRandomClientIp,
 } from "./support/localHostSession";
 
-const courtNameTokens: string[] = [];
-const memberNameTokens: string[] = [];
 const testHostUserIds: string[] = [];
 
 function uniqueCourtToken(): string {
   const token = `Zqcourt${randomUUID().slice(0, 8)}`;
-  courtNameTokens.push(token);
   return token;
+}
+
+function uniqueMemberToken(): string {
+  const token = `Zqmember${randomUUID().slice(0, 8)}`;
+  return token;
+}
+
+/** Adds courts to a social, after its existing ones, in the given order. */
+async function insertCourts(socialId: string, courtNames: string[]) {
+  const { error } = await adminClient.from("courts").insert(
+    courtNames.map((name, index) => ({
+      social_id: socialId,
+      name,
+      sort_order: 900_001 + index,
+    })),
+  );
+  if (error) throw error;
 }
 
 test.beforeEach(async ({ page }) => {
@@ -59,13 +73,8 @@ test.afterAll(async () => {
       }
     }
   }
-  for (const token of courtNameTokens.splice(0)) {
-    await adminClient.from("courts").delete().like("name", `${token}%`);
-  }
-  // After the sessions, whose attendee rows point at the members.
-  for (const token of memberNameTokens.splice(0)) {
-    await adminClient.from("members").delete().eq("last_name", token);
-  }
+  // After the sessions, whose attendee rows point at the members: the
+  // socials, with their courts and members.
   await deleteCreatedLogins();
 });
 
@@ -105,12 +114,9 @@ test("a host sets up a draft's details and courts, sees the summary, reloads and
   page,
 }) => {
   const courtToken = uniqueCourtToken();
-  const { error: courtsError } = await adminClient.from("courts").insert([
-    { name: `${courtToken} A`, sort_order: 900_001 },
-    { name: `${courtToken} B`, sort_order: 900_002 },
-  ]);
-  if (courtsError) throw courtsError;
-  const { email } = await signInAsNewManager(page, "setup");
+  const { email } = await signInAsNewManager(page, "setup", (socialId) =>
+    insertCourts(socialId, [`${courtToken} A`, `${courtToken} B`]),
+  );
   const hostUserId = (await findUserIdByEmail(email))!;
   testHostUserIds.push(hostUserId);
 
@@ -325,14 +331,23 @@ async function expectAttendanceSaved(page: Page) {
 test("a host picks members and guests for a draft, and they persist", async ({
   page,
 }) => {
-  const memberToken = `Zqmember${randomUUID().slice(0, 8)}`;
-  memberNameTokens.push(memberToken);
-  const { error: membersError } = await adminClient.from("members").insert([
-    { first_name: "Grace", last_name: memberToken, skill_level: "advanced" },
-    { first_name: "Kofi", last_name: memberToken },
-  ]);
-  if (membersError) throw membersError;
-  const { email } = await signInAsNewManager(page, "setup-players");
+  const memberToken = uniqueMemberToken();
+  const { email } = await signInAsNewManager(
+    page,
+    "setup-players",
+    async (socialId) => {
+      const { error } = await adminClient.from("members").insert([
+        {
+          social_id: socialId,
+          first_name: "Grace",
+          last_name: memberToken,
+          skill_level: "advanced",
+        },
+        { social_id: socialId, first_name: "Kofi", last_name: memberToken },
+      ]);
+      if (error) throw error;
+    },
+  );
   testHostUserIds.push((await findUserIdByEmail(email))!);
   await startNewDraft(page);
 
@@ -423,6 +438,55 @@ test("a host who isn't the social manager can't add courts", async ({
   await expect(
     page.getByRole("button", { name: "Add court", exact: true }),
   ).toHaveCount(0);
+});
+
+test("a second social's manager sees only their own social's courts and members", async ({
+  page,
+}) => {
+  const courtToken = uniqueCourtToken();
+  const memberToken = uniqueMemberToken();
+  // Social A, with nobody signed in: a court and a member that B must never see.
+  const socialAId = await createSocial(uniqueSocialName("setup-social-a"));
+  await insertCourts(socialAId, [`${courtToken} Court 1`]);
+  const { error: memberAError } = await adminClient.from("members").insert({
+    social_id: socialAId,
+    first_name: "Ada",
+    last_name: memberToken,
+  });
+  if (memberAError) throw memberAError;
+
+  // Social B has its own "Court 1" (names are unique per social) and member.
+  const { email } = await signInAsNewManager(
+    page,
+    "setup-social-b",
+    async (socialBId) => {
+      await insertCourts(socialBId, [`${courtToken} Court 1`]);
+      const { error } = await adminClient.from("members").insert({
+        social_id: socialBId,
+        first_name: "Bea",
+        last_name: memberToken,
+      });
+      if (error) throw error;
+    },
+  );
+  testHostUserIds.push((await findUserIdByEmail(email))!);
+
+  await startNewDraft(page);
+  await expect(
+    page.getByRole("button", { name: new RegExp(`${courtToken} Court 1`) }),
+  ).toHaveCount(1);
+  const card = page.getByRole("region", { name: "Who's playing?" });
+  await card.getByLabel("Search members by name").fill(memberToken);
+  await expect(card.getByText("Showing 1 of 1 matching member")).toBeVisible();
+  await expect(
+    card.getByRole("button", { name: new RegExp(`^Bea ${memberToken}`) }),
+  ).toBeVisible();
+  await expect(card.getByText(new RegExp(`Ada ${memberToken}`))).toHaveCount(0);
+
+  await page.goto(`/members?q=${memberToken}`);
+  await expect(page.getByText("Showing 1 of 1 active member")).toBeVisible();
+  await expect(page.getByText(`Bea ${memberToken}`)).toBeVisible();
+  await expect(page.getByText(`Ada ${memberToken}`)).toHaveCount(0);
 });
 
 const RECOMMENDED_PRIORITY_LABELS = [
@@ -610,12 +674,9 @@ test("a host saves a setup, discards the draft, and reuses the setup in a new on
   page,
 }) => {
   const courtToken = uniqueCourtToken();
-  const { error: courtsError } = await adminClient.from("courts").insert([
-    { name: `${courtToken} A`, sort_order: 900_001 },
-    { name: `${courtToken} B`, sort_order: 900_002 },
-  ]);
-  if (courtsError) throw courtsError;
-  const { email } = await signInAsNewManager(page, "setup-saved");
+  const { email } = await signInAsNewManager(page, "setup-saved", (socialId) =>
+    insertCourts(socialId, [`${courtToken} A`, `${courtToken} B`]),
+  );
   const hostUserId = (await findUserIdByEmail(email))!;
   testHostUserIds.push(hostUserId);
   await startNewDraft(page);

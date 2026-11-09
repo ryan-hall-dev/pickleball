@@ -12,10 +12,10 @@ insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000
 insert into public.hosts (user_id, display_name, role, social_id) values
   ('a8000000-0000-4000-8000-000000000001', 'Owner Host', 'host', '50000000-0000-4000-8000-000000000008'),
   ('a8000000-0000-4000-8000-000000000002', 'Other Host', 'host', '50000000-0000-4000-8000-000000000008');
-insert into public.members (id, first_name, last_name, skill_level, is_active) values
-  ('b8000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'advanced', true),
-  ('b8000000-0000-4000-8000-000000000002', 'Kofi', 'Mensah', null, true),
-  ('b8000000-0000-4000-8000-000000000003', 'Ina', 'Inactive', 'beginner', false);
+insert into public.members (social_id, id, first_name, last_name, skill_level, is_active) values
+  ('50000000-0000-4000-8000-000000000008', 'b8000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'advanced', true),
+  ('50000000-0000-4000-8000-000000000008', 'b8000000-0000-4000-8000-000000000002', 'Kofi', 'Mensah', null, true),
+  ('50000000-0000-4000-8000-000000000008', 'b8000000-0000-4000-8000-000000000003', 'Ina', 'Inactive', 'beginner', false);
 insert into public.sessions (id, host_id, name, host_name, planned_start, planned_end, status) values
   ('d8000000-0000-4000-8000-000000000001', 'a8000000-0000-4000-8000-000000000001', 'Owner draft', 'Owner Host',
    now(), now() + interval '2 hours', 'draft'),

@@ -9,8 +9,10 @@ import {
   type SkillLevel,
 } from "./memberSearch";
 
-// Reads use the signed-in host's session, so RLS decides what is visible
-// (hosts only; anyone else gets no rows). Writes live in memberActions.ts.
+// Reads use the signed-in host's session, so RLS decides what is visible:
+// only the members of the host's own social (anyone else gets no rows). No
+// social filter is needed here; the policy compares every row's social_id
+// with private.current_social_id(). Writes live in memberActions.ts.
 
 export interface MemberListEntry {
   id: string;

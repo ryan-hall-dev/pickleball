@@ -77,17 +77,23 @@ isOneToOne: false
                   ]
                 },"courts": {
                   Row: {
-                    "created_at": string,"id": string,"is_active": boolean,"name": string,"sort_order": number,"supported_formats": (Database["public"]['Enums']["court_format"])[],"updated_at": string
+                    "created_at": string,"id": string,"is_active": boolean,"name": string,"social_id": string,"sort_order": number,"supported_formats": (Database["public"]['Enums']["court_format"])[],"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"is_active"?: boolean,"name": string,"sort_order"?: number,"supported_formats"?: (Database["public"]['Enums']["court_format"])[],"updated_at"?: string
+                    "created_at"?: string,"id"?: string,"is_active"?: boolean,"name": string,"social_id": string,"sort_order"?: number,"supported_formats"?: (Database["public"]['Enums']["court_format"])[],"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"is_active"?: boolean,"name"?: string,"sort_order"?: number,"supported_formats"?: (Database["public"]['Enums']["court_format"])[],"updated_at"?: string
+                    "created_at"?: string,"id"?: string,"is_active"?: boolean,"name"?: string,"social_id"?: string,"sort_order"?: number,"supported_formats"?: (Database["public"]['Enums']["court_format"])[],"updated_at"?: string
                   }
                   Relationships: [
-                    
+                    {
+      foreignKeyName: "courts_social_id_fkey"
+      columns: ["social_id"]
+isOneToOne: false
+      referencedRelation: "socials"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"hosts": {
                   Row: {
@@ -145,37 +151,43 @@ isOneToOne: false
                   ]
                 },"member_devices": {
                   Row: {
-                    "created_at": string,"last_seen_at": string,"member_id": string,"token_hash": string
+                    "created_at": string,"last_seen_at": string,"member_id": string,"social_id": string,"token_hash": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"last_seen_at"?: string,"member_id": string,"token_hash": string
+                    "created_at"?: string,"last_seen_at"?: string,"member_id": string,"social_id": string,"token_hash": string
                   }
                   Update: {
-                    "created_at"?: string,"last_seen_at"?: string,"member_id"?: string,"token_hash"?: string
+                    "created_at"?: string,"last_seen_at"?: string,"member_id"?: string,"social_id"?: string,"token_hash"?: string
                   }
                   Relationships: [
                     {
-      foreignKeyName: "member_devices_member_id_fkey"
-      columns: ["member_id"]
+      foreignKeyName: "member_devices_member_id_social_id_fkey"
+      columns: ["member_id","social_id"]
 isOneToOne: false
       referencedRelation: "members"
-      referencedColumns: ["id"]
+      referencedColumns: ["id","social_id"]
     }
                   ]
                 },"members": {
                   Row: {
-                    "avatar_url": string | null,"created_at": string,"first_name": string,"id": string,"is_active": boolean,"last_checked_in_at": string | null,"last_name": string,"search_name": string,"skill_level": Database["public"]['Enums']["skill_level"] | null,"updated_at": string
+                    "avatar_url": string | null,"created_at": string,"first_name": string,"id": string,"is_active": boolean,"last_checked_in_at": string | null,"last_name": string,"search_name": string,"skill_level": Database["public"]['Enums']["skill_level"] | null,"social_id": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "avatar_url"?: string | null,"created_at"?: string,"first_name": string,"id"?: string,"is_active"?: boolean,"last_checked_in_at"?: string | null,"last_name": string,"search_name"?: never,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"updated_at"?: string
+                    "avatar_url"?: string | null,"created_at"?: string,"first_name": string,"id"?: string,"is_active"?: boolean,"last_checked_in_at"?: string | null,"last_name": string,"search_name"?: never,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id": string,"updated_at"?: string
                   }
                   Update: {
-                    "avatar_url"?: string | null,"created_at"?: string,"first_name"?: string,"id"?: string,"is_active"?: boolean,"last_checked_in_at"?: string | null,"last_name"?: string,"search_name"?: never,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"updated_at"?: string
+                    "avatar_url"?: string | null,"created_at"?: string,"first_name"?: string,"id"?: string,"is_active"?: boolean,"last_checked_in_at"?: string | null,"last_name"?: string,"search_name"?: never,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id"?: string,"updated_at"?: string
                   }
                   Relationships: [
-                    
+                    {
+      foreignKeyName: "members_social_id_fkey"
+      columns: ["social_id"]
+isOneToOne: false
+      referencedRelation: "socials"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"saved_setups": {
                   Row: {

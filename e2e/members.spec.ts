@@ -11,16 +11,13 @@ import {
   useRandomClientIp,
 } from "./support/localHostSession";
 
-const createdMemberTokens: string[] = [];
-
-/** A unique, letters-only last name; remembered for cleanup. */
+/** A unique, letters-only last name. */
 function uniqueLastName(): string {
   const letters = randomUUID()
     .replace(/[^a-f]/g, "")
     .slice(0, 8)
     .padEnd(8, "q");
   const token = `Zqe${letters}`;
-  createdMemberTokens.push(token);
   return token;
 }
 
@@ -29,16 +26,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterAll(async () => {
-  // Test-only cleanup with the secret key; the app itself never deletes members.
-  for (const token of createdMemberTokens.splice(0)) {
-    const { error } = await adminClient
-      .from("members")
-      .delete()
-      .eq("last_name", token);
-    if (error) {
-      console.warn(`Couldn't delete e2e members ${token}: ${error.message}`);
-    }
-  }
+  // The test socials go with every member the tests added.
   await deleteCreatedLogins();
 });
 
@@ -205,7 +193,17 @@ test("a duplicate name warns before saving", async ({ page }) => {
 test("an empty search shows a clear state, the page fits the screen and focus is visible", async ({
   page,
 }) => {
-  await signInAsNewManager(page, "members-empty");
+  // Members belong to a social: a new social's directory is empty ("No
+  // members yet", no search), so give it one member to search past.
+  const memberLastName = uniqueLastName();
+  await signInAsNewManager(page, "members-empty", async (socialId) => {
+    const { error } = await adminClient.from("members").insert({
+      social_id: socialId,
+      first_name: "Grace",
+      last_name: memberLastName,
+    });
+    if (error) throw error;
+  });
   const unmatchedText = uniqueLastName();
 
   await page.goto("/members");

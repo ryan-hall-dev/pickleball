@@ -49,6 +49,8 @@ import {
 // with getUser() first, then writes with the service-role client
 // (docs/decisions/0002-server-only-writes.md). A host only ever touches their
 // OWN draft: every session read and write is filtered by host_id = caller.
+// Courts belong to the host's social: every court query filters by
+// host.socialId and every insert sets it (the service-role client bypasses RLS).
 
 export type SetupActionResult = { ok: true } | { ok: false; message: string };
 
@@ -173,10 +175,12 @@ async function readOwnDraft(
 /**
  * Court snapshots for a draft or saved setup: names come from the database
  * (never trusted from the browser), in club order. Courts that were removed,
- * deactivated or don't support the format are listed as unavailable.
+ * deactivated, don't support the format or belong to another social are
+ * listed as unavailable.
  */
 async function snapshotCourts(
   adminClient: AdminClient,
+  socialId: string,
   courtIds: readonly string[],
   matchFormat: CourtFormat,
 ): Promise<{ courts: CourtConfig[]; unavailableCourtIds: string[] }> {
@@ -184,6 +188,7 @@ async function snapshotCourts(
   const { data: courtRows, error } = await adminClient
     .from("courts")
     .select("id, name, supported_formats, is_active, sort_order")
+    .eq("social_id", socialId)
     .in("id", [...courtIds])
     .order("sort_order")
     .order("name");
@@ -294,6 +299,7 @@ export async function saveSessionDraft(
     const adminClient = createSupabaseAdminClient();
     const { courts, unavailableCourtIds } = await snapshotCourts(
       adminClient,
+      host.socialId,
       draftInput.courtIds,
       draftInput.matchFormat,
     );
@@ -384,8 +390,10 @@ export async function discardSessionDraft(
 }
 
 /**
- * Adds a court to the club. Social managers only (Ryan, 2026-11-09): courts are shared
- * by every session, so other hosts only choose from the existing ones.
+ * Adds a court to the manager's social. Social managers only (Ryan,
+ * 2026-11-09): courts are shared by every session of the social, so other
+ * hosts only choose from the existing ones. Names are unique within the
+ * social; another social may have a court of the same name.
  */
 export async function addClubCourt(
   input: AddClubCourtInput,
@@ -412,6 +420,7 @@ export async function addClubCourt(
     const { data: lastCourt, error: readError } = await adminClient
       .from("courts")
       .select("sort_order")
+      .eq("social_id", host.socialId)
       .order("sort_order", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -421,6 +430,7 @@ export async function addClubCourt(
     const { data: createdCourt, error } = await adminClient
       .from("courts")
       .insert({
+        social_id: host.socialId,
         name,
         supported_formats: supportedFormats,
         sort_order: (lastCourt?.sort_order ?? 0) + 1,
@@ -626,6 +636,7 @@ export async function saveSetup(
     const adminClient = createSupabaseAdminClient();
     const { courts, unavailableCourtIds } = await snapshotCourts(
       adminClient,
+      host.socialId,
       draft.courtIds,
       draft.matchFormat,
     );
@@ -722,6 +733,7 @@ export async function applySavedSetup(
     const setup = parseSavedSetupConfig(setupRow.config);
     const { courts, unavailableCourtIds } = await snapshotCourts(
       adminClient,
+      host.socialId,
       setup.courts.map((court) => court.courtId),
       setup.matchFormat,
     );

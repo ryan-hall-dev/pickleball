@@ -10,6 +10,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/lib/database.types";
 import { HOST_ACCESS_DENIAL_MESSAGES } from "@/server/auth/hostAccess";
+import { deleteTestSocials } from "@/server/testing/deleteTestSocials";
 import { updateSocialName } from "@/server/socials/socialActions";
 import { inviteHost, removeHost } from "./hostActions";
 import { listHosts } from "./hostDirectory";
@@ -233,7 +234,7 @@ describe.skipIf(!localStack)(
       for (const userId of createdUserIds) {
         await admin.auth.admin.deleteUser(userId);
       }
-      await admin.from("socials").delete().in("id", createdSocialIds);
+      await deleteTestSocials(admin, createdSocialIds);
       vi.unstubAllEnvs();
     });
 

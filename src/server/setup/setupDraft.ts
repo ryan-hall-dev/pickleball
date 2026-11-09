@@ -12,7 +12,9 @@ import {
 } from "./setupRules";
 
 // Reads for the Setup screen use the signed-in host's session, so RLS decides
-// what is visible (hosts only). Writes live in setupActions.ts.
+// what is visible (hosts only; courts and members of the host's own social
+// only, so the court picker and "Who's playing?" never list another
+// social's). Writes live in setupActions.ts.
 
 export interface ClubCourt {
   id: string;
@@ -123,7 +125,7 @@ export async function listDraftParticipants(
   }));
 }
 
-/** The club's active courts in display order. */
+/** The social's active courts in display order (RLS scopes them to the host's social). */
 export async function listActiveClubCourts(): Promise<ClubCourt[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase

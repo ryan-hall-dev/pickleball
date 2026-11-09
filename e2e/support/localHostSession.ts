@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/lib/database.types";
+import { deleteTestSocials } from "../../src/server/testing/deleteTestSocials";
 
 const CODE_EMAIL_TIMEOUT_MS = 15_000;
 
@@ -51,7 +52,11 @@ export function trackCreatedLogin(userId: string) {
   createdUserIds.push(userId);
 }
 
-/** Deletes the tracked logins (and so their hosts rows), then their socials. */
+/**
+ * Deletes the tracked logins (and so their hosts rows), then their socials one
+ * at a time with their courts and members. Delete sessions that reference a
+ * social's members first.
+ */
 export async function deleteCreatedLogins() {
   for (const userId of createdUserIds.splice(0)) {
     const { error } = await adminClient.auth.admin.deleteUser(userId);
@@ -59,14 +64,7 @@ export async function deleteCreatedLogins() {
     if (error)
       console.warn(`Couldn't delete e2e user ${userId}: ${error.message}`);
   }
-  const socialIds = createdSocialIds.splice(0);
-  if (socialIds.length === 0) return;
-  const { error } = await adminClient
-    .from("socials")
-    .delete()
-    .in("id", socialIds);
-  // e.g. a social that still has hosts.
-  if (error) console.warn(`Couldn't delete e2e socials: ${error.message}`);
+  await deleteTestSocials(adminClient, createdSocialIds.splice(0));
 }
 
 /** A new social, removed by `deleteCreatedLogins` after the tests. */
@@ -194,9 +192,15 @@ export function uniqueSocialName(label: string): string {
 
 /**
  * Creates a social of its own with a new manager login and signs it in.
+ * `prepareSocial` runs before signing in, e.g. to add the social's courts or
+ * members so the first page already shows them.
  * Returns the manager's email and the social's id and name.
  */
-export async function signInAsNewManager(page: Page, label: string) {
+export async function signInAsNewManager(
+  page: Page,
+  label: string,
+  prepareSocial?: (socialId: string) => Promise<void>,
+) {
   const email = uniqueEmail(label);
   const socialName = uniqueSocialName(label);
   const socialId = await createSocial(socialName);
@@ -206,6 +210,7 @@ export async function signInAsNewManager(page: Page, label: string) {
     "manager",
     socialId,
   );
+  await prepareSocial?.(socialId);
   await signIn(page, email);
   return { email, socialId, socialName };
 }
