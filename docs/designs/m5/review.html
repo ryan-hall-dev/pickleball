@@ -835,15 +835,10 @@
         <h1 id="t">Player check-in, pending tray and QR</h1>
         <p class="lede">
           Every screen M5 needs that had no design yet, drawn from DESIGN.md and
-          the reference exports. Nothing here is built. Screens show at their
-          real CSS size (phones at 390 px, the host page at 1280 px). Ryan
-          approved every behaviour decision on 10 Nov 2026 (<span
-            class="pill agreed"
-            >Approved</span
-          >); the remaining wording and layout details are built as drawn (<span
-            class="pill open"
-            >Wording · as drawn</span
-          >).
+          the reference exports. Screens show at their real CSS size (phones at
+          390 px, the host page at 1280 px). Ryan approved every decision on 10
+          Nov 2026, including the wording and layout as drawn, and M5 is being
+          built from these screens.
         </p>
       </div>
       <div class="stats" aria-label="Summary">
@@ -861,8 +856,8 @@
         <p>
           Ryan approved these on 10 Nov 2026, and they're recorded in the M5
           plan. The duplicate-attendance rules come first. The numbered list is
-          every proposal from the drafts: orange ones change behaviour and are
-          approved; the rest are wording or layout, built as drawn.
+          every proposal from the drafts: orange ones change behaviour; the rest
+          are wording or layout, approved as drawn.
         </p>
       </div>
 
@@ -1082,7 +1077,7 @@
     {
       id: "D-D",
       t: "Possible duplicate warning for new players",
-      d: "When a new-player request has the same normalised full name (case, accents and spacing ignored) as a member already attending, hosts see “Possible duplicate: same name as someone already checked in. A matching name doesn't mean it's the same person. Check with them before approving.” Names only. Nothing is identified, merged or rejected automatically; Approve and Reject stay and the host decides. The player is never told.",
+      d: "When a new-player request has the same normalised full name (case, accents and spacing ignored) as anyone already attending (a member, or a guest a host added directly in Who's playing, compared by their name in this session), hosts see “Possible duplicate: same name as someone already checked in. A matching name doesn't mean it's the same person. Check with them before approving.” Names only. Nothing is identified, merged or rejected automatically; Approve and Reject stay and the host decides. The player is never told.",
       refs: ["H03"],
     },
   ];
@@ -1737,12 +1732,12 @@
   const img = (s) => `screens/${s.file}.png`;
 
   // Ryan approved every behaviour decision (and #31 was verified) on 10 Nov 2026.
-  const isApproved = (id, key) => key || id === 31;
+  const isApproved = () => true;
   function decCard(id, t, d, refs, key) {
     const links = refs.map((r) => `<a href="#${r}">${r}</a>`).join(", ");
     const pill = isApproved(id, key)
       ? `<span class="pill agreed">${id === 31 ? "Verified" : "Approved"}</span>`
-      : `<span class="pill open">Wording · as drawn</span>`;
+      : `<span class="pill agreed">Approved as drawn</span>`;
     return `<div class="dec${key ? " key" : ""}" id="dec-${id}"><div class="n">${esc(id)}</div><div class="t">${esc(t)} ${pill}</div><div class="d">${esc(d)}</div><div class="refs">Screens: ${links}</div></div>`;
   }
   document.getElementById("dupDecisions").innerHTML = DUP_DECISIONS.map((x) =>

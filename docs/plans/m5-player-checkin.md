@@ -26,7 +26,7 @@ Part of `docs/plans/session-manager-mvp.md` (§4.1, M5 row). Status: acceptance 
 - `approve_checkin` refuses a member who is already attending with `ALREADY_IN_SESSION`: no participant, no device link. Today it errors with `PARTICIPANT_ID_MISMATCH` or re-links the device when the existing participant id is passed; M5 removes both.
 - Races: a pending row switches to the already-checked-in state on the next 5 s poll once the member is attending (another host approved a request from a different phone, or added them in Who's playing). An Approve already pressed is refused and the row reads "Approve stopped: already checked in · Added by another host a moment ago."
 
-**Possible duplicate warning (D-D).** When a new-player (guest) request's normalised full name matches a member already attending the session, the host sees a warning on that tray row.
+**Possible duplicate warning (D-D).** When a new-player (guest) request's normalised full name matches anyone already attending the session, the host sees a warning on that tray row. "Already attending" covers both groups (extended by Ryan, 2026-11-10): members already attending, and guests a host added directly through Who's playing. Guests are compared by their name in this session's attendance (`session_participants` first and last name); no member record is created for the comparison.
 
 - Normalised full name: first and last name joined, lower-cased, accents removed, surrounding and repeated spaces collapsed (the same normalisation as `members.search_name`). Names only: nothing else is compared.
 - Nothing is automatic: the guest isn't identified, merged or rejected. Approve and Reject both stay; the host decides.
@@ -45,7 +45,7 @@ Part of `docs/plans/session-manager-mvp.md` (§4.1, M5 row). Status: acceptance 
 8. The Sticker and QR page has no nav item; it opens from the tray's "Show QR code" and from the Hosts page, for every host of the social (#25).
 9. Print layout: A4 only, 12 stickers per page (#28). The Hosts page gets a "Check-in link" card (every host sees the link; managers see "Issue new link", the UI term for issuing a new tag) (#29).
 
-Verified: check-in requests belong to the session, not the tag, so issuing a new link leaves requests already sent untouched (#31). The remaining README items are wording and layout and are built as drawn unless Ryan changes them.
+Verified: check-in requests belong to the session, not the tag, so issuing a new link leaves requests already sent untouched (#31). The remaining wording and layout items in the README (about 20) are approved as drawn (Ryan, 2026-11-10) and are built as documented. If implementation reveals a genuine usability issue, it is flagged for Ryan's review instead of the design being changed silently.
 
 ## Acceptance criteria
 
@@ -67,7 +67,7 @@ Verified: check-in requests belong to the session, not the tag, so issuing a new
 11. Pending tray on the Setup screen, under the stepper and above both columns, visible to every host of the social and showing only the open session's requests (Live comes in M7, which reuses the component): lists pending requests within 5 s (polling), oldest first, each with name, "New player"/"Member", skill (and "level changed from <old>"), plus Approve and Reject. Empty state when none.
 12. Approve (one transaction, existing `approve_checkin`): a member for a first-timer, the phone linked, a session participant added; the attendee appears in Who's playing without a reload. Reject: request rejected, player's phone shows the neutral message.
     12a. A member already attending can't be approved again: the row shows the already-checked-in state with "Close: already checked in" and Reject only; the server refuses approval with `ALREADY_IN_SESSION`; closing records `already_checked_in`, links no phone, and the player's phone shows P09b. Rows switch to this state within 5 s when the member becomes attending.
-    12b. A new-player request whose normalised full name matches a member already attending shows the possible-duplicate warning to hosts only; Approve and Reject stay; nothing is merged, identified or rejected automatically.
+    12b. A new-player request whose normalised full name matches anyone already attending (a member, or a guest added directly through Who's playing, compared by their name in this session) shows the possible-duplicate warning to hosts only; no member record is created for the comparison; Approve and Reject stay; nothing is merged, identified or rejected automatically.
 13. Hosts of other socials see and decide nothing of this social's requests; two hosts of the social deciding the same request → one wins, the other sees "Already decided".
 14. One check-in link and QR per social. Host "Sticker and QR" page: the social's link, a QR code (generated server-side or with a vetted library) shown full-screen for a player to scan, and a print layout (print it on any number of stickers).
 15. Manager-only "Issue new tag" on the Hosts page, with confirmation; the old `/t/<tag>` link stops working immediately.

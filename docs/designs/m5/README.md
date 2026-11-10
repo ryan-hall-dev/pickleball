@@ -62,52 +62,52 @@ Render (from the repo root): `export PATH="/opt/homebrew/opt/node@24/bin:$PATH" 
 
 ## Decisions
 
-Proposals not covered by `DESIGN.md` or the M5 plan, with their status. **APPROVED (Ryan, 2026-11-10)** items are agreed behaviour. Items marked **Open (wording/layout), shown as drawn** are built as drawn unless Ryan changes them.
+Proposals not covered by `DESIGN.md` or the M5 plan, with their status. **APPROVED (Ryan, 2026-11-10)** items are agreed behaviour. The wording and layout items were approved as drawn on the same day. If implementation reveals a genuine usability issue, flag it for review rather than changing the design silently.
 
 **Host tray**
 
 1. **APPROVED (Ryan, 2026-11-10).** **Tray placement:** a full-width card directly under the setup stepper, above both columns. Reason: it's the first thing a host sees, and it stays near the top on tablet and phone (the summary aside drops below the main column there, so a tray at the top of the aside would end up near the bottom of the page). Alternative: top of the summary aside (desktop only looks better).
-2. **Open (wording/layout), shown as drawn.** Tray header: a 32 px count badge (blue when requests are waiting, grey at 0) in place of a numbered section badge; the tray border is blue while requests wait and neutral when empty. Subtitle "Approve to add them to Who's playing. Oldest first."
-3. **Open (wording/layout), shown as drawn.** Rows are ordered oldest first.
+2. **APPROVED as drawn (Ryan, 2026-11-10).** Tray header: a 32 px count badge (blue when requests are waiting, grey at 0) in place of a numbered section badge; the tray border is blue while requests wait and neutral when empty. Subtitle "Approve to add them to Who's playing. Oldest first."
+3. **APPROVED as drawn (Ryan, 2026-11-10).** Rows are ordered oldest first.
 4. **APPROVED (Ryan, 2026-11-10).** A member who chose "Update your level" shows the new level plus "level changed from <old>". The request needs to carry the chosen level for this.
 5. **APPROVED (Ryan, 2026-11-10).** **Already checked in: a player already attending is never approved into the same session again.** Server rule: `session_participants` is unique on `(session_id, member_id)`, so duplicate attendance is already impossible in the database, but today `approve_checkin` for an attending member either errors (`PARTICIPANT_ID_MISMATCH`) or re-links the device. In M5, `approve_checkin` refuses with `ALREADY_IN_SESSION`: no participant row, no device link. Design: a request for a member who is already attending gets an orange-edged row with `!` and "Already checked in to this session. They can't be added twice." and **no Approve button**. Its actions are blue "Close: already checked in" (resolves the request; the requesting phone then shows P9b) and outline "Reject" (for when it isn't them). Pending rows switch to this row by themselves within one 5 s poll when the member becomes attending. If the member is added after the row was shown (another host approved a request from a different phone, or a host added them in Who's playing), pressing Approve is refused and the row switches to the same already-checked-in row with "Added by another host a moment ago." (H3). Before a host decides, a non-linked phone still sees P6 Waiting, so a phone never learns anyone's status from a submit. Approved details:
    - **(a)** "Close: already checked in" is its own request outcome: a new `checkin_request_status` value, `already_checked_in`, separate from `rejected`.
    - **(b)** After the host closes it, the requesting phone shows P9b ("You're already checked in").
    - **(c)** The requesting phone is never linked to the member in this case.
 6. **APPROVED (Ryan, 2026-11-10).** Decided rows (approved, rejected, closed as already checked in, decided by another host) show a one-line message for about 4 s, then leave the list. A "Check-in rejected" confirmation is added alongside the plan's approved one.
-7. **Open (wording/layout), shown as drawn.** Failed approve/reject: orange row message "Couldn't approve. Check your connection and retry." with a blue Retry; Reject stays available.
-8. **Open (wording/layout), shown as drawn.** "Show QR code" (outline, 44 px) is always in the tray header, not only in the empty state.
+7. **APPROVED as drawn (Ryan, 2026-11-10).** Failed approve/reject: orange row message "Couldn't approve. Check your connection and retry." with a blue Retry; Reject stays available.
+8. **APPROVED as drawn (Ryan, 2026-11-10).** "Show QR code" (outline, 44 px) is always in the tray header, not only in the empty state.
 
 **Player page**
 
 9. **APPROVED (Ryan, 2026-11-10).** Confirm pop-up is a bottom sheet (thumb reach on phones), with modal styling (28 px top radius, modal shadow, dimmed page behind).
 10. **APPROVED (Ryan, 2026-11-10).** "Update your level": an outline disclosure button, collapsed by default; when opened, the three level buttons with nothing preselected (the saved level stays private). Tapping the selected level again clears it; leaving none selected keeps the saved level.
-11. **Open (wording/layout), shown as drawn.** Primary CTAs are uppercase, per DESIGN.md ("CHECK IN AS GRACE"); the PNG uses sentence case.
-12. **Open (wording/layout), shown as drawn.** Search placeholder "Type your name" (the PNG says "Type your first name"), since `search_name` covers the full name. The hint below reads "Type at least 2 letters of your name".
+11. **APPROVED as drawn (Ryan, 2026-11-10).** Primary CTAs are uppercase, per DESIGN.md ("CHECK IN AS GRACE"); the PNG uses sentence case.
+12. **APPROVED as drawn (Ryan, 2026-11-10).** Search placeholder "Type your name" (the PNG says "Type your first name"), since `search_name` covers the full name. The hint below reads "Type at least 2 letters of your name".
 13. **APPROVED (Ryan, 2026-11-10).** When exactly 5 names come back, a status line reads "5 names shown. Not listed? Type more of your name." This only reveals that at least 5 match. Alternative: no line.
-14. **Open (wording/layout), shown as drawn.** Search rows show a chevron and open the confirm sheet directly. There is no selected-row state on the page.
-15. **Open (wording/layout), shown as drawn.** P1 recognised card and P2 search sit under "Who's checking in?". P2 labels the search with a "Find your name" line in place of "Not you? Find your name".
-16. **Open (wording/layout), shown as drawn.** The confirm sheet and guest form include the note "A host approves each check-in before you're added to today's players."
-17. **Open (wording/layout), shown as drawn.** Guest form: titled "Check in as a guest" with the session line beneath; the level field is labelled "Your level"; errors appear after pressing Check in ("Enter your first name", "Enter your last name", "Choose your level"). The level group gets a 2 px orange outline when invalid. The back link reads "Back to find your name".
-18. **Open (wording/layout), shown as drawn.** State screens (P6-P13) show only the brand line (logo + social name), not the LIVE NOW card.
+14. **APPROVED as drawn (Ryan, 2026-11-10).** Search rows show a chevron and open the confirm sheet directly. There is no selected-row state on the page.
+15. **APPROVED as drawn (Ryan, 2026-11-10).** P1 recognised card and P2 search sit under "Who's checking in?". P2 labels the search with a "Find your name" line in place of "Not you? Find your name".
+16. **APPROVED as drawn (Ryan, 2026-11-10).** The confirm sheet and guest form include the note "A host approves each check-in before you're added to today's players."
+17. **APPROVED as drawn (Ryan, 2026-11-10).** Guest form: titled "Check in as a guest" with the session line beneath; the level field is labelled "Your level"; errors appear after pressing Check in ("Enter your first name", "Enter your last name", "Choose your level"). The level group gets a 2 px orange outline when invalid. The back link reads "Back to find your name".
+18. **APPROVED as drawn (Ryan, 2026-11-10).** State screens (P6-P13) show only the brand line (logo + social name), not the LIVE NOW card.
 19. **APPROVED (Ryan, 2026-11-10).** P6 has no cancel button (none in the plan). It shows the player's own "Waiting" pill, a polite live line "This page updates by itself every few seconds." and a "While you wait" box.
-20. **Open (wording/layout), shown as drawn.** P7 and P9 "what happens next" copy is generic: "The hosts put you on a court when it's your turn. Stay near the courts and listen for your name."
-21. **Open (wording/layout), shown as drawn.** P8 rejected uses a neutral grey person icon and an outline "Try again" (calm, not a call to action). Try again goes back to the welcome screen.
-22. **Open (wording/layout), shown as drawn.** P10 has an outline "Try again"; P12 has an outline "Check again" (both just reload). Alternative: no button.
-23. **Open (wording/layout), shown as drawn.** P11 shows the app name "Pickleball Social Manager" (not the social's) and "Ask a host at the courts for the current QR code."
-24. **Open (wording/layout), shown as drawn.** P13 is one screen for offline and server errors, with lime "Try again". The line "If you'd already pressed Check in, trying again won't send a second request." relies on acceptance criterion 8 (same phone, same session returns the existing request).
+20. **APPROVED as drawn (Ryan, 2026-11-10).** P7 and P9 "what happens next" copy is generic: "The hosts put you on a court when it's your turn. Stay near the courts and listen for your name."
+21. **APPROVED as drawn (Ryan, 2026-11-10).** P8 rejected uses a neutral grey person icon and an outline "Try again" (calm, not a call to action). Try again goes back to the welcome screen.
+22. **APPROVED as drawn (Ryan, 2026-11-10).** P10 has an outline "Try again"; P12 has an outline "Check again" (both just reload). Alternative: no button.
+23. **APPROVED as drawn (Ryan, 2026-11-10).** P11 shows the app name "Pickleball Social Manager" (not the social's) and "Ask a host at the courts for the current QR code."
+24. **APPROVED as drawn (Ryan, 2026-11-10).** P13 is one screen for offline and server errors, with lime "Try again". The line "If you'd already pressed Check in, trying again won't send a second request." relies on acceptance criterion 8 (same phone, same session returns the existing request).
 
 **Sticker and QR, issue new link**
 
 25. **APPROVED (Ryan, 2026-11-10).** The Sticker and QR page has no nav item. It opens from the tray's "Show QR code" and from the Hosts page ("Open Sticker and QR"), and has a "Back to session setup" link. It is open to every host of the social.
-26. **Open (wording/layout), shown as drawn.** S1 shows the full link with "Copy link" (outline) and a short "Copied" confirmation, an NFC note ("write this same link to the sticker"), blue "Show full screen" and outline "Print stickers".
-27. **Open (wording/layout), shown as drawn.** Full-screen QR: social name, "Scan to check in", QR on a white panel (quiet zone for scanning), short URL, 44 px close button (Esc too).
+26. **APPROVED as drawn (Ryan, 2026-11-10).** S1 shows the full link with "Copy link" (outline) and a short "Copied" confirmation, an NFC note ("write this same link to the sticker"), blue "Show full screen" and outline "Print stickers".
+27. **APPROVED as drawn (Ryan, 2026-11-10).** Full-screen QR: social name, "Scan to check in", QR on a white panel (quiet zone for scanning), short URL, 44 px close button (Esc too).
 28. **APPROVED (Ryan, 2026-11-10).** Print: A4 only, 12 stickers per page (3 x 4, about 63 x 67 mm), black on white with dashed cut lines; each sticker has the QR, social name, "Scan to check in" and the short URL. A screen-only toolbar with Back and Print. US Letter is not covered.
 29. **APPROVED (Ryan, 2026-11-10).** The Hosts page gets a "Check-in link" card (every host sees the link; only managers see "Issue new link"). The plan says "Issue new tag"; the UI says "link" because hosts know the link and QR, not the tag.
-30. **Open (wording/layout), shown as drawn.** "Issue new link" uses the existing orange-outline attention button; the dialog's confirm is **solid orange** with `#2A1606` text (DESIGN.md has no destructive button style). Focus starts on Cancel.
+30. **APPROVED as drawn (Ryan, 2026-11-10).** "Issue new link" uses the existing orange-outline attention button; the dialog's confirm is **solid orange** with `#2A1606` text (DESIGN.md has no destructive button style). Focus starts on Cancel.
 31. **APPROVED (Ryan, 2026-11-10).** The dialog says "Check-ins already sent are not affected." Verified: requests belong to the session, not the tag.
-32. **Open (wording/layout), shown as drawn.** Placeholder domain `pickleball.example` and tag `k7Qm2xPa` stand in for the real host and tag format.
-33. **APPROVED (Ryan, 2026-11-10).** **Possible duplicate warning (D-D).** When a new-player request has the same normalised full name (first + last; case-, accent- and whitespace-insensitive) as a member already attending the session, the tray row is orange-edged with `!` and "Possible duplicate: same name as someone already checked in." plus "A matching name doesn't mean it's the same person. Check with them before approving." (H3). Rules: compares names only; nothing is identified, merged or rejected automatically; the host decides, and the blue Approve and outline Reject both stay; nothing is shown to the player.
+32. **APPROVED as drawn (Ryan, 2026-11-10).** Placeholder domain `pickleball.example` and tag `k7Qm2xPa` stand in for the real host and tag format.
+33. **APPROVED (Ryan, 2026-11-10).** **Possible duplicate warning (D-D).** When a new-player request has the same normalised full name (first + last; case-, accent- and whitespace-insensitive) as anyone already attending the session (a member, or a guest a host added directly through Who's playing, compared by their name in this session; no member record is created for the comparison), the tray row is orange-edged with `!` and "Possible duplicate: same name as someone already checked in." plus "A matching name doesn't mean it's the same person. Check with them before approving." (H3). Rules: compares names only; nothing is identified, merged or rejected automatically; the host decides, and the blue Approve and outline Reject both stay; nothing is shown to the player.
 
 ## Copy deck
 
