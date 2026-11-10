@@ -1,7 +1,7 @@
 // The public player check-in page (/t/<tag>, M5 increment 2) at 390 px
 // against the LOCAL Supabase stack: a new phone finds its name and waits,
-// a host's approval (approve_checkin with the secret key: the host tray comes
-// in increment 3) switches it to "You're in" within a poll, a reload keeps
+// a host's approval (approve_checkin with the secret key; the host tray's own
+// journey is checkinTray.spec.ts) switches it to "You're in" within a poll, a reload keeps
 // the state, the approved phone is recognised next time, the guest form's
 // errors, a rejection with Try again, an inactive link and a social with
 // nothing open. Each test has its own social; everything is removed after.

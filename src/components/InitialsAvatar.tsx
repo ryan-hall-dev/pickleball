@@ -13,6 +13,7 @@ const AVATAR_TONE_CLASS_NAMES = {
   notAttending: "bg-inner-border text-muted",
   playing: "bg-lime-avatar text-lime-soft",
   next: "bg-blue-avatar text-blue-soft",
+  attention: "bg-orange-avatar text-orange-avatar-text",
 } as const;
 
 const AVATAR_SIZE_CLASS_NAMES = {

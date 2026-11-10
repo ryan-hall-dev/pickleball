@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ActiveMemberChoice } from "@/server/members/memberDirectory";
 import {
   addDraftGuest,
+  readSessionDraft,
   removeDraftGuest,
   setDraftMemberAttendance,
   type DraftAttendanceResult,
@@ -52,7 +53,9 @@ function submitAttendanceChange(
  * once. After every write the list is replaced by the server's, so changes
  * from another tab appear too; changes still waiting are applied on top.
  * Failed changes are dropped from the screen and kept for Retry, minus
- * anything the host has changed since.
+ * anything the host has changed since. Check-ins approved in the tray are
+ * added at once; ones approved by another host appear when the tray asks
+ * for a re-read.
  */
 export function useDraftAttendance(
   sessionId: string,
@@ -70,6 +73,10 @@ export function useDraftAttendance(
   const [refreshProblem, setRefreshProblem] = useState<string | null>(null);
   const queuedChangesRef = useRef<QueuedAttendanceChange[]>([]);
   const isWritingRef = useRef(false);
+  /** Bumped whenever the saved list changes, so an older re-read can't replace it. */
+  const savedListVersionRef = useRef(0);
+  /** The newest re-read started; an earlier one answering later is dropped. */
+  const latestRereadRef = useRef(0);
 
   const activeMembersById = useMemo(
     () => new Map(activeMembers.map((member) => [member.id, member])),
@@ -87,6 +94,7 @@ export function useDraftAttendance(
       ).catch(() => ({ ok: false as const, message: OFFLINE_MESSAGE }));
       queuedChangesRef.current = queuedChangesRef.current.slice(1);
       setQueuedChanges(queuedChangesRef.current);
+      savedListVersionRef.current += 1;
       if (!result.ok) {
         setFailures((currentFailures) => [
           ...currentFailures,
@@ -129,6 +137,49 @@ export function useDraftAttendance(
     }
   }, [failures, queueChange]);
 
+  /** A check-in this host approved: shown at once (no-op if already listed). */
+  const addApprovedParticipant = useCallback(
+    (approvedParticipant: DraftParticipant) => {
+      savedListVersionRef.current += 1;
+      setSavedParticipants((currentParticipants) =>
+        currentParticipants.some(
+          (participant) =>
+            participant.participantId === approvedParticipant.participantId,
+        )
+          ? currentParticipants
+          : [...currentParticipants, approvedParticipant],
+      );
+    },
+    [],
+  );
+
+  /**
+   * Re-reads the attendee list (another host approved a check-in). Skipped
+   * while a write is on its way: its answer brings the list back anyway. A
+   * re-read that a write, an approval or a newer re-read overtook is
+   * dropped. A failed re-read changes nothing: the tray asks again on the
+   * next change it sees, and every write here returns the whole list.
+   * Relies on Next running a page's server actions one at a time, in order:
+   * a write's list is read after any re-read sent before it.
+   */
+  const rereadParticipants = useCallback(async () => {
+    if (isWritingRef.current) return;
+    latestRereadRef.current += 1;
+    const reread = latestRereadRef.current;
+    const versionAtStart = savedListVersionRef.current;
+    const result = await readSessionDraft(sessionId).catch(() => null);
+    if (
+      !result?.ok ||
+      reread !== latestRereadRef.current ||
+      versionAtStart !== savedListVersionRef.current ||
+      isWritingRef.current
+    ) {
+      return;
+    }
+    savedListVersionRef.current += 1;
+    setSavedParticipants(result.draft.participants);
+  }, [sessionId]);
+
   const participants = useMemo(
     () =>
       queuedChanges.reduce(
@@ -150,6 +201,8 @@ export function useDraftAttendance(
     refreshProblem,
     queueChange,
     retryFailures,
+    addApprovedParticipant,
+    rereadParticipants,
   };
 }
 

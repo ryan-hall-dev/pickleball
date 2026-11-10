@@ -42,7 +42,7 @@ import {
 } from "./checkinViewState";
 import { ConfirmSheet } from "./ConfirmSheet";
 import { GuestCheckinForm } from "./GuestCheckinForm";
-import { settleWithin } from "./settleWithin";
+import { settleWithin } from "@/lib/settleWithin";
 import { WelcomeScreen } from "./WelcomeScreen";
 
 /** Typing settles for this long before a search is sent. */

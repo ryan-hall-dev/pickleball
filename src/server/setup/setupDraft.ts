@@ -111,9 +111,7 @@ export async function listDraftParticipants(
     (fromRow, toRow) =>
       supabase
         .from("session_participants")
-        .select(
-          "id, member_id, is_guest, first_name, last_name, skill_level, members(is_active)",
-        )
+        .select(DRAFT_PARTICIPANT_COLUMNS)
         .eq("social_id", socialId)
         .eq("session_id", sessionId)
         .order("created_at")
@@ -121,7 +119,23 @@ export async function listDraftParticipants(
         .range(fromRow, toRow),
     "Reading the draft's players failed",
   );
-  return rows.map((row) => ({
+  return rows.map(draftParticipantFromRow);
+}
+
+/** The `session_participants` columns a DraftParticipant is read from. */
+export const DRAFT_PARTICIPANT_COLUMNS =
+  "id, member_id, is_guest, first_name, last_name, skill_level, members(is_active)";
+
+export function draftParticipantFromRow(row: {
+  id: string;
+  member_id: string | null;
+  is_guest: boolean;
+  first_name: string;
+  last_name: string;
+  skill_level: SkillLevel | null;
+  members: { is_active: boolean } | null;
+}): DraftParticipant {
+  return {
     participantId: row.id,
     memberId: row.member_id,
     isGuest: row.is_guest,
@@ -129,7 +143,7 @@ export async function listDraftParticipants(
     lastName: row.last_name,
     skillLevel: row.skill_level,
     isMemberActive: row.members?.is_active ?? null,
-  }));
+  };
 }
 
 /** The social's active courts in display order (RLS scopes them to the host's social). */

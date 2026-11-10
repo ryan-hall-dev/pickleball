@@ -33,6 +33,10 @@
   --color-orange-text: #ffd6ae;
   /* Stepper item that needs attention ("Players · 1 to fix"). */
   --color-orange-surface-strong: #2b2114;
+  /* Attention rows (behind-average table rows, check-in tray rows) and their avatars. */
+  --color-orange-surface-row: #251c12;
+  --color-orange-avatar: #3a2612;
+  --color-orange-avatar-text: #ffc48f;
   /* Court tile captions on lime surfaces; waiting dots in the capacity diagram. */
   --color-lime-caption: #c9d6a0;
   --color-drag-handle: #5b6b7a;

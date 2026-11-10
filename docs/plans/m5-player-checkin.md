@@ -81,7 +81,7 @@ Verified: check-in requests belong to the session, not the tag, so issuing a new
 
 ## Increments (each tested and committed separately)
 
-Progress: 1 done (`745a2f0`, 2026-11-10); 2 done (2026-11-10, includes migration `20261111120000_checkin_member_names`: a member's request always stores the member's own name, so a check-in can't rename or impersonate a member).
+Progress: 1 done (`745a2f0`, 2026-11-10); 2 done (2026-11-10, includes migration `20261111120000_checkin_member_names`: a member's request always stores the member's own name, so a check-in can't rename or impersonate a member). 3 done (2026-11-10): host tray on Setup; the "Show QR code" button comes with increment 4.
 
 1. Database: search uses `search_name`; read functions for the page header, phone recognition and request status (service-role only); per-social tag reissue (manager only); `already_checked_in` request status, `approve_checkin` refusing an attending member (`ALREADY_IN_SESSION`, no device re-link), a close-as-already-checked-in function (service-role, social-scoped), and the possible-duplicate flag in the tray read. pgTAP.
 2. Public page: header, recognition, search, confirm, guest form, waiting/approved/rejected states. Unit, integration, e2e at 390 px.

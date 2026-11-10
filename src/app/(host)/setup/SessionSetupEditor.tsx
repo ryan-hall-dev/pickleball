@@ -24,6 +24,7 @@ import {
 } from "@/server/setup/setupActions";
 import type {
   ClubCourt,
+  DraftParticipant,
   SavedSetupSummary,
   SessionDraft,
 } from "@/server/setup/setupDraft";
@@ -31,6 +32,7 @@ import type { SaveSessionDraftInput } from "@/server/setup/setupRules";
 import { CoHostDraftNotice } from "./CoHostDraftNotice";
 import { CourtsCard } from "./CourtsCard";
 import { DiscardDraftButton } from "./DiscardDraftButton";
+import { PendingCheckinTray } from "./PendingCheckinTray";
 import {
   forgetShownConflict,
   ownDraftWritesNotYetLoaded,
@@ -627,6 +629,17 @@ function SessionSetupForm({
     draft.participants,
     activeMembers,
   );
+  const { addApprovedParticipant, rereadParticipants } = attendance;
+  const showApprovedCheckin = useCallback(
+    (approvedParticipant: DraftParticipant | null) => {
+      if (approvedParticipant) addApprovedParticipant(approvedParticipant);
+      else void rereadParticipants();
+    },
+    [addApprovedParticipant, rereadParticipants],
+  );
+  const showAttendanceChangedElsewhere = useCallback(() => {
+    void rereadParticipants();
+  }, [rereadParticipants]);
   const attendingPlayerCount = attendance.participants.length;
   const attendingGuestCount = attendance.participants.filter(
     (participant) => participant.isGuest,
@@ -854,6 +867,10 @@ function SessionSetupForm({
         />
       )}
       <SetupStepper steps={readiness.steps} />
+      <PendingCheckinTray
+        onParticipantApproved={showApprovedCheckin}
+        onAttendanceChangedElsewhere={showAttendanceChangedElsewhere}
+      />
       <div className="flex flex-wrap items-start gap-[18px]">
         <div className="flex min-w-0 flex-[999_1_640px] flex-col gap-[18px]">
           {/* Applying a setup replaces these values: no edits meanwhile. */}

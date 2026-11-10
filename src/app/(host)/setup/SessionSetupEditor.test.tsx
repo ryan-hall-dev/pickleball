@@ -30,6 +30,14 @@ import { polyfillDialogForTests } from "./dialogTestPolyfill";
 import { forgetOwnDraftWrites } from "./ownDraftWrites";
 import { SessionSetupEditor } from "./SessionSetupEditor";
 
+// The check-in tray polls on its own (PendingCheckinTray.test.tsx): none here.
+vi.mock("@/server/checkin/hostCheckinActions", () => ({
+  listPendingCheckins: vi.fn(async () => ({ ok: true, requests: [] })),
+  approveCheckin: vi.fn(),
+  rejectCheckin: vi.fn(),
+  closeCheckinAlreadyCheckedIn: vi.fn(),
+}));
+
 vi.mock("@/server/setup/setupActions", () => ({
   saveSessionDraft: vi.fn(),
   discardSessionDraft: vi.fn(),
