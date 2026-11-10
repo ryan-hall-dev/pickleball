@@ -3,7 +3,7 @@
 -- runs as service_role, as the server does (anon access is tested in 01).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(46);
+select plan(47);
 
 insert into auth.users (id, email) values
   ('a0000000-0000-4000-8000-000000000002', 'pgtap-host@example.test'),
@@ -297,12 +297,18 @@ select is(
   'approval saved the returning member''s edited details'
 );
 
--- Already checked in, and a member's existing participant id must be reused.
+-- Already checked in: only the member's own linked phone is told (M5 privacy
+-- rule); any other phone gets an ordinary pending request.
 set local role service_role;
 select is(
-  public.submit_checkin('tag0000000000000001', pg_temp.device(12), pg_temp.ip(12), 'Grace', 'Kim-Lee', null, 'b0000000-0000-4000-8000-000000000001') ->> 'status',
+  public.submit_checkin('tag0000000000000001', pg_temp.device(11), pg_temp.ip(11), 'Grace', 'Kim-Lee', null, 'b0000000-0000-4000-8000-000000000001') ->> 'status',
   'already_checked_in',
-  'a member already in the session is told so'
+  'a member already in the session is told so on their own linked phone'
+);
+select is(
+  public.submit_checkin('tag0000000000000001', pg_temp.device(12), pg_temp.ip(12), 'Grace', 'Kim-Lee', null, 'b0000000-0000-4000-8000-000000000001') ->> 'status',
+  'pending',
+  'another phone naming an attending member gets a pending request (no status leak)'
 );
 select is(
   public.submit_checkin('tag0000000000000001', pg_temp.device(13), pg_temp.ip(13), 'Grant', 'Lee', null, 'b0000000-0000-4000-8000-000000000002') ->> 'status',
@@ -315,8 +321,8 @@ insert into public.session_participants (id, session_id, social_id, member_id, f
   ('e0000000-0000-4000-8000-000000000012', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000002', 'Grant', 'Lee');
 set local role service_role;
 select throws_ok(
-  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where first_name = 'Grant'), gen_random_uuid(), gen_random_uuid(), 2, now())$$,
-  '22023', 'PARTICIPANT_ID_MISMATCH', 'approval must reuse the member''s existing participant id'
+  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where first_name = 'Grant'), 'e0000000-0000-4000-8000-000000000012', gen_random_uuid(), 2, now())$$,
+  'P0001', 'ALREADY_IN_SESSION', 'a member already attending cannot be approved again, even with their participant id'
 );
 reset role;
 

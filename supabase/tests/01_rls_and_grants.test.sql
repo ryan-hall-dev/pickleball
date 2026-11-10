@@ -82,6 +82,8 @@ select set_eq(
     'set_draft_member_attendance', 'add_draft_guest', 'remove_draft_guest',
     'save_setup', 'apply_saved_setup',
     'approve_checkin', 'reject_checkin', 'search_checkin_names', 'submit_checkin',
+    'get_checkin_page', 'close_checkin_already_checked_in',
+    'list_checkin_requests_for_open_session', 'reissue_checkin_tag',
     'record_login_attempt', 'create_social_with_manager'
   ],
   'service_role executes exactly the public functions'

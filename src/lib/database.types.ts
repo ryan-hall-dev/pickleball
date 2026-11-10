@@ -325,14 +325,28 @@ isOneToOne: false
 "cancel_draft_session":
 { Args: { "p_actor_user_id": string,"p_session_id": string }; Returns: Json
                            },
+"close_checkin_already_checked_in":
+{ Args: { "p_actor_user_id": string,"p_checkin_request_id": string }; Returns: Json
+                           },
 "create_social_with_manager":
 { Args: { "p_manager_display_name": string,"p_manager_user_id": string,"p_name": string }; Returns: string
                            },
 "end_session":
 { Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_last_seq": number,"p_final_stats"?: Json,"p_occurred_at": string,"p_session_id": string }; Returns: Json
                            },
+"get_checkin_page":
+{ Args: { "p_checkin_tag": string,"p_device_token_hash": string }; Returns: Json
+                           },
+"list_checkin_requests_for_open_session":
+{ Args: { "p_actor_user_id": string }; Returns: {
+              "created_at": string,"first_name": string,"id": string,"is_already_attending": boolean,"is_possible_duplicate": boolean,"last_name": string,"member_id": string,"saved_skill_level": Database["public"]['Enums']["skill_level"],"skill_level": Database["public"]['Enums']["skill_level"]
+            }[]
+                           },
 "record_login_attempt":
 { Args: { "p_email_hash": string,"p_ip_hash": string,"p_kind": string }; Returns: boolean
+                           },
+"reissue_checkin_tag":
+{ Args: { "p_actor_user_id": string }; Returns: string
                            },
 "reject_checkin":
 { Args: { "p_actor_user_id": string,"p_checkin_request_id": string }; Returns: Json
@@ -365,7 +379,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "checkin_attempt_kind": "search"|"submit","checkin_request_status": "pending"|"approved"|"rejected"|"withdrawn","court_format": "doubles"|"singles","host_role": "manager"|"host","match_row_status": "completed"|"abandoned"|"reverted","session_event_type": "SessionStarted"|"PlayerJoined"|"PlayerJoinReverted"|"PlayerLeft"|"PlayerLeaveReverted"|"PlayerSkipped"|"PlayerUnskipped"|"PlayerLocked"|"PlayerUnlocked"|"CourtAdded"|"CourtAddReverted"|"CourtClosed"|"CourtReopened"|"MatchStarted"|"MatchStartReverted"|"MatchCompleted"|"MatchCompletionReverted"|"PlayerReplaced"|"PlayerReplacementReverted"|"PlayerRemovedMidMatch"|"PlayerRemovalReverted"|"MatchAbandoned"|"MatchAbandonReverted"|"QueueReordered"|"SuggestionsShuffled"|"Paused"|"Resumed"|"SessionEnded","session_status": "draft"|"live"|"ended"|"cancelled","skill_level": "beginner"|"intermediate"|"advanced"
+            "checkin_attempt_kind": "search"|"submit","checkin_request_status": "pending"|"approved"|"rejected"|"withdrawn"|"already_checked_in","court_format": "doubles"|"singles","host_role": "manager"|"host","match_row_status": "completed"|"abandoned"|"reverted","session_event_type": "SessionStarted"|"PlayerJoined"|"PlayerJoinReverted"|"PlayerLeft"|"PlayerLeaveReverted"|"PlayerSkipped"|"PlayerUnskipped"|"PlayerLocked"|"PlayerUnlocked"|"CourtAdded"|"CourtAddReverted"|"CourtClosed"|"CourtReopened"|"MatchStarted"|"MatchStartReverted"|"MatchCompleted"|"MatchCompletionReverted"|"PlayerReplaced"|"PlayerReplacementReverted"|"PlayerRemovedMidMatch"|"PlayerRemovalReverted"|"MatchAbandoned"|"MatchAbandonReverted"|"QueueReordered"|"SuggestionsShuffled"|"Paused"|"Resumed"|"SessionEnded","session_status": "draft"|"live"|"ended"|"cancelled","skill_level": "beginner"|"intermediate"|"advanced"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -485,7 +499,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "checkin_attempt_kind": ["search", "submit"],"checkin_request_status": ["pending", "approved", "rejected", "withdrawn"],"court_format": ["doubles", "singles"],"host_role": ["manager", "host"],"match_row_status": ["completed", "abandoned", "reverted"],"session_event_type": ["SessionStarted", "PlayerJoined", "PlayerJoinReverted", "PlayerLeft", "PlayerLeaveReverted", "PlayerSkipped", "PlayerUnskipped", "PlayerLocked", "PlayerUnlocked", "CourtAdded", "CourtAddReverted", "CourtClosed", "CourtReopened", "MatchStarted", "MatchStartReverted", "MatchCompleted", "MatchCompletionReverted", "PlayerReplaced", "PlayerReplacementReverted", "PlayerRemovedMidMatch", "PlayerRemovalReverted", "MatchAbandoned", "MatchAbandonReverted", "QueueReordered", "SuggestionsShuffled", "Paused", "Resumed", "SessionEnded"],"session_status": ["draft", "live", "ended", "cancelled"],"skill_level": ["beginner", "intermediate", "advanced"]
+            "checkin_attempt_kind": ["search", "submit"],"checkin_request_status": ["pending", "approved", "rejected", "withdrawn", "already_checked_in"],"court_format": ["doubles", "singles"],"host_role": ["manager", "host"],"match_row_status": ["completed", "abandoned", "reverted"],"session_event_type": ["SessionStarted", "PlayerJoined", "PlayerJoinReverted", "PlayerLeft", "PlayerLeaveReverted", "PlayerSkipped", "PlayerUnskipped", "PlayerLocked", "PlayerUnlocked", "CourtAdded", "CourtAddReverted", "CourtClosed", "CourtReopened", "MatchStarted", "MatchStartReverted", "MatchCompleted", "MatchCompletionReverted", "PlayerReplaced", "PlayerReplacementReverted", "PlayerRemovedMidMatch", "PlayerRemovalReverted", "MatchAbandoned", "MatchAbandonReverted", "QueueReordered", "SuggestionsShuffled", "Paused", "Resumed", "SessionEnded"],"session_status": ["draft", "live", "ended", "cancelled"],"skill_level": ["beginner", "intermediate", "advanced"]
           }
         }
 } as const
