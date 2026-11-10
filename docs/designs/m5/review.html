@@ -301,6 +301,11 @@
   .pill.agreed::before {
     content: "✓";
   }
+  .pill.open {
+    background: var(--inner);
+    color: var(--muted);
+    border: 1px solid var(--inner-border);
+  }
   .pill.new {
     background: var(--blue-surface);
     color: var(--blue-soft);
@@ -810,9 +815,7 @@
       <span>M5 review</span>
     </div>
     <nav class="nav" aria-label="Sections">
-      <a href="#approve"
-        >Your approval <span class="count warn" id="navNeeds"></span
-      ></a>
+      <a href="#approve">Decisions <span class="count" id="navNeeds"></span></a>
       <a href="#journey">Player journey</a>
       <a href="#player">Player check-in <span class="count">18</span></a>
       <a href="#tray">Host tray <span class="count">6</span></a>
@@ -826,21 +829,27 @@
     <section class="intro" aria-labelledby="t">
       <div class="intro-text">
         <div class="eyebrow">
-          Pickleball Social Manager · Milestone 5 · Design draft, 10 Nov 2026
+          Pickleball Social Manager · Milestone 5 · Designs approved by Ryan, 10
+          Nov 2026
         </div>
         <h1 id="t">Player check-in, pending tray and QR</h1>
         <p class="lede">
           Every screen M5 needs that had no design yet, drawn from DESIGN.md and
           the reference exports. Nothing here is built. Screens show at their
-          real CSS size (phones at 390 px, the host page at 1280 px). Anything
-          not already agreed in the M5 plan is marked
-          <span class="pill needs">Needs Ryan</span>.
+          real CSS size (phones at 390 px, the host page at 1280 px). Ryan
+          approved every behaviour decision on 10 Nov 2026 (<span
+            class="pill agreed"
+            >Approved</span
+          >); the remaining wording and layout details are built as drawn (<span
+            class="pill open"
+            >Wording · as drawn</span
+          >).
         </p>
       </div>
       <div class="stats" aria-label="Summary">
         <div class="stat"><b>29</b><span>screens</span></div>
-        <div class="stat attn">
-          <b id="statNeeds">–</b><span>decisions need you</span>
+        <div class="stat">
+          <b id="statNeeds">–</b><span>decisions approved</span>
         </div>
         <div class="stat"><b>3</b><span>groups</span></div>
       </div>
@@ -848,12 +857,12 @@
 
     <section id="approve" aria-labelledby="approve-h">
       <div class="sec-head">
-        <h2 id="approve-h">Needs your approval</h2>
+        <h2 id="approve-h">Approved decisions</h2>
         <p>
-          Start with the duplicate-attendance proposal, which changes how hosts
-          handle a player who's already checked in. The numbered list below is
-          every other proposal from the drafts. Orange ones change behaviour;
-          the rest are copy or layout.
+          Ryan approved these on 10 Nov 2026, and they're recorded in the M5
+          plan. The duplicate-attendance rules come first. The numbered list is
+          every proposal from the drafts: orange ones change behaviour and are
+          approved; the rest are wording or layout, built as drawn.
         </p>
       </div>
 
@@ -869,7 +878,7 @@
           <h3 id="dup-h" style="font-size: 22px; font-weight: 800">
             A player can never be checked in to the same session twice
           </h3>
-          <span class="pill needs">Needs Ryan · D-A to D-D</span>
+          <span class="pill agreed">Approved 10 Nov · D-A to D-D</span>
         </div>
         <div class="feature-grid">
           <div class="box">
@@ -884,7 +893,7 @@
             </p>
           </div>
           <div class="box warn">
-            <h3>Proposed rule</h3>
+            <h3>Approved rule</h3>
             <p>
               A check-in for someone already attending can't be approved. The
               host closes it as "already checked in", or rejects it if it isn't
@@ -1055,26 +1064,26 @@
     {
       id: "D-A",
       t: "A separate outcome for “already checked in”",
-      d: "Store it as its own request outcome (for example already_in_session) rather than reusing “rejected”, so the history and the player's screen are accurate.",
+      d: "Closing the request records its own outcome, already_checked_in, not a rejection, so the history and the player's screen are accurate.",
       refs: ["H01"],
     },
     {
       id: "D-B",
       t: "Tell the phone after a host closes it",
-      d: "After “Close: already checked in”, the requesting phone shows “You're already checked in” (P09b). Recommended, because a host confirmed it in person. The alternative is the neutral rejected message.",
+      d: "After “Close: already checked in”, the requesting phone shows “You're already checked in” (P09b), because a host confirmed it in person. Reject still shows the neutral message.",
       refs: ["P09b", "P08"],
     },
     {
       id: "D-C",
       t: "Don't link the phone",
-      d: "Closing a duplicate never links the requesting phone to the member. Their existing phone keeps its link.",
+      d: "Closing a duplicate never links the requesting phone to the existing member. Their existing phones keep their links.",
       refs: ["H01"],
     },
     {
       id: "D-D",
-      t: "New player with the same name as someone attending",
-      d: "Question: should a “New player” row whose name matches someone already attending show a hint (“Same name as someone already checked in”)? A member who uses the guest form would otherwise create a second member and could attend twice. Proposal: show the hint and let the host decide; no automatic matching.",
-      refs: ["H01"],
+      t: "Possible duplicate warning for new players",
+      d: "When a new-player request has the same normalised full name (case, accents and spacing ignored) as a member already attending, hosts see “Possible duplicate: same name as someone already checked in. A matching name doesn't mean it's the same person. Check with them before approving.” Names only. Nothing is identified, merged or rejected automatically; Approve and Reject stay and the host decides. The player is never told.",
+      refs: ["H03"],
     },
   ];
 
@@ -1106,7 +1115,7 @@
         [
           5,
           "Already in this session",
-          "Replaced by the duplicate-attendance proposal above: no Approve on these rows.",
+          "Covered by the duplicate-attendance rules above: no Approve on these rows.",
           ["H01", "H03"],
           true,
         ],
@@ -1533,7 +1542,7 @@
           "level changed from Advanced",
           "NEW PLAYER",
         ],
-        [4, 5, "D-A", "D-C", "D-D"],
+        [4, 5, "D-A", "D-C"],
         true,
       ),
       S(
@@ -1552,7 +1561,7 @@
         "H03",
         "H03-row-states",
         "Row states",
-        "Approving, failed with Retry, decided by another host, approved, rejected, and the duplicate race.",
+        "Approving, failed with Retry, decided by another host, approved, rejected, the duplicate race, a closed duplicate, and the possible-duplicate warning on a new player.",
         [
           "Approving…",
           "Couldn't approve. Check your connection and retry.",
@@ -1561,8 +1570,10 @@
           "Approve stopped: already checked in",
           "Added by another host a moment ago.",
           "Request closed. Their phone shows they're already checked in.",
+          "Possible duplicate: same name as someone already checked in.",
+          "A matching name doesn't mean it's the same person. Check with them before approving.",
         ],
-        [5, 6, 7],
+        [5, 6, 7, "D-D"],
         true,
       ),
       S(
@@ -1725,9 +1736,14 @@
     );
   const img = (s) => `screens/${s.file}.png`;
 
+  // Ryan approved every behaviour decision (and #31 was verified) on 10 Nov 2026.
+  const isApproved = (id, key) => key || id === 31;
   function decCard(id, t, d, refs, key) {
     const links = refs.map((r) => `<a href="#${r}">${r}</a>`).join(", ");
-    return `<div class="dec${key ? " key" : ""}" id="dec-${id}"><div class="n">${esc(id)}</div><div class="t">${esc(t)} <span class="pill needs">Needs Ryan</span></div><div class="d">${esc(d)}</div><div class="refs">Screens: ${links}</div></div>`;
+    const pill = isApproved(id, key)
+      ? `<span class="pill agreed">${id === 31 ? "Verified" : "Approved"}</span>`
+      : `<span class="pill open">Wording · as drawn</span>`;
+    return `<div class="dec${key ? " key" : ""}" id="dec-${id}"><div class="n">${esc(id)}</div><div class="t">${esc(t)} ${pill}</div><div class="d">${esc(d)}</div><div class="refs">Screens: ${links}</div></div>`;
   }
   document.getElementById("dupDecisions").innerHTML = DUP_DECISIONS.map((x) =>
     decCard(x.id, x.t, x.d, x.refs, true),
@@ -1752,7 +1768,12 @@
   setFilter(true);
 
   const needs =
-    DUP_DECISIONS.length + DECISIONS.reduce((n, g) => n + g.items.length, 0);
+    DUP_DECISIONS.length +
+    DECISIONS.reduce(
+      (n, g) =>
+        n + g.items.filter(([id, , , , key]) => isApproved(id, key)).length,
+      0,
+    );
   document.getElementById("statNeeds").textContent = needs;
   document.getElementById("navNeeds").textContent = needs;
 

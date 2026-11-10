@@ -1139,7 +1139,9 @@
           already checked in, decided elsewhere) show their message for about 4
           s, then leave the list. A pending row also switches to the
           already-checked-in row by itself, within one 5 s poll, when the member
-          becomes attending.
+          becomes attending. A new player with the same normalised full name as
+          someone already attending gets a possible-duplicate warning (names
+          only, never shown to the player); Approve and Reject both stay.
         </figcaption>
         <div class="screen w760" data-screen style="padding: 22px">
           <section
@@ -1281,6 +1283,48 @@
                       >
                     </div>
                   </div>
+                </div>
+              </li>
+            </ul>
+            <div class="state-label">Possible duplicate (new player)</div>
+            <ul class="tray-list" style="margin: 0">
+              <li class="tray-row attention">
+                <div class="row-who">
+                  <span class="avatar orange" aria-hidden="true">KM</span>
+                  <div class="row-text">
+                    <div class="row-name">Kai Moreno</div>
+                    <div class="row-meta">
+                      <span class="chip new-player">New player</span
+                      ><span class="chip">Beginner</span><span>1 min ago</span>
+                    </div>
+                    <div class="row-flag">
+                      <span class="badge-bang" aria-hidden="true">!</span
+                      ><span
+                        >Possible duplicate: same name as someone already
+                        checked in.
+                        <span class="sub"
+                          >A matching name doesn't mean it's the same person.
+                          Check with them before approving.</span
+                        ></span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <div class="row-actions">
+                  <button
+                    class="btn btn-secondary"
+                    type="button"
+                    aria-label="Approve Kai Moreno"
+                  >
+                    <span data-include="tpl-icon-check"></span>Approve
+                  </button>
+                  <button
+                    class="btn btn-outline"
+                    type="button"
+                    aria-label="Reject Kai Moreno"
+                  >
+                    Reject
+                  </button>
                 </div>
               </li>
             </ul>
