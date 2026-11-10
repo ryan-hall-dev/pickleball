@@ -174,7 +174,8 @@ describe("DiscardDraftButton", () => {
     expect(await screen.findByText(DRAFT_NOT_OPEN)).toBeInTheDocument();
     expect(dialog).toHaveAttribute("open");
     expect(onAutosavePausedChange.mock.calls).toEqual([[true], [false]]);
-    expect(finalDiscardButton()).toBeEnabled();
+    // The message renders before the transition settles; the button re-enables when it does.
+    await waitFor(() => expect(finalDiscardButton()).toBeEnabled());
   });
 
   it("says when the server can't be reached", async () => {
