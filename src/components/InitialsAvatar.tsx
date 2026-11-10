@@ -20,6 +20,10 @@ const AVATAR_SIZE_CLASS_NAMES = {
   list: "size-9 text-[13px]",
   /** 30px: guest chips. */
   chip: "size-[30px] text-[11px]",
+  /** 44px: the player check-in page's own-name cards. */
+  large: "size-11 text-sm",
+  /** 52px: the player check-in confirm sheet. */
+  extraLarge: "size-[52px] text-base",
 } as const;
 
 /** Initials circle (36px, neutral colours by default). Decorative: the name is always shown beside it. */

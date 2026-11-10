@@ -6,7 +6,7 @@ export const MEMBER_NAME_MAX_LENGTH = 50;
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 
-function personNameSchema(emptyMessage: string) {
+export function personNameSchema(emptyMessage: string) {
   return (
     z
       .string()

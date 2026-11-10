@@ -260,11 +260,11 @@ select public.start_session('a0000000-0000-4000-8000-000000000002',
   '{"config":{"participants":[{"participantId":"e0000000-0000-4000-8000-000000000010"}]},"initialAttendeeIds":["e0000000-0000-4000-8000-000000000010"]}'
 );
 select throws_ok(
-  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where last_name = 'Kim-Lee'), 'e0000000-0000-4000-8000-000000000011')$$,
+  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where device_token_hash = pg_temp.device(11)), 'e0000000-0000-4000-8000-000000000011')$$,
   '22023', 'EVENT_REQUIRED', 'approving into a live session needs the event arguments'
 );
 select throws_ok(
-  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where last_name = 'Kim-Lee'), 'e0000000-0000-4000-8000-000000000011',
+  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where device_token_hash = pg_temp.device(11)), 'e0000000-0000-4000-8000-000000000011',
       gen_random_uuid(), 0, now())$$,
   'P0001', 'STALE_EXPECTED_SEQ', 'a live approval with a stale seq is refused'
 );
@@ -274,13 +274,13 @@ select results_eq(
            (select count(*) from public.session_participants where member_id = 'b0000000-0000-4000-8000-000000000001')
     from public.checkin_requests as request
     join public.members as member on member.id = 'b0000000-0000-4000-8000-000000000001'
-    where request.last_name = 'Kim-Lee'$$,
+    where request.device_token_hash = pg_temp.device(11)$$,
   $$values ('pending'::text, 'Kim'::text, 0::bigint)$$,
   'the refused approval changed nothing (atomic)'
 );
 set local role service_role;
 select is(
-  public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where last_name = 'Kim-Lee'), 'e0000000-0000-4000-8000-000000000011',
+  public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where device_token_hash = pg_temp.device(11)), 'e0000000-0000-4000-8000-000000000011',
     'f0000000-0000-4000-8000-000000000020', 1, now()) -> 'event' ->> 'seq',
   '2',
   'a live approval appends the PlayerJoined event'
@@ -288,13 +288,15 @@ select is(
 reset role;
 select results_eq(
   $$select type::text, payload from public.session_events where event_id = 'f0000000-0000-4000-8000-000000000020'$$,
-  $$values ('PlayerJoined', '{"participant":{"participantId":"e0000000-0000-4000-8000-000000000011","firstName":"Grace","lastName":"Kim-Lee","skill":"advanced","isGuest":false}}'::jsonb)$$,
-  'the PlayerJoined snapshot uses the approved name and the member''s saved skill'
+  $$values ('PlayerJoined', '{"participant":{"participantId":"e0000000-0000-4000-8000-000000000011","firstName":"Grace","lastName":"Kim","skill":"advanced","isGuest":false}}'::jsonb)$$,
+  'the PlayerJoined snapshot uses the member''s own name and saved skill'
 );
+-- Since 20261111120000 a member request stores the member's names, so the
+-- phone's "Kim-Lee" can't rename the member.
 select is(
   (select last_name::text from public.members where id = 'b0000000-0000-4000-8000-000000000001'),
-  'Kim-Lee',
-  'approval saved the returning member''s edited details'
+  'Kim',
+  'approval keeps the member''s own name (a phone can''t rename a member)'
 );
 
 -- Already checked in: only the member's own linked phone is told (M5 privacy

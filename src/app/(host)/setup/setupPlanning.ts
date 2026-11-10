@@ -17,6 +17,7 @@ import {
   type GamesEstimate,
   type RotationPreferences,
 } from "@/engine";
+import { formatLocalClockTime } from "@/lib/sessionTime";
 import type { SessionDraft } from "@/server/setup/setupDraft";
 import {
   saveSessionDraftInputSchema,
@@ -36,11 +37,6 @@ function twoDigits(value: number): string {
 /** "2026-11-07" in the browser's time zone (the value of <input type="date">). */
 export function toLocalDateInputValue(date: Date): string {
   return `${date.getFullYear()}-${twoDigits(date.getMonth() + 1)}-${twoDigits(date.getDate())}`;
-}
-
-/** "18:00" in the browser's time zone (the value of <input type="time">). */
-export function toLocalTimeInputValue(date: Date): string {
-  return `${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}`;
 }
 
 /**
@@ -152,8 +148,8 @@ export function setupFormFromDraft(
   return {
     name: draft.name,
     date: toLocalDateInputValue(plannedStart),
-    startTime: toLocalTimeInputValue(plannedStart),
-    endTime: toLocalTimeInputValue(plannedEnd),
+    startTime: formatLocalClockTime(plannedStart),
+    endTime: formatLocalClockTime(plannedEnd),
     location: draft.location ?? "",
     hostName: draft.hostName,
     targetMatchMinutes: String(draft.config.targetMatchMinutes),
@@ -363,17 +359,4 @@ export function defaultNewDraftTimes(now: Date): {
     plannedStart: plannedStart.toISOString(),
     plannedEnd: plannedEnd.toISOString(),
   };
-}
-
-/** "Sat 7 Nov · 18:00 – 20:00" in the browser's time zone. */
-export function formatSessionWhen(
-  plannedStart: Date,
-  plannedEnd: Date,
-): string {
-  const day = plannedStart.toLocaleDateString("en-GB", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-  return `${day} · ${toLocalTimeInputValue(plannedStart)} – ${toLocalTimeInputValue(plannedEnd)}`;
 }

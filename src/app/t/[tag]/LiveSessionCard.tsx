@@ -1,0 +1,56 @@
+import type { OpenCheckinPage } from "@/server/checkin/checkinResults";
+import {
+  formatCheckinHeaderWhen,
+  formatFirstGameEstimate,
+} from "./checkinHeaderFormatting";
+
+/**
+ * The header card on P01-P04 (acceptance criterion 3): session name, date and
+ * planned times, time left, courts, checked-in count and the first-game
+ * estimate. Drafts show "LIVE NOW" too (decision 2026-11-09).
+ */
+export function LiveSessionCard({ page }: { page: OpenCheckinPage }) {
+  const { session, now } = page;
+  const stats = [
+    { value: String(session.courtsCount), label: "courts" },
+    { value: String(session.checkedInCount), label: "checked in" },
+    {
+      value: formatFirstGameEstimate(session.plannedStart, now),
+      label: "to first game",
+    },
+  ];
+  return (
+    <section
+      aria-labelledby="checkin-session-name"
+      className="rounded-card border border-card-border bg-card p-[18px]"
+    >
+      <p className="flex items-center gap-2 text-xs font-bold tracking-[0.12em] text-lime uppercase">
+        <span aria-hidden="true" className="size-[7px] rounded-full bg-lime" />
+        Live now
+      </p>
+      <h1
+        id="checkin-session-name"
+        className="mt-2 mb-0.5 text-[26px] leading-[1.12] font-extrabold tracking-[-0.01em] break-words"
+      >
+        {session.name}
+      </h1>
+      <p className="text-sm text-muted tabular-nums">
+        {formatCheckinHeaderWhen(session, now)}
+      </p>
+      <dl className="mt-3.5 grid grid-cols-3 gap-2">
+        {stats.map((stat) => (
+          // The value is drawn above its label, but read after it.
+          <div
+            key={stat.label}
+            className="flex min-w-0 flex-col-reverse rounded-[14px] bg-inner px-3 py-2.5"
+          >
+            <dt className="text-xs text-muted">{stat.label}</dt>
+            <dd className="text-xl font-bold break-words tabular-nums">
+              {stat.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}

@@ -2,12 +2,12 @@
 
 import { useState, type ReactNode } from "react";
 import { estimateGames, type CourtFormat } from "@/engine";
+import { formatSessionWhen } from "@/lib/sessionTime";
 import { CheckIcon } from "./CheckIcon";
 import type { ChecklistItem, SetupReadiness } from "./setupReadiness";
 import {
   courtCapacity,
   describeGamesEstimate,
-  formatSessionWhen,
   type GamesEstimateCopy,
 } from "./setupPlanning";
 import { SetupSection } from "./SetupSection";

@@ -8,7 +8,7 @@
 -- Functions run as service_role, as the server does.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(75);
+select plan(79);
 
 -- Fixtures (as the table owner) -----------------------------------------------
 insert into auth.users (id, email) values
@@ -193,6 +193,29 @@ select is(
   'a linked phone whose member is not attending gets a pending request'
 );
 reset role;
+-- 20261111120000: a member's request stores the member's names, not the phone's.
+select is(
+  (select first_name || ' ' || last_name from public.checkin_requests where device_token_hash = pg_temp.device(2)),
+  'Zoë Núñez',
+  'a member request sent with someone else''s name stores the member''s own name'
+);
+set local role service_role;
+select is(
+  public.submit_checkin('tagm5social000001', pg_temp.device(3), pg_temp.ip(3), null, null, null, 'b1200000-0000-4000-8000-000000000004') ->> 'status',
+  'pending',
+  'a member request needs no names from the phone at all'
+);
+select throws_ok(
+  $$select public.submit_checkin('tagm5social000001', pg_temp.device(4), pg_temp.ip(4), '  ', 'Guest', 'beginner')$$,
+  '22023', 'INVALID_NAME', 'a guest''s names are still validated'
+);
+reset role;
+select is(
+  (select first_name || ' ' || last_name from public.checkin_requests where device_token_hash = pg_temp.device(3)),
+  'Eloise Abbott',
+  'and stores the member''s names'
+);
+delete from public.checkin_requests where device_token_hash = pg_temp.device(3);
 select is(
   (select count(*) from public.checkin_requests where device_token_hash in (pg_temp.device(1), pg_temp.device(9), pg_temp.device(2))),
   2::bigint,
@@ -332,7 +355,7 @@ select results_eq(
     from public.list_checkin_requests_for_open_session('a1200000-0000-4000-8000-000000000002')$$,
   $$values
     ('Élodie'::text, 'b1200000-0000-4000-8000-000000000001'::uuid, null::text, 'advanced'::text, true, false),
-    ('Sam', 'b1200000-0000-4000-8000-000000000002'::uuid, 'intermediate', 'beginner', false, false),
+    ('Zoë', 'b1200000-0000-4000-8000-000000000002'::uuid, 'intermediate', 'beginner', false, false),
     ('SÁM', null::uuid, 'beginner', null::text, false, true),
     ('gus', null::uuid, 'beginner', null::text, false, true),
     ('Mary  Ann', null::uuid, 'advanced', null::text, false, true),

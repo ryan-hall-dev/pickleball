@@ -13,8 +13,8 @@ import {
   ATTENTION_OUTLINE_BUTTON_CLASS_NAME,
   OUTLINE_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
+import { formatSessionWhen } from "@/lib/sessionTime";
 import { discardSessionDraft } from "@/server/setup/setupActions";
-import { formatSessionWhen } from "./setupPlanning";
 
 const OFFLINE_MESSAGE = "Couldn't reach the server. Check your connection.";
 

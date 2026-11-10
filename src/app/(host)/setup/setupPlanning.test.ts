@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { estimateGames } from "@/engine";
+import { formatLocalClockTime } from "@/lib/sessionTime";
 import type { SessionDraft } from "@/server/setup/setupDraft";
 import { recommendedRotationPreferences } from "@/server/setup/setupRules";
 import {
@@ -9,12 +10,10 @@ import {
   defaultNewDraftTimes,
   describeGamesEstimate,
   estimateSentence,
-  formatSessionWhen,
   localDateTime,
   minutesBetween,
   setupFormFromDraft,
   toLocalDateInputValue,
-  toLocalTimeInputValue,
   validateSetupForm,
   type SetupForm,
 } from "./setupPlanning";
@@ -42,7 +41,7 @@ describe("local date and time inputs", () => {
     const date = localDateTime("2026-11-07", "18:05");
     expect(date).toEqual(new Date(2026, 10, 7, 18, 5));
     expect(toLocalDateInputValue(date!)).toBe("2026-11-07");
-    expect(toLocalTimeInputValue(date!)).toBe("18:05");
+    expect(formatLocalClockTime(date!)).toBe("18:05");
   });
 
   it("adds days for an overnight end", () => {
@@ -84,15 +83,6 @@ describe("local date and time inputs", () => {
     );
     expect(new Date(defaults.plannedEnd)).toEqual(new Date(2026, 10, 7, 20, 0));
     expect(defaults.name).toBe("Saturday social");
-  });
-
-  it("formats the summary's When line", () => {
-    expect(
-      formatSessionWhen(
-        new Date(2026, 10, 7, 18, 0),
-        new Date(2026, 10, 7, 20, 0),
-      ),
-    ).toBe("Sat 7 Nov · 18:00 – 20:00");
   });
 });
 
