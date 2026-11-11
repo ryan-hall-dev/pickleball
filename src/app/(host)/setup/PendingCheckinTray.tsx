@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { AttentionMessage } from "@/components/AttentionMessage";
 import {
@@ -21,6 +22,8 @@ import type {
   PendingCheckinRequest,
 } from "@/server/checkin/hostCheckinResults";
 import type { DraftParticipant } from "@/server/setup/setupDraft";
+import { QrCodeIcon } from "../checkin-link/CheckinLinkIcons";
+import { STICKER_AND_QR_PAGE_PATH } from "../checkin-link/checkinLinkPaths";
 import { CheckIcon } from "./CheckIcon";
 import {
   DECIDED_ROW_VISIBLE_MS,
@@ -139,6 +142,14 @@ export function PendingCheckinTray({
             </p>
           )}
         </div>
+        {/* Always in the header, empty or not (decision #8, H02). */}
+        <Link
+          href={STICKER_AND_QR_PAGE_PATH}
+          className={`${OUTLINE_BUTTON_CLASS_NAME} gap-2 whitespace-nowrap`}
+        >
+          <QrCodeIcon />
+          Show QR code
+        </Link>
       </div>
       {state.isRefreshFailing && (
         <div className="mt-3">

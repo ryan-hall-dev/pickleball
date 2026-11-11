@@ -195,6 +195,8 @@ async function pausePolling(page: Page) {
 test("players check in, hosts approve and reject from the tray, and a second host keeps up", async ({
   browser,
 }) => {
+  // About 6 sequential 5 s polls (~28 s idle): too close to the 30 s default.
+  test.slow();
   const social = await createSocialWithHosts("tray-approve", [
     ["Peter", "Lindqvist", "advanced"],
   ]);

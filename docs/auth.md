@@ -33,7 +33,7 @@ For local development, `pnpm seed` already creates the social manager `host@exam
 ## Local development
 
 - Codes arrive in Mailpit at http://127.0.0.1:54324.
-- `.env.local` needs `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY` (from `pnpm exec supabase status`), plus `CHECKIN_IP_HMAC_SECRET` (`openssl rand -base64 32`), which the sign-in throttle needs too.
+- `.env.local` needs `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY` (from `pnpm exec supabase status`), plus `CHECKIN_IP_HMAC_SECRET` (`openssl rand -base64 32`), which the sign-in throttle needs too. `PUBLIC_APP_ORIGIN` can stay unset: the check-in link then uses the address you opened the app on.
 - The sign-in email template is `supabase/templates/magic_link.html`. It must show `{{ .Token }}`, because the default template only has a link. Template changes need `pnpm db:stop && pnpm db:start`.
 
 ## Production checklist (hosted Supabase project)
@@ -42,4 +42,4 @@ For local development, `pnpm seed` already creates the social manager `host@exam
 - Authentication > Emails > Magic Link: paste `supabase/templates/magic_link.html` (subject "Your sign-in code").
 - Email OTP length 6, expiry 600 s (matches `supabase/config.toml`).
 - Set up custom SMTP: the built-in sender is heavily rate limited.
-- Server env (never `NEXT_PUBLIC_`): `SUPABASE_SECRET_KEY` and `CHECKIN_IP_HMAC_SECRET`.
+- Server env (never `NEXT_PUBLIC_`): `SUPABASE_SECRET_KEY`, `CHECKIN_IP_HMAC_SECRET` and `PUBLIC_APP_ORIGIN` (e.g. `https://social.example.com`: an http/https origin with no path or trailing slash, else the Sticker and QR pages fail with a clear error). Set it so printed stickers and QR codes carry the real address; without it the check-in link uses the address of the request, which is fine locally.

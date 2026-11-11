@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CARD_CLASS_NAME } from "@/components/controlStyles";
 import { readHostAccess } from "@/server/auth/currentHost";
+import type { SignedInHost } from "@/server/auth/hostAccess";
+import { readCheckinLink } from "@/server/checkin/checkinLink";
 import { listHosts } from "@/server/hosts/hostDirectory";
+import { CheckinLinkCard, type CheckinLinkCardLink } from "./CheckinLinkCard";
 import { InviteHostForm } from "./InviteHostForm";
 import { RemoveHostButton } from "./RemoveHostButton";
 import { SocialNameForm } from "./SocialNameForm";
@@ -86,28 +89,63 @@ async function HostsManagement() {
           </p>
         )}
       </section>
-      {isManager && (
-        <div className="flex flex-[1_1_360px] flex-col gap-4">
-          <section
-            aria-labelledby="invite-host-heading"
-            className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
-          >
-            <h2 id="invite-host-heading" className="text-xl font-bold">
-              Invite a host
-            </h2>
-            <InviteHostForm />
-          </section>
-          <section
-            aria-labelledby="social-name-heading"
-            className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
-          >
-            <h2 id="social-name-heading" className="text-xl font-bold">
-              Social name
-            </h2>
-            <SocialNameForm socialName={currentHost.socialName} />
-          </section>
-        </div>
-      )}
+      <div className="flex min-w-0 flex-[1_1_360px] flex-col gap-4">
+        {/* Its own boundary: a failed link read takes out only this card. */}
+        <Suspense
+          fallback={
+            <CheckinLinkCard
+              checkinLink={{ status: "loading" }}
+              socialName={currentHost.socialName}
+              canIssueNewLink={isManager}
+            />
+          }
+        >
+          <LoadedCheckinLinkCard host={currentHost} />
+        </Suspense>
+        {isManager && (
+          <>
+            <section
+              aria-labelledby="invite-host-heading"
+              className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
+            >
+              <h2 id="invite-host-heading" className="text-xl font-bold">
+                Invite a host
+              </h2>
+              <InviteHostForm />
+            </section>
+            <section
+              aria-labelledby="social-name-heading"
+              className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
+            >
+              <h2 id="social-name-heading" className="text-xl font-bold">
+                Social name
+              </h2>
+              <SocialNameForm socialName={currentHost.socialName} />
+            </section>
+          </>
+        )}
+      </div>
     </div>
+  );
+}
+
+async function LoadedCheckinLinkCard({ host }: { host: SignedInHost }) {
+  let checkinLink: CheckinLinkCardLink;
+  try {
+    const { shortLink } = await readCheckinLink(host.socialId);
+    checkinLink = { status: "loaded", shortLink };
+  } catch (error) {
+    console.error("Reading the check-in link for the Hosts page failed", {
+      actorUserId: host.userId,
+      cause: error instanceof Error ? error.message : String(error),
+    });
+    checkinLink = { status: "failed" };
+  }
+  return (
+    <CheckinLinkCard
+      checkinLink={checkinLink}
+      socialName={host.socialName}
+      canIssueNewLink={host.role === "manager"}
+    />
   );
 }

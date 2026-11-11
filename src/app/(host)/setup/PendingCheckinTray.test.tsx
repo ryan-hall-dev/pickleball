@@ -136,10 +136,10 @@ describe("PendingCheckinTray", () => {
     expect(
       screen.queryByText("Approve to add them to Who's playing. Oldest first."),
     ).not.toBeInTheDocument();
-    // Increment 4 adds the Sticker and QR page and this button.
-    expect(
-      screen.queryByRole("link", { name: /Show QR code/ }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Show QR code" })).toHaveAttribute(
+      "href",
+      "/checkin-link",
+    );
   });
 
   it("lists rows oldest first with their chips, and no Approve for a member already attending", async () => {
@@ -148,6 +148,10 @@ describe("PendingCheckinTray", () => {
     await settle();
     expect(
       screen.getByRole("heading", { name: "Check-ins waiting (2)" }),
+    ).toBeInTheDocument();
+    // Always in the tray header, not only when empty (decision #8).
+    expect(
+      screen.getByRole("link", { name: "Show QR code" }),
     ).toBeInTheDocument();
     const rows = screen.getAllByRole("listitem");
     expect(rows.map((row) => row.textContent)).toEqual([

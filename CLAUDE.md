@@ -11,6 +11,7 @@ Web app for pickleball clubs. Hosts run social sessions (setup, live court rotat
 - Supabase (Postgres + Auth) via `@supabase/supabase-js` + `@supabase/ssr`. No ORM. Generated types
 - Tests: Vitest + fast-check (simulations) + `vitest bench`, Playwright (e2e), pgTAP (database)
 - Sentry (`@sentry/nextjs`), production only
+- QR codes: `uqr` (zero dependencies), rendered to SVG on the server in `src/server/checkin/checkinLink.ts`
 - pnpm 12, Node 24 LTS
 
 ## Environment
