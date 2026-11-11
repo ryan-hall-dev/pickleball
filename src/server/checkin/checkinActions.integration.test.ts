@@ -410,7 +410,7 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
       });
     });
 
-    it("sets an HttpOnly, Secure, SameSite=Lax device cookie on /t", async () => {
+    it("sets an HttpOnly, SameSite=Lax device cookie on /t (Secure in production)", async () => {
       const phone = newPhone();
       actAsPhone(phone);
       await searchCheckinNames(riversideTag, "gr");
@@ -419,7 +419,8 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
       );
       expect(phone.lastCookieOptions).toMatchObject({
         httpOnly: true,
-        secure: true,
+        // Not Secure outside production: phones on the LAN use plain http.
+        secure: false,
         sameSite: "lax",
         path: "/t",
       });
@@ -663,7 +664,7 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
       expect(deviceToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
       expect(phone.lastCookieOptions).toMatchObject({
         httpOnly: true,
-        secure: true,
+        secure: false,
         sameSite: "lax",
         path: "/t",
       });
@@ -681,6 +682,18 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
       };
       const firstRequestId = await pendingRequestId(phone, guest);
       expect(await pendingRequestId(phone, guest)).toBe(firstRequestId);
+    });
+
+    it("marks the device cookie Secure in production", async () => {
+      vi.stubEnv("NODE_ENV", "production");
+      try {
+        const phone = newPhone();
+        actAsPhone(phone);
+        await ensureCheckinDevice();
+        expect(phone.lastCookieOptions).toMatchObject({ secure: true });
+      } finally {
+        vi.stubEnv("NODE_ENV", "test");
+      }
     });
 
     it("stores a member's own name, whatever name the phone sends", async () => {

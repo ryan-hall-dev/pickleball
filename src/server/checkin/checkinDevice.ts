@@ -41,7 +41,10 @@ export async function ensureDeviceTokenHash(): Promise<string> {
   const deviceToken = randomBytes(DEVICE_TOKEN_BYTES).toString("base64url");
   (await cookies()).set(DEVICE_COOKIE_NAME, deviceToken, {
     httpOnly: true,
-    secure: true,
+    // Production serves https, so the cookie is Secure there. In development
+    // phones reach the dev server over plain http on the LAN, and browsers
+    // refuse to store a Secure cookie from an http origin.
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     // Only the check-in page and its actions need it.
     path: "/t",
