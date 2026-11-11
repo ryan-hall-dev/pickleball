@@ -4,6 +4,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Agent guidance lives in CLAUDE.md; stop `next dev` from writing AGENTS.md.
   agentRules: false,
+  // Dev only: lets a phone on the same Wi-Fi open the dev server via the Mac's
+  // private LAN address (scanning the check-in QR). Each `*` is one label.
+  allowedDevOrigins: ["192.168.*.*", "10.*.*.*"],
   cacheComponents: true,
   // The host area starts at Session setup; "/" (old links, typed URLs) goes there.
   async redirects() {
