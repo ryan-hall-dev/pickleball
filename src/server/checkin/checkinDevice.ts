@@ -4,53 +4,50 @@ import { cookies, headers } from "next/headers";
 import { clientIpFromHeaders } from "@/server/auth/clientIp";
 import { hashClientIp, hashDeviceToken } from "./clientIdentity";
 
-// The player's phone, as the public check-in page knows it: a random device
-// token in an HttpOnly cookie (acceptance criterion 17). Only its SHA-256
-// reaches the database. Cookies can only be written by server actions and
-// route handlers, so the page render just reads it; the first search or
-// submit creates it.
-
-const DEVICE_COOKIE_NAME = "checkin_device";
-/** 32 random bytes, base64url: 43 characters. */
+// Independent random tokens per session. Never read the legacy universal cookie.
 const DEVICE_TOKEN_BYTES = 32;
 const DEVICE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
-/** Browsers cap cookie lifetimes at 400 days. */
-const DEVICE_COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
+const DEVICE_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60;
 
-async function readDeviceToken(): Promise<string | null> {
-  const deviceToken = (await cookies()).get(DEVICE_COOKIE_NAME)?.value;
-  return deviceToken && DEVICE_TOKEN_PATTERN.test(deviceToken)
-    ? deviceToken
-    : null;
+function cookieName(sessionId: string): string {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      sessionId,
+    )
+  ) {
+    throw new Error("A valid session ID is required for a check-in cookie.");
+  }
+  return `checkin_session_${sessionId}`;
 }
 
-/** This phone's device hash, or null before its first search or submit. */
-export async function readDeviceTokenHash(): Promise<string | null> {
-  const deviceToken = await readDeviceToken();
-  return deviceToken ? hashDeviceToken(deviceToken) : null;
+async function readDeviceToken(sessionId: string): Promise<string | null> {
+  const token = (await cookies()).get(cookieName(sessionId))?.value;
+  return token && DEVICE_TOKEN_PATTERN.test(token) ? token : null;
 }
 
-/**
- * This phone's device hash, creating the device cookie when it is missing (or
- * malformed). Server actions only: rendering can't set cookies.
- */
-export async function ensureDeviceTokenHash(): Promise<string> {
-  const existingDeviceToken = await readDeviceToken();
-  if (existingDeviceToken) return hashDeviceToken(existingDeviceToken);
+export async function readDeviceTokenHash(
+  sessionId: string,
+): Promise<string | null> {
+  const token = await readDeviceToken(sessionId);
+  return token ? hashDeviceToken(token) : null;
+}
 
-  const deviceToken = randomBytes(DEVICE_TOKEN_BYTES).toString("base64url");
-  (await cookies()).set(DEVICE_COOKIE_NAME, deviceToken, {
+/** Called before enabling submit, so a lost submit response can be retried. */
+export async function ensureDeviceTokenHash(
+  sessionId: string,
+  checkinTag: string,
+): Promise<string> {
+  const existingToken = await readDeviceToken(sessionId);
+  if (existingToken) return hashDeviceToken(existingToken);
+  const token = randomBytes(DEVICE_TOKEN_BYTES).toString("base64url");
+  (await cookies()).set(cookieName(sessionId), token, {
     httpOnly: true,
-    // Production serves https, so the cookie is Secure there. In development
-    // phones reach the dev server over plain http on the LAN, and browsers
-    // refuse to store a Secure cookie from an http origin.
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    // Only the check-in page and its actions need it.
-    path: "/t",
+    path: `/t/${checkinTag}`,
     maxAge: DEVICE_COOKIE_MAX_AGE_SECONDS,
   });
-  return hashDeviceToken(deviceToken);
+  return hashDeviceToken(token);
 }
 
 /** HMAC of the visitor's IP, for the per-network rate limits. */

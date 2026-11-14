@@ -18,8 +18,6 @@ insert into public.hosts (user_id, display_name, role, social_id) values
   ('a9000000-0000-4000-8000-000000000001', 'Owner Host', 'host', '50000000-0000-4000-8000-000000000009'),
   ('a9000000-0000-4000-8000-000000000004', 'Co Host', 'host', '50000000-0000-4000-8000-000000000009'),
   ('a9000000-0000-4000-8000-000000000002', 'Other Host', 'host', '50000000-0000-4000-8000-000000000019');
-insert into public.members (social_id, id, first_name, last_name) values
-  ('50000000-0000-4000-8000-000000000009', 'b9000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
 insert into public.sessions (id, social_id, host_id, name, location, host_name, planned_start, planned_end, status, config_snapshot) values
   ('d9000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000009', 'a9000000-0000-4000-8000-000000000001', 'Owner draft', null, 'Owner Host',
    '2026-12-05 18:00+00', '2026-12-05 20:00+00', 'draft', '{"matchFormat": "doubles", "laterStep": {"kept": true}}'),
@@ -27,8 +25,8 @@ insert into public.sessions (id, social_id, host_id, name, location, host_name, 
    now(), now() + interval '2 hours', 'draft', null),
   ('d9000000-0000-4000-8000-000000000003', '50000000-0000-4000-8000-000000000009', 'a9000000-0000-4000-8000-000000000001', 'Old one', null, 'Owner Host',
    now(), now() + interval '2 hours', 'cancelled', null);
-insert into public.session_participants (id, session_id, social_id, member_id, first_name, last_name) values
-  ('e9000000-0000-4000-8000-000000000001', 'd9000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000009', 'b9000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
+insert into public.session_participants (id, session_id, social_id, first_name, last_name, skill_level) values
+  ('e9000000-0000-4000-8000-000000000001', 'd9000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000009', 'Grace', 'Kim', 'advanced');
 insert into public.saved_setups (id, social_id, host_id, name, config, last_used_at) values
   ('f9000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000019', 'a9000000-0000-4000-8000-000000000002', 'Other setup', '{}', now() - interval '30 days');
 

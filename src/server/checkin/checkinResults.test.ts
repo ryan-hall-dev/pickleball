@@ -3,17 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
   checkinDatabaseErrorKind,
   checkinPageFromRpc,
-  nameMatchesFromRpc,
   submitCheckinOutcomeFromRpc,
 } from "./checkinResults";
 
-const MEMBER_ID = "a0000000-0000-4000-8000-000000000001";
 const REQUEST_ID = "b0000000-0000-4000-8000-000000000001";
 
 const openPageRpc = {
   status: "open",
   social_name: "Pickleball Riverside",
   session: {
+    id: "a0000000-0000-4000-8000-000000000001",
     name: "Saturday Social",
     status: "draft",
     planned_start: "2026-11-07T18:00:00+00:00",
@@ -21,44 +20,31 @@ const openPageRpc = {
     courts_count: 4,
     checked_in_count: 26,
   },
-  recognised_member: {
-    member_id: MEMBER_ID,
-    first_name: "Grace",
-    last_name: "Kim",
-    skill_level: null,
-  },
   current_request: {
     id: REQUEST_ID,
-    status: "already_checked_in",
+    status: "approved",
     first_name: "Grace",
-    member_id: null,
   },
   now: "2026-11-07T17:54:12.345678+00:00",
 };
 
 describe("checkinPageFromRpc", () => {
-  it("maps an open page, keeping the SQL's nullable fields nullable", () => {
+  it("maps an open page (no recognised member since session-only participants)", () => {
     expect(checkinPageFromRpc(openPageRpc)).toEqual({
       status: "open",
       socialName: "Pickleball Riverside",
       session: {
+        sessionId: "a0000000-0000-4000-8000-000000000001",
         name: "Saturday Social",
         plannedStart: "2026-11-07T18:00:00+00:00",
         plannedEnd: "2026-11-07T20:00:00+00:00",
         courtsCount: 4,
         checkedInCount: 26,
       },
-      recognisedMember: {
-        memberId: MEMBER_ID,
-        firstName: "Grace",
-        lastName: "Kim",
-        skillLevel: null,
-      },
       currentRequest: {
         checkinRequestId: REQUEST_ID,
-        status: "already_checked_in",
+        status: "approved",
         firstName: "Grace",
-        memberId: null,
       },
       now: "2026-11-07T17:54:12.345678+00:00",
     });
@@ -68,10 +54,9 @@ describe("checkinPageFromRpc", () => {
     expect(
       checkinPageFromRpc({
         ...openPageRpc,
-        recognised_member: null,
         current_request: null,
       }),
-    ).toMatchObject({ recognisedMember: null, currentRequest: null });
+    ).toMatchObject({ currentRequest: null });
   });
 
   it("maps inactive (nothing else) and no open session", () => {
@@ -98,16 +83,6 @@ describe("checkinPageFromRpc", () => {
   });
 });
 
-describe("nameMatchesFromRpc", () => {
-  it("maps names and refuses more than 5", () => {
-    const row = { member_id: MEMBER_ID, first_name: "Grace", last_name: "Kim" };
-    expect(nameMatchesFromRpc([row])).toEqual([
-      { memberId: MEMBER_ID, firstName: "Grace", lastName: "Kim" },
-    ]);
-    expect(() => nameMatchesFromRpc(Array(6).fill(row))).toThrow();
-  });
-});
-
 describe("submitCheckinOutcomeFromRpc", () => {
   it("maps each reply", () => {
     expect(
@@ -120,9 +95,10 @@ describe("submitCheckinOutcomeFromRpc", () => {
     expect(
       submitCheckinOutcomeFromRpc({ status: "already_checked_in" }),
     ).toEqual({ status: "already_checked_in" });
-    expect(submitCheckinOutcomeFromRpc({ status: "member_not_found" })).toEqual(
-      { status: "member_not_found" },
-    );
+    // The database no longer answers member_not_found.
+    expect(() =>
+      submitCheckinOutcomeFromRpc({ status: "member_not_found" }),
+    ).toThrow();
     expect(() => submitCheckinOutcomeFromRpc({ status: "approved" })).toThrow();
   });
 });

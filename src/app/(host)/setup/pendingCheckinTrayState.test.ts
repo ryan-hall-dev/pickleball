@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { PendingCheckinRequest } from "@/server/checkin/hostCheckinResults";
 import {
   INITIAL_TRAY_STATE,
-  displayedSkillLevel,
-  levelChangeLabel,
   relativeTimeLabel,
   trayReducer,
   trayRowView,
@@ -21,31 +19,20 @@ function pendingRequest(
   return {
     checkinRequestId: `a0000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
     createdAt: new Date(Date.UTC(2026, 10, 7, 18, index)).toISOString(),
-    memberId: null,
     firstName: "Kai",
     lastName: `Moreno${index}`,
-    requestedSkillLevel: "beginner",
-    savedSkillLevel: null,
-    isAlreadyAttending: false,
-    isPossibleDuplicate: false,
+    skillLevel: "beginner",
+    isNameAlreadyInSession: false,
     ...overrides,
   };
 }
 
-const grace = pendingRequest(1, {
-  memberId: "b0000000-0000-4000-8000-000000000001",
-  firstName: "Grace",
-  lastName: "Kim",
-  requestedSkillLevel: null,
-  savedSkillLevel: "beginner",
-});
+const grace = pendingRequest(1, { firstName: "Grace", lastName: "Kim" });
 const kai = pendingRequest(2);
 const peter = pendingRequest(3, {
-  memberId: "b0000000-0000-4000-8000-000000000003",
   firstName: "Peter",
   lastName: "Lindqvist",
-  requestedSkillLevel: "intermediate",
-  savedSkillLevel: "advanced",
+  skillLevel: "intermediate",
 });
 
 let pollSequence = 0;
@@ -114,15 +101,15 @@ describe("trayReducer: polling", () => {
     expect(apply(afterFailure, polled([kai])).isRefreshFailing).toBe(false);
   });
 
-  it("switches a row to already attending on the next poll and counts a change elsewhere", () => {
+  it("switches a row to Reject only when its name becomes taken, and counts a change elsewhere", () => {
     const before = apply(INITIAL_TRAY_STATE, polled([grace]));
     const after = apply(
       before,
-      polled([{ ...grace, isAlreadyAttending: true }]),
+      polled([{ ...grace, isNameAlreadyInSession: true }]),
     );
     expect(
       trayRowView(rowFor(after, grace)).buttons.map((b) => b.kind),
-    ).toEqual(["close", "reject"]);
+    ).toEqual(["reject"]);
     expect(after.attendanceChangesSeenElsewhere).toBe(
       before.attendanceChangesSeenElsewhere + 1,
     );
@@ -180,7 +167,6 @@ describe("trayReducer: decisions", () => {
   it.each([
     [{ kind: "approved", participant: null } as const, "approved"],
     [{ kind: "rejected" } as const, "rejected"],
-    [{ kind: "closed" } as const, "closed"],
     [{ kind: "already_decided" } as const, "decidedElsewhere"],
   ])("shows %o as the decided message %s", (result, outcome) => {
     const state = apply(loaded, {
@@ -228,36 +214,22 @@ describe("trayReducer: decisions", () => {
     expect(idsOf(state)).toEqual([grace.checkinRequestId]);
   });
 
-  it("turns a refused Approve into the already-checked-in row with the note", () => {
+  it("turns an Approve refused for a name clash into a Reject-only row with the note", () => {
     const state = apply(loaded, {
       type: "decision_finished",
       checkinRequestId: grace.checkinRequestId,
       action: "approve",
-      result: { kind: "already_in_session" },
+      result: { kind: "name_already_in_session" },
     });
-    const view = trayRowView(rowFor(state, grace));
-    expect(view.attentions).toEqual(["alreadyAttending"]);
+    const row = rowFor(state, grace);
+    expect(row.request.isNameAlreadyInSession).toBe(true);
+    const view = trayRowView(row);
+    expect(view.attentions).toEqual(["nameAlreadyInSession"]);
     expect(view.showsAddedByAnotherHost).toBe(true);
-    expect(view.buttons.map((b) => b.kind)).toEqual(["close", "reject"]);
+    expect(view.buttons.map((b) => b.kind)).toEqual(["reject"]);
     expect(state.attendanceChangesSeenElsewhere).toBe(
       loaded.attendanceChangesSeenElsewhere + 1,
     );
-  });
-
-  it("turns a refused Close back into Approve / Reject", () => {
-    const attending = apply(
-      INITIAL_TRAY_STATE,
-      polled([{ ...grace, isAlreadyAttending: true }]),
-    );
-    const state = apply(attending, {
-      type: "decision_finished",
-      checkinRequestId: grace.checkinRequestId,
-      action: "close",
-      result: { kind: "not_already_in_session" },
-    });
-    const view = trayRowView(rowFor(state, grace));
-    expect(view.attentions).toEqual([]);
-    expect(view.buttons.map((b) => b.kind)).toEqual(["approve", "reject"]);
   });
 
   it("keeps a failed row with Retry", () => {
@@ -294,19 +266,12 @@ describe("trayRowView", () => {
     ]);
   });
 
-  it("never offers Approve for a member already attending", () => {
-    const view = viewOf({ ...grace, isAlreadyAttending: true });
+  it("never offers Approve for a name already in the session (Reject only)", () => {
+    const view = viewOf({ ...grace, isNameAlreadyInSession: true });
     expect(view.surface).toBe("attention");
-    expect(view.attentions).toEqual(["alreadyAttending"]);
+    expect(view.attentions).toEqual(["nameAlreadyInSession"]);
     expect(view.showsAddedByAnotherHost).toBe(false);
-    expect(view.buttons.map((b) => b.kind)).toEqual(["close", "reject"]);
-  });
-
-  it("warns about a possible duplicate and keeps Approve and Reject", () => {
-    const view = viewOf({ ...kai, isPossibleDuplicate: true });
-    expect(view.surface).toBe("attention");
-    expect(view.attentions).toEqual(["possibleDuplicate"]);
-    expect(view.buttons.map((b) => b.kind)).toEqual(["approve", "reject"]);
+    expect(view.buttons.map((b) => b.kind)).toEqual(["reject"]);
   });
 
   it("disables both buttons while approving and marks Approve busy", () => {
@@ -325,17 +290,25 @@ describe("trayRowView", () => {
     ]);
   });
 
-  it("keeps the primary action and retries a failed reject", () => {
+  it("keeps Approve and retries a failed reject", () => {
+    const view = viewOf(kai, { kind: "failed", action: "reject" });
+    expect(view.attentions).toEqual([{ failedAction: "reject" }]);
+    expect(view.buttons.map((b) => [b.kind, b.action])).toEqual([
+      ["approve", "approve"],
+      ["retry", "reject"],
+    ]);
+  });
+
+  it("retries only Reject on a clashing row", () => {
     const view = viewOf(
-      { ...grace, isAlreadyAttending: true },
+      { ...grace, isNameAlreadyInSession: true },
       { kind: "failed", action: "reject" },
     );
     expect(view.attentions).toEqual([
-      "alreadyAttending",
+      "nameAlreadyInSession",
       { failedAction: "reject" },
     ]);
     expect(view.buttons.map((b) => [b.kind, b.action])).toEqual([
-      ["close", "close"],
       ["retry", "reject"],
     ]);
   });
@@ -351,30 +324,6 @@ describe("trayRowView", () => {
     expect(
       viewOf(kai, { kind: "decided", outcome: "decidedElsewhere" }).surface,
     ).toBe("neutral");
-  });
-});
-
-describe("levels", () => {
-  it("shows the level a member chose with the level it replaces", () => {
-    expect(displayedSkillLevel(peter)).toBe("intermediate");
-    expect(levelChangeLabel(peter)).toBe("level changed from Advanced");
-  });
-
-  it("shows the saved level when a member kept it", () => {
-    expect(displayedSkillLevel(grace)).toBe("beginner");
-    expect(levelChangeLabel(grace)).toBeNull();
-  });
-
-  it("says nothing changed when the chosen level is the saved one", () => {
-    expect(
-      levelChangeLabel({ ...peter, requestedSkillLevel: "advanced" }),
-    ).toBeNull();
-  });
-
-  it("says nothing changed for a member with no saved level, or a new player", () => {
-    expect(levelChangeLabel({ ...peter, savedSkillLevel: null })).toBeNull();
-    expect(levelChangeLabel(kai)).toBeNull();
-    expect(displayedSkillLevel(kai)).toBe("beginner");
   });
 });
 

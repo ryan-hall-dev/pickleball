@@ -43,9 +43,8 @@ vi.mock("@/server/setup/setupActions", () => ({
   discardSessionDraft: vi.fn(),
   addClubCourt: vi.fn(),
   startSessionDraft: vi.fn(),
-  setDraftMemberAttendance: vi.fn(),
-  addDraftGuest: vi.fn(),
-  removeDraftGuest: vi.fn(),
+  addDraftParticipant: vi.fn(),
+  removeDraftParticipant: vi.fn(),
   saveSetup: vi.fn(),
   applySavedSetup: vi.fn(),
   readSessionDraft: vi.fn(),
@@ -79,30 +78,14 @@ const clubCourts: ClubCourt[] = [
   },
 ];
 
-/** An attendee list of `memberCount` members and `guestCount` guests. */
-function participantsFor(
-  memberCount: number,
-  guestCount: number,
-): DraftParticipant[] {
-  const participant = (index: number, isGuest: boolean): DraftParticipant => ({
+/** An attendee list of `count` players. */
+function participantsFor(count: number): DraftParticipant[] {
+  return Array.from({ length: count }, (_, index) => ({
     participantId: `e0000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-    memberId: isGuest
-      ? null
-      : `b0000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-    isGuest,
-    firstName: isGuest ? "Guest" : "Member",
+    firstName: "Player",
     lastName: String(index),
-    skillLevel: null,
-    isMemberActive: isGuest ? null : true,
-  });
-  return [
-    ...Array.from({ length: memberCount }, (_, index) =>
-      participant(index, false),
-    ),
-    ...Array.from({ length: guestCount }, (_, index) =>
-      participant(memberCount + index, true),
-    ),
-  ];
+    skillLevel: "intermediate",
+  }));
 }
 
 function draftWith(overrides: Partial<SessionDraft> = {}): SessionDraft {
@@ -146,7 +129,6 @@ function renderEditor(
     <SessionSetupEditor
       draft={draft}
       initialClubCourts={clubCourts}
-      activeMembers={[]}
       canAddCourts
       initialSavedSetups={savedSetups}
       socialName="Riverside Picklers"
@@ -311,7 +293,7 @@ describe("SessionSetupEditor", () => {
   it("says once, in the summary, when the session is shorter than one round", () => {
     renderEditor(
       draftWith({
-        participants: participantsFor(8, 0),
+        participants: participantsFor(8),
         config: {
           courts: [
             { courtId: clubCourts[0].id, name: "Court 1", format: "doubles" },
@@ -458,7 +440,7 @@ describe("SessionSetupEditor", () => {
   });
 
   it("selects courts, updates the capacity line and limits formats to what the courts support", () => {
-    renderEditor(draftWith({ participants: participantsFor(8, 2) }));
+    renderEditor(draftWith({ participants: participantsFor(10) }));
     const courtTile = (name: RegExp) => screen.getByRole("button", { name });
 
     // The singles-only court can't be picked for doubles, and looks disabled
@@ -496,7 +478,7 @@ describe("SessionSetupEditor", () => {
   it("summarises the session with the capacity diagram and the estimate", () => {
     renderEditor(
       draftWith({
-        participants: participantsFor(14, 1),
+        participants: participantsFor(15),
         config: {
           courts: clubCourts.slice(0, 2).map((court) => ({
             courtId: court.id,
@@ -515,7 +497,6 @@ describe("SessionSetupEditor", () => {
       screen.getByRole("complementary", { name: "Session summary and start" }),
     );
     expect(summary.getByText("Sat 7 Nov · 18:00 – 20:00")).toBeInTheDocument();
-    expect(summary.getByText("(14 members + 1 guest)")).toBeInTheDocument();
     expect(summary.getByText("2 · doubles")).toBeInTheDocument();
     const diagram = summary.getByRole("img", {
       name: "Capacity: 2 courts of 4 players, 8 on court, 7 waiting",
@@ -701,7 +682,7 @@ describe("SessionSetupEditor", () => {
 
   it("discards only after a confirmation that identifies the draft on screen", async () => {
     discardSessionDraftMock.mockResolvedValue({ ok: true });
-    renderEditor(draftWith({ participants: participantsFor(3, 1) }));
+    renderEditor(draftWith({ participants: participantsFor(4) }));
     fireEvent.change(screen.getByLabelText("Session name"), {
       target: { value: "Late social" },
     });
@@ -819,7 +800,6 @@ describe("SessionSetupEditor", () => {
           <SessionSetupEditor
             draft={draftWith()}
             initialClubCourts={clubCourts}
-            activeMembers={[]}
             canAddCourts
             initialSavedSetups={[]}
             socialName="Riverside Picklers"
@@ -946,7 +926,6 @@ describe("SessionSetupEditor", () => {
             key={instance}
             draft={draftWith()}
             initialClubCourts={clubCourts}
-            activeMembers={[]}
             canAddCourts
             initialSavedSetups={[]}
             socialName="Riverside Picklers"
@@ -1265,10 +1244,10 @@ describe("SessionSetupEditor", () => {
   });
 
   describe("stepper and checklist", () => {
-    it("shows Players · 1 to fix for a half-filled guest form, and START waits", () => {
+    it("shows Players · 1 to fix for a half-filled participant form, and START waits", () => {
       renderEditor(
         draftWith({
-          participants: participantsFor(8, 0),
+          participants: participantsFor(8),
           config: {
             ...draftWith().config,
             courts: [
@@ -1291,7 +1270,7 @@ describe("SessionSetupEditor", () => {
       );
       expect(
         screen.getByText(
-          "Guest form has an unfinished entry: add Kai's last name or clear it",
+          "Participant form has an unfinished entry: add Kai's last name or clear it",
         ),
       ).toBeInTheDocument();
       expect(start).toBeDisabled();
@@ -1310,7 +1289,7 @@ describe("SessionSetupEditor", () => {
     it("enables START only once saved, and says what it will do when pressed", async () => {
       renderEditor(
         draftWith({
-          participants: participantsFor(8, 0),
+          participants: participantsFor(8),
           config: {
             ...draftWith().config,
             courts: [

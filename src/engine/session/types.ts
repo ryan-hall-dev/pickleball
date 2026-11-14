@@ -37,14 +37,18 @@ export interface CourtConfig {
 
 export type SkillLevel = "beginner" | "intermediate" | "advanced";
 
-/** A participant as snapshotted into the session (members and guests alike). */
+/**
+ * A participant as snapshotted into the session. Participants exist only
+ * within their session (no cross-session identity). Historical
+ * PlayerJoined / SessionStarted payloads may still carry an `isGuest` key;
+ * it is never read.
+ */
 export interface Participant {
   participantId: ParticipantId;
   firstName: string;
   lastName: string;
-  /** Null when unknown (e.g. added by a host without a level). */
+  /** Null when unknown (sessions recorded before a level was required). */
   skill: SkillLevel | null;
-  isGuest: boolean;
 }
 
 /** The host's rotation objectives, ranked by importance (first = most important). */

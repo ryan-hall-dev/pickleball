@@ -33,7 +33,6 @@ export function SessionSummary({
   courtCount,
   matchFormat,
   attendingPlayerCount,
-  attendingGuestCount,
   rotationSummary,
   readiness,
 }: {
@@ -44,14 +43,12 @@ export function SessionSummary({
   courtCount: number;
   matchFormat: CourtFormat;
   attendingPlayerCount: number;
-  attendingGuestCount: number;
   /** e.g. "Equal games first". */
   rotationSummary: string;
   readiness: SetupReadiness;
 }) {
   const [isStartNoteShown, setIsStartNoteShown] = useState(false);
   const capacity = courtCapacity(courtCount, matchFormat, attendingPlayerCount);
-  const attendingMemberCount = attendingPlayerCount - attendingGuestCount;
   const estimateCopy: GamesEstimateCopy = timing
     ? describeGamesEstimate(
         estimateGames({
@@ -98,18 +95,7 @@ export function SessionSummary({
             )}
           </SummaryRow>
           <SummaryRow term="Players">
-            <span className="tabular-nums">
-              {attendingPlayerCount}
-              {attendingPlayerCount > 0 && (
-                <span className="font-medium text-muted">
-                  {" "}
-                  ({attendingMemberCount}{" "}
-                  {attendingMemberCount === 1 ? "member" : "members"} +{" "}
-                  {attendingGuestCount}{" "}
-                  {attendingGuestCount === 1 ? "guest" : "guests"})
-                </span>
-              )}
-            </span>
+            <span className="tabular-nums">{attendingPlayerCount}</span>
           </SummaryRow>
           <SummaryRow term="Courts">
             {courtCount === 0 ? (

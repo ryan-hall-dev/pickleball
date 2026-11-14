@@ -10,7 +10,6 @@ import {
   HOST_ACCESS_DENIAL_MESSAGES,
   type SignedInHost,
 } from "@/server/auth/hostAccess";
-import type { SkillLevel } from "@/server/members/memberSearch";
 import {
   listDraftParticipants,
   listSocialSavedSetups,
@@ -22,18 +21,16 @@ import {
 } from "./setupDraft";
 import {
   addClubCourtInputSchema,
-  addDraftGuestInputSchema,
+  addDraftParticipantInputSchema,
   DEFAULT_SESSION_DRAFT_CONFIG,
-  removeDraftGuestInputSchema,
+  removeDraftParticipantInputSchema,
   saveSessionDraftInputSchema,
-  setDraftMemberAttendanceInputSchema,
   startSessionDraftInputSchema,
   type AddClubCourtInput,
-  type AddDraftGuestInput,
-  type RemoveDraftGuestInput,
+  type AddDraftParticipantInput,
+  type RemoveDraftParticipantInput,
   type SaveSessionDraftInput,
   type SessionDraftConfig,
-  type SetDraftMemberAttendanceInput,
   type ApplySavedSetupInput,
   type SaveSetupInput,
   applySavedSetupInputSchema,
@@ -122,6 +119,12 @@ const DRAFT_NOT_OPEN =
   "This draft is no longer open (it was discarded or started). Reload the page.";
 /** Raised by the draft write functions when the session isn't the social's open draft. */
 const DRAFT_NOT_OPEN_ERROR = "DRAFT_NOT_OPEN";
+/** Raised by remove_draft_participant when the participant's session is no longer a draft. */
+const SESSION_NOT_DRAFT_ERROR = "SESSION_NOT_DRAFT";
+/** Raised by remove_draft_participant for a participant that's gone (or another social's). */
+const PARTICIPANT_NOT_FOUND_ERROR = "PARTICIPANT_NOT_FOUND";
+/** Raised by every participant write when the name is already in the session. */
+const NAME_ALREADY_IN_SESSION_ERROR = "NAME_ALREADY_IN_SESSION";
 const SAVED_BUT_LIST_NOT_REFRESHED =
   "Saved, but the list couldn't refresh. Reload the page.";
 const SAVED_SETUP_NOT_FOUND =
@@ -484,7 +487,9 @@ export async function addClubCourt(
  * Runs one attendance function on the social's draft, then reads the
  * attendee list back. Each function checks in the database, in its own
  * transaction, that the draft is the actor's social's and still open, so there is no
- * separate ownership read here (it would only add a race).
+ * separate ownership read here (it would only add a race). A participant
+ * that's already gone counts as removed. `nameClashMessage` is shown when
+ * the function refuses a name already in the session.
  */
 async function writeDraftAttendance(
   host: SignedInHost,
@@ -493,15 +498,24 @@ async function writeDraftAttendance(
   callAttendanceFunction: (
     adminClient: AdminClient,
   ) => PromiseLike<{ error: { message: string } | null }>,
+  nameClashMessage?: string,
 ): Promise<DraftAttendanceResult> {
   let adminClient: AdminClient;
   try {
     adminClient = createSupabaseAdminClient();
     const { error } = await callAttendanceFunction(adminClient);
-    if (error?.message === DRAFT_NOT_OPEN_ERROR) {
+    if (
+      error?.message === DRAFT_NOT_OPEN_ERROR ||
+      error?.message === SESSION_NOT_DRAFT_ERROR
+    ) {
       return { ok: false, message: DRAFT_NOT_OPEN };
     }
-    if (error) throw new Error(`${failureLabel}: ${error.message}`);
+    if (error?.message === NAME_ALREADY_IN_SESSION_ERROR && nameClashMessage) {
+      return { ok: false, message: nameClashMessage };
+    }
+    if (error && error.message !== PARTICIPANT_NOT_FOUND_ERROR) {
+      throw new Error(`${failureLabel}: ${error.message}`);
+    }
   } catch (error) {
     logActionFailure(failureLabel, host, error);
     return { ok: false, message: SOMETHING_WENT_WRONG };
@@ -529,47 +543,21 @@ async function writeDraftAttendance(
   }
 }
 
-/**
- * Marks members as attending the social's draft, or not. Set semantics: members
- * already in that state are left alone, so repeats and other tabs are safe.
- * Only active members can be added; "not attending" never removes guests.
- */
-export async function setDraftMemberAttendance(
-  input: SetDraftMemberAttendanceInput,
-): Promise<DraftAttendanceResult> {
-  const authorization = await authorizeCurrentHost("host");
-  if (!authorization.ok) {
-    return {
-      ok: false,
-      message: HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
-    };
-  }
-  const { host } = authorization;
-  const parsed = setDraftMemberAttendanceInputSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, message: firstIssueMessage(parsed.error) };
-  }
-  const { sessionId, memberIds, attending } = parsed.data;
-  return writeDraftAttendance(
-    host,
-    sessionId,
-    "Changing draft attendance failed",
-    (adminClient) =>
-      adminClient.rpc("set_draft_member_attendance", {
-        p_actor_user_id: host.userId,
-        p_session_id: sessionId,
-        p_member_ids: memberIds,
-        p_attending: attending,
-      }),
-  );
+/** The host's message when a name is already in the session (plan §2). */
+function nameAlreadyInSessionMessage(
+  firstName: string,
+  lastName: string,
+): string {
+  return `Someone named ${firstName} ${lastName} is already in this session. Add something to tell them apart, like an initial.`;
 }
 
 /**
- * Adds a guest (plays this session only; not added to the members directory).
- * Repeating the same participant id is a no-op, so a retry is safe.
+ * Adds a player to the social's draft (this session only): name and level
+ * required, and no two players in a session may share a name. Repeating the
+ * same participant id is a no-op, so a retry is safe.
  */
-export async function addDraftGuest(
-  input: AddDraftGuestInput,
+export async function addDraftParticipant(
+  input: AddDraftParticipantInput,
 ): Promise<DraftAttendanceResult> {
   const authorization = await authorizeCurrentHost("host");
   if (!authorization.ok) {
@@ -579,7 +567,7 @@ export async function addDraftGuest(
     };
   }
   const { host } = authorization;
-  const parsed = addDraftGuestInputSchema.safeParse(input);
+  const parsed = addDraftParticipantInputSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, message: firstIssueMessage(parsed.error) };
   }
@@ -588,23 +576,23 @@ export async function addDraftGuest(
   return writeDraftAttendance(
     host,
     sessionId,
-    "Adding a draft guest failed",
+    "Adding a draft participant failed",
     (adminClient) =>
-      adminClient.rpc("add_draft_guest", {
+      adminClient.rpc("add_draft_participant", {
         p_actor_user_id: host.userId,
         p_session_id: sessionId,
         p_session_participant_id: participantId,
         p_first_name: firstName,
         p_last_name: lastName,
-        // Generated types can't mark an argument nullable; null = no level.
-        p_skill_level: skillLevel as SkillLevel,
+        p_skill_level: skillLevel,
       }),
+    nameAlreadyInSessionMessage(firstName, lastName),
   );
 }
 
-/** Removes a guest from the social's draft (already gone counts as done). */
-export async function removeDraftGuest(
-  input: RemoveDraftGuestInput,
+/** Removes a player from the social's draft (already gone counts as done). */
+export async function removeDraftParticipant(
+  input: RemoveDraftParticipantInput,
 ): Promise<DraftAttendanceResult> {
   const authorization = await authorizeCurrentHost("host");
   if (!authorization.ok) {
@@ -614,7 +602,7 @@ export async function removeDraftGuest(
     };
   }
   const { host } = authorization;
-  const parsed = removeDraftGuestInputSchema.safeParse(input);
+  const parsed = removeDraftParticipantInputSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, message: firstIssueMessage(parsed.error) };
   }
@@ -622,11 +610,10 @@ export async function removeDraftGuest(
   return writeDraftAttendance(
     host,
     sessionId,
-    "Removing a draft guest failed",
+    "Removing a draft participant failed",
     (adminClient) =>
-      adminClient.rpc("remove_draft_guest", {
+      adminClient.rpc("remove_draft_participant", {
         p_actor_user_id: host.userId,
-        p_session_id: sessionId,
         p_session_participant_id: participantId,
       }),
   );

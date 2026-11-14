@@ -1,7 +1,4 @@
-import {
-  SKILL_LEVEL_LABELS,
-  type SkillLevel,
-} from "@/server/members/memberSearch";
+import { SKILL_LEVEL_LABELS, type SkillLevel } from "@/server/skillLevels";
 
 /** A member's skill level as a small grey chip ("No level" when unknown). */
 export function SkillChip({ skillLevel }: { skillLevel: SkillLevel | null }) {

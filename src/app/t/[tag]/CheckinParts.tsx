@@ -4,7 +4,7 @@ import {
   SKILL_LEVEL_LABELS,
   SKILL_LEVELS,
   type SkillLevel,
-} from "@/server/members/memberSearch";
+} from "@/server/skillLevels";
 import {
   INFO_NOTICE_CLASS_NAME,
   SELECTED_LEVEL_OPTION_CLASS_NAME,
@@ -52,7 +52,7 @@ export const HOST_APPROVES_NOTE =
 
 /**
  * Beginner / Intermediate / Advanced as pressable buttons (aria-pressed),
- * three across. `isInvalid` adds the 2px orange outline (guest form).
+ * three across. `isInvalid` adds the 2px orange outline (form).
  */
 export function SkillLevelOptions({
   id,

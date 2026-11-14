@@ -12,7 +12,6 @@ import { SkillChip } from "@/components/SkillChip";
 import { settleWithin } from "@/lib/settleWithin";
 import {
   approveCheckin,
-  closeCheckinAlreadyCheckedIn,
   listPendingCheckins,
   rejectCheckin,
 } from "@/server/checkin/hostCheckinActions";
@@ -28,8 +27,6 @@ import { CheckIcon } from "./CheckIcon";
 import {
   DECIDED_ROW_VISIBLE_MS,
   INITIAL_TRAY_STATE,
-  displayedSkillLevel,
-  levelChangeLabel,
   relativeTimeLabel,
   trayReducer,
   trayRowView,
@@ -55,19 +52,18 @@ const DECISION_FUNCTIONS: Record<
 > = {
   approve: approveCheckin,
   reject: rejectCheckin,
-  close: closeCheckinAlreadyCheckedIn,
 };
 
 const HEADING_ID = "pending-checkins-heading";
 
 /**
  * The host pending check-in tray (H00-H04): the open session's requests,
- * polled every 5 s while the page is visible, with Approve / Reject, or
- * Close for a member who is already attending. `onParticipantApproved` gets
- * the attendee this host approved (null: approved, but not read back);
+ * polled every 5 s while the page is visible, with Approve / Reject (Reject
+ * only when the name is already in the session). `onParticipantApproved`
+ * gets the attendee this host approved (null: approved, but not read back);
  * `onAttendanceChangedElsewhere` runs when the requests suggest another host
  * changed the attendee list (a request left without a decision here, or a
- * member became attending), so Who's playing re-reads it.
+ * request's name became taken), so Who's playing re-reads it.
  */
 export function PendingCheckinTray({
   onParticipantApproved,
@@ -362,25 +358,9 @@ function RequestDetails({
   request: PendingCheckinRequest;
   nowMs: number;
 }) {
-  const levelChange = levelChangeLabel(request);
   return (
     <div className="mt-[3px] flex flex-wrap items-center gap-1.5 text-xs text-muted">
-      {request.memberId ? (
-        <span className="shrink-0 rounded-full bg-inner-border px-2 py-[3px] text-xs font-semibold text-text-soft">
-          Member
-        </span>
-      ) : (
-        <span className="shrink-0 rounded-full border border-blue-edge bg-blue-surface px-2 py-0.5 text-[11px] font-bold tracking-[0.08em] text-link uppercase">
-          New player
-        </span>
-      )}
-      <SkillChip skillLevel={displayedSkillLevel(request)} />
-      {levelChange && (
-        <>
-          <span>{levelChange}</span>
-          <span aria-hidden="true">·</span>
-        </>
-      )}
+      <SkillChip skillLevel={request.skillLevel} />
       <span className="tabular-nums">
         {relativeTimeLabel(request.createdAt, nowMs)}
       </span>
@@ -391,22 +371,19 @@ function RequestDetails({
 const FAILED_ACTION_WORDS: Record<TrayDecisionAction, string> = {
   approve: "Couldn't approve.",
   reject: "Couldn't reject.",
-  close: "Couldn't close the request.",
 };
 
 function RowAttention({ attention }: { attention: TrayRowAttention }) {
   const [headline, detail] =
-    attention === "alreadyAttending"
-      ? ["Already checked in to this session.", "They can't be added twice."]
-      : attention === "possibleDuplicate"
-        ? [
-            "Possible duplicate: same name as someone already checked in.",
-            "A matching name doesn't mean it's the same person. Check with them before approving.",
-          ]
-        : [
-            FAILED_ACTION_WORDS[attention.failedAction],
-            "Check your connection and retry.",
-          ];
+    attention === "nameAlreadyInSession"
+      ? [
+          "This name is already checked in to this session.",
+          "They can't be added twice.",
+        ]
+      : [
+          FAILED_ACTION_WORDS[attention.failedAction],
+          "Check your connection and retry.",
+        ];
   const isFailure = typeof attention !== "string";
   return (
     <p
@@ -430,7 +407,6 @@ function RowAttention({ attention }: { attention: TrayRowAttention }) {
 const DECIDED_MESSAGES: Record<TrayDecidedOutcome, string> = {
   approved: "Added to Who's playing",
   rejected: 'Check-in rejected. The player sees "Please speak to the host".',
-  closed: "Request closed. Their phone shows they're already checked in.",
   decidedElsewhere: "Already decided by another host",
 };
 
@@ -469,7 +445,6 @@ function InfoBadge() {
 const BUSY_WORDS: Record<TrayDecisionAction, string> = {
   approve: "Approving…",
   reject: "Rejecting…",
-  close: "Closing…",
 };
 
 function rowButtonWords(
@@ -479,11 +454,6 @@ function rowButtonWords(
   switch (rowButton.kind) {
     case "approve":
       return { label: "Approve", accessibleName: `Approve ${name}` };
-    case "close":
-      return {
-        label: "Close: already checked in",
-        accessibleName: `Close ${name}'s request: already checked in`,
-      };
     case "reject":
       return { label: "Reject", accessibleName: `Reject ${name}` };
     case "retry":
@@ -492,9 +462,7 @@ function rowButtonWords(
         accessibleName:
           rowButton.action === "approve"
             ? `Retry approving ${name}`
-            : rowButton.action === "reject"
-              ? `Retry rejecting ${name}`
-              : `Retry closing ${name}'s request`,
+            : `Retry rejecting ${name}`,
       };
   }
 }
@@ -510,18 +478,13 @@ function RowButton({
 }) {
   const { label, accessibleName } = rowButtonWords(rowButton, name);
   const isBlue = rowButton.kind !== "reject";
-  const isWide = rowButton.kind === "close";
   return (
     <button
       type="button"
       onClick={onPress}
       disabled={rowButton.isDisabled}
       aria-label={rowButton.isBusy ? undefined : accessibleName}
-      className={`${isBlue ? SECONDARY_BUTTON_CLASS_NAME : OUTLINE_BUTTON_CLASS_NAME} gap-2 whitespace-nowrap ${
-        isWide
-          ? "flex-[2_1_auto] max-sm:max-w-none sm:max-w-[260px]"
-          : "flex-[1_1_0] max-sm:max-w-none sm:max-w-[140px]"
-      }`}
+      className={`${isBlue ? SECONDARY_BUTTON_CLASS_NAME : OUTLINE_BUTTON_CLASS_NAME} flex-[1_1_0] gap-2 whitespace-nowrap max-sm:max-w-none sm:max-w-[140px]`}
     >
       {rowButton.isBusy ? (
         <>

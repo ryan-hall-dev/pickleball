@@ -3,15 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Design order: Session setup, Live courts, Members, History. Later milestones
-// add Live courts and History; Hosts (admin tools) stays last.
+// Design order: Session setup, Live courts, History. Later milestones add Live
+// courts and History; Hosts (admin tools) stays last. There is no Members
+// section: participants exist per session only (session-only participants).
 const HOST_NAV_ITEMS = [
   { href: "/setup", label: "Session setup" },
-  { href: "/members", label: "Members" },
   { href: "/hosts", label: "Hosts" },
 ] as const;
 
-/** A section stays current on its sub-pages (e.g. /members/new). */
+/** A section stays current on its sub-pages (e.g. /hosts/...). */
 function isCurrentSection(pathname: string, href: string): boolean {
   return pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
 }

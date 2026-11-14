@@ -1,11 +1,12 @@
 // @vitest-environment node
 // The public check-in page's server actions against the LOCAL Supabase stack
-// (`pnpm db:start`): the page read (inactive link, nothing open, open),
-// phone recognition only for a linked device, the submit privacy rule (only
-// the member's own linked phone hears "already checked in"), one pending
-// request per phone, the rate-limit mapping, another social's member refused,
-// the device cookie (only its hash reaches the database), and no table or
-// function access with the publishable (anon) key. Each phone is a fake
+// (`pnpm db:start`), after session-only participants (20261112090000): the
+// page read (inactive link, nothing open, open, this phone's request only),
+// the submit privacy rule (only the phone whose own request was approved
+// hears "already checked in"; a name already attending is never revealed),
+// one pending request per phone, a fresh request after a rejection, the
+// rate-limit mapping, the device cookie (only its hash reaches the database),
+// and no table or function access with the publishable (anon) key. Each phone is a fake
 // cookie jar with its own client IP. Skips when the stack isn't running,
 // unless REQUIRE_LOCAL_SUPABASE=1. Everything deletable is removed afterwards.
 import { execFileSync } from "node:child_process";
@@ -17,10 +18,12 @@ import { deleteTestSocials } from "@/server/testing/deleteTestSocials";
 import {
   ensureCheckinDevice,
   readCheckinPage,
-  searchCheckinNames,
-  submitCheckin,
+  submitCheckin as submitCheckinAction,
 } from "./checkinActions";
+import type { ParticipantCheckinInput } from "./checkinRules";
 import type { OpenCheckinPage } from "./checkinResults";
+
+import * as checkinPageModule from "./checkinPage";
 
 type DatabaseClient = SupabaseClient<Database>;
 
@@ -100,7 +103,6 @@ if (!localStack) {
   );
 }
 
-const DEVICE_COOKIE_NAME = "checkin_device";
 const UNKNOWN_TAG = `zz${randomUUID().replace(/-/g, "")}`;
 let phoneCounter = 0;
 
@@ -131,8 +133,12 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
   let riversideTag: string;
   let quietSocialTag: string;
   let riversideSessionId: string;
-  const memberIds: Record<string, string> = {};
-  let otherSocialMemberId: string;
+  async function submitCheckin(tag: unknown, input: unknown) {
+    return submitCheckinAction(tag, {
+      ...(input as object),
+      sessionId: riversideSessionId,
+    });
+  }
 
   async function createTestSocial(name: string) {
     const { data, error } = await admin
@@ -145,32 +151,16 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
     return data;
   }
 
-  async function insertMember(
-    socialId: string,
-    firstName: string,
-    lastName: string,
-    skillLevel: "beginner" | "intermediate" | "advanced" | null = null,
-  ): Promise<string> {
-    const { data, error } = await admin
-      .from("members")
-      .insert({
-        social_id: socialId,
-        first_name: firstName,
-        last_name: lastName,
-        skill_level: skillLevel,
-      })
-      .select("id")
-      .single();
-    if (error) throw error;
-    return data.id;
-  }
-
   async function approve(checkinRequestId: string) {
-    const { data, error } = await admin.rpc("approve_checkin", {
+    return admin.rpc("approve_checkin", {
       p_actor_user_id: managerUserId,
       p_checkin_request_id: checkinRequestId,
       p_session_participant_id: randomUUID(),
     });
+  }
+
+  async function approveOrThrow(checkinRequestId: string) {
+    const { data, error } = await approve(checkinRequestId);
     if (error) throw error;
     return data;
   }
@@ -189,18 +179,15 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
     return result.outcome.checkinRequestId;
   }
 
-  function memberInput(name: "grace" | "peter" | "penny") {
-    const names = {
-      grace: ["Grace", "Kim"],
-      peter: ["Peter", "Lindqvist"],
-      penny: ["Penny", "Ward"],
-    } as const;
+  /** A check-in with a name unique to this run (names are unique per session). */
+  function playerInput(
+    firstName: string,
+    skillLevel: ParticipantCheckinInput["skillLevel"] = "beginner",
+  ) {
     return {
-      kind: "member" as const,
-      memberId: memberIds[name],
-      firstName: names[name][0],
-      lastName: names[name][1],
-      updatedSkillLevel: null,
+      firstName,
+      lastName: `Tester${randomUUID().slice(0, 6)}`,
+      skillLevel,
     };
   }
 
@@ -233,7 +220,6 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
     riversideTag = riverside.checkin_tag;
     const quietSocial = await createTestSocial("Integration check-in quiet");
     quietSocialTag = quietSocial.checkin_tag;
-    const otherSocial = await createTestSocial("Integration check-in other");
 
     const created = await admin.auth.admin.createUser({
       email: `integration-checkin-${randomUUID()}@example.test`,
@@ -249,31 +235,6 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
       social_id: riverside.id,
     });
     if (hostError) throw hostError;
-
-    memberIds.grace = await insertMember(
-      riverside.id,
-      "Grace",
-      "Kim",
-      "beginner",
-    );
-    memberIds.peter = await insertMember(riverside.id, "Peter", "Lindqvist");
-    memberIds.penny = await insertMember(riverside.id, "Penny", "Ward");
-    for (const [firstName, lastName] of [
-      ["Pedro", "Alves"],
-      ["Petra", "Novák"],
-      ["Pearl", "Jones"],
-      ["Élodie", "Durand"],
-    ]) {
-      await insertMember(riverside.id, firstName, lastName);
-    }
-    const { error: inactiveError } = await admin.from("members").insert({
-      social_id: riverside.id,
-      first_name: "Pete",
-      last_name: "Retired",
-      is_active: false,
-    });
-    if (inactiveError) throw inactiveError;
-    otherSocialMemberId = await insertMember(otherSocial.id, "Peter", "Other");
 
     const plannedStart = new Date(Date.now() + 30 * 60_000);
     const { data: session, error: sessionError } = await admin
@@ -339,7 +300,6 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
           courtsCount: 2,
           checkedInCount: expect.any(Number),
         },
-        recognisedMember: null,
         currentRequest: null,
       });
       expect(Date.parse(page.now)).not.toBeNaN();
@@ -348,98 +308,21 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
     });
   });
 
-  describe("searchCheckinNames", () => {
-    it("lists nothing (and sets no cookie) before 2 letters", async () => {
-      actAsPhone(newPhone());
-      expect(await searchCheckinNames(riversideTag, "P")).toEqual({
-        ok: true,
-        matches: [],
-      });
-      expect(await searchCheckinNames(riversideTag, " é ")).toEqual({
-        ok: true,
-        matches: [],
-      });
-      expect(currentPhone.cookieJar.size).toBe(0);
-    });
-
-    it("lists at most 5 active members of this social, names only", async () => {
-      actAsPhone(newPhone());
-      const result = await searchCheckinNames(riversideTag, "pe");
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.matches).toHaveLength(5);
-      for (const match of result.matches) {
-        expect(Object.keys(match).sort()).toEqual([
-          "firstName",
-          "lastName",
-          "memberId",
-        ]);
-      }
-      const names = result.matches.map(
-        (match) => `${match.firstName} ${match.lastName}`,
-      );
-      expect(names).not.toContain("Pete Retired");
-      expect(names).not.toContain("Peter Other");
-    });
-
-    it("matches accent-insensitively, by last name too", async () => {
-      actAsPhone(newPhone());
-      expect(await searchCheckinNames(riversideTag, "elo")).toMatchObject({
-        ok: true,
-        matches: [{ firstName: "Élodie", lastName: "Durand" }],
-      });
-      expect(await searchCheckinNames(riversideTag, "NOVAK")).toMatchObject({
-        ok: true,
-        matches: [{ firstName: "Petra" }],
-      });
-      expect(await searchCheckinNames(riversideTag, "pe1")).toEqual({
-        ok: true,
-        matches: [],
-      });
-    });
-
-    it("tells an inactive link from a social with nothing open", async () => {
-      actAsPhone(newPhone());
-      expect(await searchCheckinNames(UNKNOWN_TAG, "pe")).toEqual({
-        ok: false,
-        failure: "inactive",
-      });
-      expect(await searchCheckinNames(quietSocialTag, "pe")).toEqual({
-        ok: false,
-        failure: "no_open_session",
-      });
-    });
-
-    it("sets an HttpOnly, SameSite=Lax device cookie on /t (Secure in production)", async () => {
+  describe("submitCheckin", () => {
+    it("sets an HttpOnly, SameSite=Lax device cookie on /t and stores only the token's hash", async () => {
       const phone = newPhone();
-      actAsPhone(phone);
-      await searchCheckinNames(riversideTag, "gr");
-      expect(phone.cookieJar.get(DEVICE_COOKIE_NAME)).toMatch(
-        /^[A-Za-z0-9_-]{43}$/,
-      );
+      const requestId = await pendingRequestId(phone, playerInput("Grace"));
+      const deviceToken = phone.cookieJar.get(
+        `checkin_session_${riversideSessionId}`,
+      )!;
+      expect(deviceToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
       expect(phone.lastCookieOptions).toMatchObject({
         httpOnly: true,
         // Not Secure outside production: phones on the LAN use plain http.
         secure: false,
         sameSite: "lax",
-        path: "/t",
+        path: `/t/${riversideTag}`,
       });
-      // The same phone keeps its token.
-      const firstToken = phone.cookieJar.get(DEVICE_COOKIE_NAME);
-      phone.lastCookieOptions = null;
-      await searchCheckinNames(riversideTag, "gra");
-      expect(phone.cookieJar.get(DEVICE_COOKIE_NAME)).toBe(firstToken);
-      expect(phone.lastCookieOptions).toBeNull();
-    });
-  });
-
-  describe("submitCheckin", () => {
-    it("recognises only the phone linked by an approval, and stores only the token's hash", async () => {
-      const gracePhone = newPhone();
-      const requestId = await pendingRequestId(
-        gracePhone,
-        memberInput("grace"),
-      );
 
       const { data: requestRow, error } = await admin
         .from("checkin_requests")
@@ -447,56 +330,39 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
         .eq("id", requestId)
         .single();
       if (error) throw error;
-      const deviceToken = gracePhone.cookieJar.get(DEVICE_COOKIE_NAME)!;
       expect(requestRow.device_token_hash).toBe(sha256Hex(deviceToken));
       expect(requestRow.device_token_hash).not.toContain(deviceToken);
       expect(requestRow.ip_hash).toMatch(/^[0-9a-f]{64}$/);
-      expect(requestRow.ip_hash).not.toBe(sha256Hex(gracePhone.clientIp));
+      expect(requestRow.ip_hash).not.toBe(sha256Hex(phone.clientIp));
 
-      // Before approval: waiting, and not yet recognised.
-      expect(await openPageFor(gracePhone)).toMatchObject({
-        recognisedMember: null,
+      // Waiting, then approved: the phone sees its own request only.
+      expect(await openPageFor(phone)).toMatchObject({
         currentRequest: { checkinRequestId: requestId, status: "pending" },
       });
-
-      await approve(requestId);
-      expect(await openPageFor(gracePhone)).toMatchObject({
-        recognisedMember: {
-          memberId: memberIds.grace,
-          firstName: "Grace",
-          lastName: "Kim",
-          skillLevel: "beginner",
-        },
+      await approveOrThrow(requestId);
+      expect(await openPageFor(phone)).toMatchObject({
         currentRequest: { checkinRequestId: requestId, status: "approved" },
       });
-
-      // Another phone recognises nobody and sees no request.
       expect(await openPageFor(newPhone())).toMatchObject({
-        recognisedMember: null,
         currentRequest: null,
       });
     });
 
-    it("answers already checked in only to the member's own linked phone", async () => {
-      // Approving Peter's request links his phone and makes him attending.
+    it("answers already checked in only to the phone whose request was approved, and never reveals a name", async () => {
+      const peter = playerInput("Peter");
       const peterPhone = newPhone();
-      await approve(await pendingRequestId(peterPhone, memberInput("peter")));
+      await approveOrThrow(await pendingRequestId(peterPhone, peter));
 
       actAsPhone(peterPhone);
-      expect(await submitCheckin(riversideTag, memberInput("peter"))).toEqual({
+      expect(await submitCheckin(riversideTag, peter)).toEqual({
         ok: true,
         outcome: { status: "already_checked_in" },
       });
 
-      // Any other phone naming Peter just waits, like any request: a submit
-      // never tells a phone who is checked in.
+      // Another phone with the same name just waits, like any request.
       const strangerPhone = newPhone();
-      const strangerRequestId = await pendingRequestId(
-        strangerPhone,
-        memberInput("peter"),
-      );
+      const strangerRequestId = await pendingRequestId(strangerPhone, peter);
       expect(await openPageFor(strangerPhone)).toMatchObject({
-        recognisedMember: null,
         currentRequest: {
           checkinRequestId: strangerRequestId,
           status: "pending",
@@ -504,37 +370,38 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
         },
       });
 
-      // A host closes it as already checked in: that phone sees the outcome
-      // (P09b) and is still not linked to Peter (D-C).
-      const { error: closeError } = await admin.rpc(
-        "close_checkin_already_checked_in",
-        {
-          p_actor_user_id: managerUserId,
-          p_checkin_request_id: strangerRequestId,
-        },
-      );
-      if (closeError) throw closeError;
+      // The host can't approve it (one name per session) and rejects it; the
+      // phone then sends a fresh request with a distinguishing name.
+      const { error: approveError } = await approve(strangerRequestId);
+      expect(approveError?.message).toBe("NAME_ALREADY_IN_SESSION");
+      const { error: rejectError } = await admin.rpc("reject_checkin", {
+        p_actor_user_id: managerUserId,
+        p_checkin_request_id: strangerRequestId,
+      });
+      if (rejectError) throw rejectError;
       expect(await openPageFor(strangerPhone)).toMatchObject({
-        recognisedMember: null,
         currentRequest: {
           checkinRequestId: strangerRequestId,
-          status: "already_checked_in",
+          status: "rejected",
         },
+      });
+      const freshRequestId = await pendingRequestId(strangerPhone, {
+        ...peter,
+        lastName: `${peter.lastName} B`,
+      });
+      expect(freshRequestId).not.toBe(strangerRequestId);
+      expect(await openPageFor(strangerPhone)).toMatchObject({
+        currentRequest: { checkinRequestId: freshRequestId, status: "pending" },
       });
     });
 
     it("returns the same pending request when the same phone submits twice", async () => {
       const phone = newPhone();
-      const firstRequestId = await pendingRequestId(
+      const firstRequestId = await pendingRequestId(phone, playerInput("Pia"));
+      const secondRequestId = await pendingRequestId(
         phone,
-        memberInput("peter"),
+        playerInput("Pia", "advanced"),
       );
-      const secondRequestId = await pendingRequestId(phone, {
-        kind: "guest",
-        firstName: "Peter",
-        lastName: "Changed",
-        skillLevel: "advanced",
-      });
       expect(secondRequestId).toBe(firstRequestId);
 
       const { data, error } = await admin
@@ -543,56 +410,40 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
         .eq("session_id", riversideSessionId)
         .eq(
           "device_token_hash",
-          sha256Hex(phone.cookieJar.get(DEVICE_COOKIE_NAME)!),
+          sha256Hex(
+            phone.cookieJar.get(`checkin_session_${riversideSessionId}`)!,
+          ),
         )
         .eq("status", "pending");
       if (error) throw error;
       expect(data).toEqual([{ id: firstRequestId }]);
     });
 
-    it("sends a guest with an optional level change kept for the host", async () => {
+    it("stores the player's names (trimmed) and level", async () => {
       const phone = newPhone();
       const requestId = await pendingRequestId(phone, {
-        kind: "guest",
         firstName: "  Kai ",
         lastName: "Moreno",
         skillLevel: "intermediate",
       });
       const { data, error } = await admin
         .from("checkin_requests")
-        .select("member_id, first_name, last_name, skill_level")
+        .select("first_name, last_name, skill_level")
         .eq("id", requestId)
         .single();
       if (error) throw error;
       expect(data).toEqual({
-        member_id: null,
         first_name: "Kai",
         last_name: "Moreno",
         skill_level: "intermediate",
       });
-
-      const pennyPhone = newPhone();
-      const pennyRequestId = await pendingRequestId(pennyPhone, {
-        ...memberInput("penny"),
-        updatedSkillLevel: "advanced",
-      });
-      const { data: pennyRow } = await admin
-        .from("checkin_requests")
-        .select("member_id, skill_level")
-        .eq("id", pennyRequestId)
-        .single();
-      expect(pennyRow).toEqual({
-        member_id: memberIds.penny,
-        skill_level: "advanced",
-      });
     });
 
-    it("returns the guest form's field errors without calling the database", async () => {
+    it("returns the form's field errors without calling the database", async () => {
       const phone = newPhone();
       actAsPhone(phone);
       expect(
         await submitCheckin(riversideTag, {
-          kind: "guest",
           firstName: "",
           lastName: "Moreno",
           skillLevel: null,
@@ -609,46 +460,49 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
       expect(phone.cookieJar.size).toBe(0);
     });
 
-    it("refuses another social's member id without creating a request", async () => {
+    it("refuses an obsolete member-era submit without creating a request", async () => {
       const phone = newPhone();
       actAsPhone(phone);
       expect(
         await submitCheckin(riversideTag, {
           kind: "member",
-          memberId: otherSocialMemberId,
-          firstName: "Peter",
-          lastName: "Other",
+          memberId: randomUUID(),
+          firstName: "Old",
+          lastName: "Page",
           updatedSkillLevel: null,
         }),
-      ).toEqual({ ok: true, outcome: { status: "member_not_found" } });
+      ).toMatchObject({ ok: false, failure: "invalid_input" });
       const { data, error } = await admin
         .from("checkin_requests")
         .select("id")
-        .eq("member_id", otherSocialMemberId);
+        .eq("session_id", riversideSessionId)
+        .eq("first_name", "Old")
+        .eq("last_name", "Page");
       if (error) throw error;
       expect(data).toEqual([]);
     });
 
     it("tells an inactive link from a social with nothing open", async () => {
       actAsPhone(newPhone());
-      expect(await submitCheckin(UNKNOWN_TAG, memberInput("peter"))).toEqual({
+      expect(await submitCheckin(UNKNOWN_TAG, playerInput("Nobody"))).toEqual({
         ok: false,
         failure: "inactive",
       });
-      expect(await submitCheckin(quietSocialTag, memberInput("peter"))).toEqual(
-        { ok: false, failure: "no_open_session" },
-      );
+      expect(
+        await submitCheckin(quietSocialTag, playerInput("Nobody")),
+      ).toEqual({ ok: false, failure: "no_open_session" });
     });
 
     it("maps the per-phone rate limit to rate_limited", async () => {
       // submit_checkin allows 10 submits per phone in the window.
       const phone = newPhone();
       actAsPhone(phone);
+      const penny = playerInput("Penny");
       for (let attempt = 1; attempt <= 10; attempt += 1) {
-        const result = await submitCheckin(riversideTag, memberInput("penny"));
+        const result = await submitCheckin(riversideTag, penny);
         expect(result.ok).toBe(true);
       }
-      expect(await submitCheckin(riversideTag, memberInput("penny"))).toEqual({
+      expect(await submitCheckin(riversideTag, penny)).toEqual({
         ok: false,
         failure: "rate_limited",
       });
@@ -659,29 +513,28 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
     it("ensureCheckinDevice sets the device cookie once, before any submit", async () => {
       const phone = newPhone();
       actAsPhone(phone);
-      await ensureCheckinDevice();
-      const deviceToken = phone.cookieJar.get(DEVICE_COOKIE_NAME);
+      await ensureCheckinDevice(riversideTag);
+      const deviceToken = phone.cookieJar.get(
+        `checkin_session_${riversideSessionId}`,
+      );
       expect(deviceToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
       expect(phone.lastCookieOptions).toMatchObject({
         httpOnly: true,
         secure: false,
         sameSite: "lax",
-        path: "/t",
+        path: `/t/${riversideTag}`,
       });
       phone.lastCookieOptions = null;
-      await ensureCheckinDevice();
-      expect(phone.cookieJar.get(DEVICE_COOKIE_NAME)).toBe(deviceToken);
+      await ensureCheckinDevice(riversideTag);
+      expect(phone.cookieJar.get(`checkin_session_${riversideSessionId}`)).toBe(
+        deviceToken,
+      );
       expect(phone.lastCookieOptions).toBeNull();
 
       // A submit retried after a lost answer is the same phone: same request.
-      const guest = {
-        kind: "guest" as const,
-        firstName: "Retry",
-        lastName: "Twice",
-        skillLevel: "beginner" as const,
-      };
-      const firstRequestId = await pendingRequestId(phone, guest);
-      expect(await pendingRequestId(phone, guest)).toBe(firstRequestId);
+      const player = playerInput("Retry");
+      const firstRequestId = await pendingRequestId(phone, player);
+      expect(await pendingRequestId(phone, player)).toBe(firstRequestId);
     });
 
     it("marks the device cookie Secure in production", async () => {
@@ -689,63 +542,27 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
       try {
         const phone = newPhone();
         actAsPhone(phone);
-        await ensureCheckinDevice();
+        await ensureCheckinDevice(riversideTag);
         expect(phone.lastCookieOptions).toMatchObject({ secure: true });
       } finally {
         vi.stubEnv("NODE_ENV", "test");
       }
     });
 
-    it("stores a member's own name, whatever name the phone sends", async () => {
-      const phone = newPhone();
-      const requestId = await pendingRequestId(phone, {
-        ...memberInput("penny"),
-        firstName: "Alice",
-        lastName: "Smith",
-      });
-      const { data, error } = await admin
-        .from("checkin_requests")
-        .select("member_id, first_name, last_name")
-        .eq("id", requestId)
-        .single();
-      if (error) throw error;
-      expect(data).toEqual({
-        member_id: memberIds.penny,
-        first_name: "Penny",
-        last_name: "Ward",
-      });
-
-      const { data: tray, error: trayError } = await admin.rpc(
-        "list_checkin_requests_for_open_session",
-        { p_actor_user_id: managerUserId },
-      );
-      if (trayError) throw trayError;
-      const trayRow = tray.find((row) => row.id === requestId);
-      expect(trayRow).toMatchObject({
-        member_id: memberIds.penny,
-        first_name: "Penny",
-        last_name: "Ward",
-      });
-      expect(tray.some((row) => row.first_name === "Alice")).toBe(false);
-    });
-
     it("never shows one phone's request to another phone", async () => {
       const firstPhone = newPhone();
-      const requestId = await pendingRequestId(firstPhone, {
-        kind: "guest",
-        firstName: "Private",
-        lastName: "Person",
-        skillLevel: "beginner",
-      });
+      const requestId = await pendingRequestId(
+        firstPhone,
+        playerInput("Private"),
+      );
       expect(await openPageFor(firstPhone)).toMatchObject({
         currentRequest: { checkinRequestId: requestId },
       });
 
       const secondPhone = newPhone();
       actAsPhone(secondPhone);
-      await ensureCheckinDevice();
+      await ensureCheckinDevice(riversideTag);
       expect(await openPageFor(secondPhone)).toMatchObject({
-        recognisedMember: null,
         currentRequest: null,
       });
     });
@@ -753,21 +570,92 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
     it("maps the per-network rate limit to rate_limited", async () => {
       // submit_checkin allows 30 submits per network (IP) in the window.
       const sharedIp = newPhone().clientIp;
+      const penny = playerInput("Penny");
       for (let phoneNumber = 1; phoneNumber <= 3; phoneNumber += 1) {
         const phone = { ...newPhone(), clientIp: sharedIp };
         actAsPhone(phone);
         for (let attempt = 1; attempt <= 10; attempt += 1) {
-          expect(
-            (await submitCheckin(riversideTag, memberInput("penny"))).ok,
-          ).toBe(true);
+          expect((await submitCheckin(riversideTag, penny)).ok).toBe(true);
         }
       }
       actAsPhone({ ...newPhone(), clientIp: sharedIp });
-      expect(await submitCheckin(riversideTag, memberInput("penny"))).toEqual({
+      expect(await submitCheckin(riversideTag, penny)).toEqual({
         ok: false,
         failure: "rate_limited",
       });
     });
+  });
+
+  it("refuses session turnover before the action and between preflight and RPC without writing a request", async () => {
+    const phone = newPhone();
+    actAsPhone(phone);
+    await ensureCheckinDevice(riversideTag);
+    const originalFetch = checkinPageModule.fetchCheckinPage;
+    let replacementSessionId: string | undefined;
+    const spy = vi.spyOn(checkinPageModule, "fetchCheckinPage");
+    spy.mockImplementationOnce(async (tag, hash) => {
+      const oldPage = await originalFetch(tag, hash);
+      const { data: old, error } = await admin
+        .from("sessions")
+        .select("social_id, host_id, host_name, planned_start, planned_end")
+        .eq("id", riversideSessionId)
+        .single();
+      if (error) throw error;
+      const cancelled = await admin
+        .from("sessions")
+        .update({ status: "cancelled" })
+        .eq("id", riversideSessionId);
+      if (cancelled.error) throw cancelled.error;
+      const created = await admin
+        .from("sessions")
+        .insert({ ...old, name: "Replacement session" })
+        .select("id")
+        .single();
+      if (created.error) throw created.error;
+      replacementSessionId = created.data.id;
+      return oldPage;
+    });
+    try {
+      expect(
+        await submitCheckin(riversideTag, playerInput("Turnover")),
+      ).toEqual({ ok: false, failure: "session_changed" });
+      spy.mockRestore();
+      // A stale rendered form is rejected even when B is already open before the action starts.
+      expect(await submitCheckin(riversideTag, playerInput("Stale"))).toEqual({
+        ok: false,
+        failure: "session_changed",
+      });
+      const { data, error } = await admin
+        .from("checkin_requests")
+        .select("id")
+        .eq("session_id", replacementSessionId!);
+      if (error) throw error;
+      expect(data).toEqual([]);
+      expect(
+        phone.cookieJar.has(`checkin_session_${replacementSessionId}`),
+      ).toBe(false);
+      const freshPage = await openPageFor(phone);
+      expect(freshPage.session.sessionId).toBe(replacementSessionId);
+      expect(freshPage.currentRequest).toBeNull();
+      await ensureCheckinDevice(riversideTag);
+      expect(
+        phone.cookieJar.get(`checkin_session_${replacementSessionId}`),
+      ).not.toBe(phone.cookieJar.get(`checkin_session_${riversideSessionId}`));
+    } finally {
+      spy.mockRestore();
+      if (replacementSessionId) {
+        const cancelled = await admin
+          .from("sessions")
+          .update({ status: "cancelled" })
+          .eq("id", replacementSessionId);
+        if (cancelled.error) throw cancelled.error;
+      }
+      const restored = await admin
+        .from("sessions")
+        .update({ status: "draft" })
+        .eq("id", riversideSessionId);
+      if (restored.error) throw restored.error;
+    }
   });
 
   describe("the publishable (anon) key", () => {
@@ -779,8 +667,7 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
       );
       for (const table of [
         "checkin_requests",
-        "member_devices",
-        "members",
+        "session_participants",
         "socials",
         "sessions",
         "checkin_attempts",
@@ -793,15 +680,9 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
         p_device_token_hash: sha256Hex("anything"),
       });
       expect(page.error).not.toBeNull();
-      const search = await anonClient.rpc("search_checkin_names", {
-        p_checkin_tag: riversideTag,
-        p_name_query: "pe",
-        p_device_token_hash: sha256Hex("anything"),
-        p_ip_hash: sha256Hex("anything"),
-      });
-      expect(search.error).not.toBeNull();
       const submit = await anonClient.rpc("submit_checkin", {
         p_checkin_tag: riversideTag,
+        p_expected_session_id: riversideSessionId,
         p_device_token_hash: sha256Hex("anything"),
         p_ip_hash: sha256Hex("anything"),
         p_first_name: "Anon",

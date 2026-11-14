@@ -1,34 +1,32 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  addDraftParticipant,
   readSessionDraft,
-  setDraftMemberAttendance,
+  removeDraftParticipant,
   type ReadSessionDraftResult,
 } from "@/server/setup/setupActions";
 import type { DraftParticipant, SessionDraft } from "@/server/setup/setupDraft";
 import { useDraftAttendance } from "./useDraftAttendance";
 
 vi.mock("@/server/setup/setupActions", () => ({
-  setDraftMemberAttendance: vi.fn(),
-  addDraftGuest: vi.fn(),
-  removeDraftGuest: vi.fn(),
+  addDraftParticipant: vi.fn(),
+  removeDraftParticipant: vi.fn(),
   readSessionDraft: vi.fn(),
 }));
 
 const readSessionDraftMock = vi.mocked(readSessionDraft);
-const setAttendanceMock = vi.mocked(setDraftMemberAttendance);
+const addParticipantMock = vi.mocked(addDraftParticipant);
+const removeParticipantMock = vi.mocked(removeDraftParticipant);
 
 const SESSION_ID = "d0000000-0000-4000-8000-000000000001";
 
 function attendee(index: number, firstName: string): DraftParticipant {
   return {
     participantId: `e0000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-    memberId: `b0000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-    isGuest: false,
     firstName,
     lastName: "Player",
     skillLevel: "beginner",
-    isMemberActive: true,
   };
 }
 
@@ -44,14 +42,93 @@ function draftRead(participants: DraftParticipant[]): ReadSessionDraftResult {
 }
 
 function renderAttendance(initialParticipants: DraftParticipant[]) {
-  return renderHook(() =>
-    useDraftAttendance(SESSION_ID, initialParticipants, []),
-  );
+  return renderHook(() => useDraftAttendance(SESSION_ID, initialParticipants));
 }
 
 beforeEach(() => {
   readSessionDraftMock.mockReset();
-  setAttendanceMock.mockReset();
+  addParticipantMock.mockReset();
+  removeParticipantMock.mockReset();
+});
+
+describe("useDraftAttendance: writes", () => {
+  it("adds a player with the level and shows the server's list", async () => {
+    addParticipantMock.mockResolvedValue({
+      ok: true,
+      participants: [grace, kai],
+    });
+    const { result } = renderAttendance([grace]);
+    await act(async () =>
+      result.current.queueChange({
+        change: {
+          kind: "addParticipant",
+          participantId: kai.participantId,
+          participant: {
+            firstName: "Kai",
+            lastName: "Player",
+            skillLevel: "beginner",
+          },
+        },
+        description: "Adding Kai Player",
+      }),
+    );
+    expect(addParticipantMock).toHaveBeenCalledWith({
+      sessionId: SESSION_ID,
+      participantId: kai.participantId,
+      firstName: "Kai",
+      lastName: "Player",
+      skillLevel: "beginner",
+    });
+    expect(result.current.participants).toEqual([grace, kai]);
+  });
+
+  it("keeps a refused add for Retry with the server's message (e.g. a name clash)", async () => {
+    addParticipantMock.mockResolvedValue({
+      ok: false,
+      message: "Someone named Grace Player is already in this session.",
+    });
+    const { result } = renderAttendance([grace]);
+    await act(async () =>
+      result.current.queueChange({
+        change: {
+          kind: "addParticipant",
+          participantId: "e0000000-0000-4000-8000-000000000099",
+          participant: {
+            firstName: "Grace",
+            lastName: "Player",
+            skillLevel: "beginner",
+          },
+        },
+        description: "Adding Grace Player",
+      }),
+    );
+    expect(result.current.participants).toEqual([grace]);
+    expect(result.current.failures).toMatchObject([
+      {
+        description: "Adding Grace Player",
+        message: "Someone named Grace Player is already in this session.",
+      },
+    ]);
+  });
+
+  it("removes any player through removeDraftParticipant", async () => {
+    removeParticipantMock.mockResolvedValue({ ok: true, participants: [kai] });
+    const { result } = renderAttendance([grace, kai]);
+    await act(async () =>
+      result.current.queueChange({
+        change: {
+          kind: "removeParticipant",
+          participantId: grace.participantId,
+        },
+        description: "Removing Grace Player",
+      }),
+    );
+    expect(removeParticipantMock).toHaveBeenCalledWith({
+      sessionId: SESSION_ID,
+      participantId: grace.participantId,
+    });
+    expect(result.current.participants).toEqual([kai]);
+  });
 });
 
 describe("useDraftAttendance: check-ins", () => {
@@ -91,14 +168,13 @@ describe("useDraftAttendance: check-ins", () => {
   });
 
   it("skips a re-read while a write is on its way (its answer brings the list)", async () => {
-    setAttendanceMock.mockReturnValue(new Promise(() => {}));
+    removeParticipantMock.mockReturnValue(new Promise(() => {}));
     const { result } = renderAttendance([grace]);
     act(() =>
       result.current.queueChange({
         change: {
-          kind: "setMembers",
-          memberIds: [grace.memberId!],
-          attending: false,
+          kind: "removeParticipant",
+          participantId: grace.participantId,
         },
         description: "Removing Grace",
       }),

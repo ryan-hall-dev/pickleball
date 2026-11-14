@@ -17,8 +17,6 @@ insert into public.hosts (user_id, display_name, role, social_id) values
   ('a7000000-0000-4000-8000-000000000001', 'Owner Host', 'host', '50000000-0000-4000-8000-000000000007'),
   ('a7000000-0000-4000-8000-000000000004', 'Co Host', 'host', '50000000-0000-4000-8000-000000000007'),
   ('a7000000-0000-4000-8000-000000000002', 'Other Host', 'host', '50000000-0000-4000-8000-000000000017');
-insert into public.members (social_id, id, first_name, last_name) values
-  ('50000000-0000-4000-8000-000000000007', 'b7000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
 insert into public.sessions (id, social_id, host_id, name, host_name, planned_start, planned_end, status, started_at, config_snapshot) values
   -- The owner's draft, with a key another setup step owns.
   ('d7000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000007', 'a7000000-0000-4000-8000-000000000001', 'Draft', 'Owner Host',
@@ -139,8 +137,8 @@ select results_eq(
 );
 -- Attendance is reconciled separately: it never bumps the settings revision.
 select lives_ok(
-  $$select public.set_draft_member_attendance('a7000000-0000-4000-8000-000000000001', 'd7000000-0000-4000-8000-000000000001',
-    array['b7000000-0000-4000-8000-000000000001']::uuid[], true)$$,
+  $$select public.add_draft_participant('a7000000-0000-4000-8000-000000000001', 'd7000000-0000-4000-8000-000000000001',
+    gen_random_uuid(), 'Grace', 'Kim', 'advanced')$$,
   'attendance changes on the same draft'
 );
 select is(

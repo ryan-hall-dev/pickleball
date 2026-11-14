@@ -2,16 +2,17 @@
 -- own social and its hosts; a host never moves to another social; a social
 -- with hosts keeps a manager (checked at commit); the check-in tag belongs to
 -- the social; create_social_with_manager is atomic and service_role only.
--- The directory (A2): members, member phones and courts belong to one social;
--- reads, check-in search/submit/approve and draft attendance never cross
--- socials; per-social uniques; composite FK for phones.
+-- The directory (A2): courts belong to one social; reads, check-in
+-- submit/approve and draft attendance never cross socials; per-social
+-- uniques. (Members and member phones were removed by session-only
+-- participants, 20261112090000.)
 -- Sessions (A3): saved setups, sessions, participants, check-in requests, the
 -- log and match rows belong to one social; reads and every write function
 -- stay within the actor's social; composite FKs refuse cross-social links;
 -- one open session per social; setup names unique per social.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(121);
+select plan(95);
 
 insert into auth.users (id, email) values
   ('a1100000-0000-4000-8000-000000000001', 'pgtap-manager-a@example.test'),
@@ -51,20 +52,14 @@ insert into public.saved_setups (id, social_id, host_id, name, config) values
   ('f1100000-0000-4000-8000-00000000000a', '51100000-0000-4000-8000-00000000000a', 'a1100000-0000-4000-8000-000000000002', 'Tuesday', '{}'),
   ('f1100000-0000-4000-8000-00000000000b', '51100000-0000-4000-8000-00000000000b', 'a1100000-0000-4000-8000-000000000004', 'Tuesday', '{}');
 
--- The directory: in A and B a member named Grace K..., the same phone, and a
--- "Court 1" each (B's phone and court are inserted by the checks below).
-insert into public.members (id, social_id, first_name, last_name, skill_level) values
-  ('b1100000-0000-4000-8000-00000000000a', '51100000-0000-4000-8000-00000000000a', 'Grace', 'Kim', 'advanced'),
-  ('b1100000-0000-4000-8000-00000000000b', '51100000-0000-4000-8000-00000000000b', 'Grace', 'Kimball', 'beginner');
-insert into public.member_devices (social_id, token_hash, member_id) values
-  ('51100000-0000-4000-8000-00000000000a', repeat('d', 64), 'b1100000-0000-4000-8000-00000000000a');
+-- The directory: a "Court 1" each (B's court is inserted by the checks below).
 insert into public.courts (id, social_id, name) values
   ('c1100000-0000-4000-8000-00000000000a', '51100000-0000-4000-8000-00000000000a', 'Court 1');
 -- A's draft: Grace attends and a first-timer waits for approval. B's live
 -- session: Grace K. attends, one logged event and one match row.
-insert into public.session_participants (id, session_id, social_id, member_id, first_name, last_name) values
-  ('e1100000-0000-4000-8000-00000000000a', 'd1100000-0000-4000-8000-000000000001', '51100000-0000-4000-8000-00000000000a', 'b1100000-0000-4000-8000-00000000000a', 'Grace', 'Kim'),
-  ('e1100000-0000-4000-8000-00000000000b', 'd1100000-0000-4000-8000-000000000003', '51100000-0000-4000-8000-00000000000b', 'b1100000-0000-4000-8000-00000000000b', 'Grace', 'Kimball');
+insert into public.session_participants (id, session_id, social_id, first_name, last_name, skill_level) values
+  ('e1100000-0000-4000-8000-00000000000a', 'd1100000-0000-4000-8000-000000000001', '51100000-0000-4000-8000-00000000000a', 'Grace', 'Kim', 'advanced'),
+  ('e1100000-0000-4000-8000-00000000000b', 'd1100000-0000-4000-8000-000000000003', '51100000-0000-4000-8000-00000000000b', 'Grace', 'Kimball', 'beginner');
 insert into public.checkin_requests (id, session_id, social_id, first_name, last_name, skill_level, device_token_hash, ip_hash) values
   ('c2100000-0000-4000-8000-00000000000a', 'd1100000-0000-4000-8000-000000000001', '51100000-0000-4000-8000-00000000000a', 'Paula', 'Pending', 'beginner', repeat('5', 64), repeat('2', 64));
 insert into public.session_events (session_id, seq, event_id, type, payload, occurred_at, actor_user_id) values
@@ -77,20 +72,16 @@ insert into public.matches (id, session_id, court_id, court_name, team_a, team_b
 -- Schema ----------------------------------------------------------------------
 select col_type_is('public', 'hosts', 'social_id', 'uuid', 'hosts.social_id is a uuid');
 select col_not_null('public', 'hosts', 'social_id', 'every host belongs to a social');
-select col_not_null('public', 'members', 'social_id', 'every member belongs to a social');
-select col_not_null('public', 'member_devices', 'social_id', 'every member phone belongs to a social');
+select hasnt_column('public', 'session_participants', 'member_id', 'participants link to no member');
+select hasnt_column('public', 'session_participants', 'is_guest', 'participants have no guest flag');
+select hasnt_column('public', 'checkin_requests', 'member_id', 'check-in requests name no member');
 select col_not_null('public', 'courts', 'social_id', 'every court belongs to a social');
 select is(
   (select count(*) from pg_policies
-   where schemaname = 'public' and tablename in ('socials', 'hosts', 'members', 'courts')
+   where schemaname = 'public' and tablename in ('socials', 'hosts', 'courts')
      and qual like '%current_social_id%'),
-  4::bigint,
-  'the socials, hosts, members and courts policies compare against current_social_id'
-);
-select is(
-  (select count(*) from pg_policies where schemaname = 'public' and tablename = 'member_devices'),
-  0::bigint,
-  'member_devices has no read policy'
+  3::bigint,
+  'the socials, hosts and courts policies compare against current_social_id'
 );
 select is(
   (select array_agg(tablename::text order by tablename) from pg_tables as public_table
@@ -116,39 +107,17 @@ select fk_ok(
   'a participant belongs to a session of its own social'
 );
 select fk_ok(
-  'public', 'session_participants', array['member_id', 'social_id'],
-  'public', 'members', array['id', 'social_id'],
-  'a participant links only to a member of its own social'
-);
-select fk_ok(
   'public', 'checkin_requests', array['session_id', 'social_id'],
   'public', 'sessions', array['id', 'social_id'],
   'a check-in request belongs to a session of its own social'
 );
-select fk_ok(
-  'public', 'checkin_requests', array['member_id', 'social_id'],
-  'public', 'members', array['id', 'social_id'],
-  'a check-in request names only a member of its own social'
-);
 select is(
   (select count(*) from pg_constraint
    where conrelid in ('public.session_participants'::regclass, 'public.checkin_requests'::regclass)
-     and contype = 'f' and confrelid in ('public.sessions'::regclass, 'public.members'::regclass)
+     and contype = 'f' and confrelid = 'public.sessions'::regclass
      and cardinality(conkey) = 1),
   0::bigint,
   'the composite FKs replaced the single-column ones (no ambiguous PostgREST embed)'
-);
-select col_is_pk('public', 'member_devices', array['social_id', 'token_hash'], 'a phone is recognised per social');
-select fk_ok(
-  'public', 'member_devices', array['member_id', 'social_id'],
-  'public', 'members', array['id', 'social_id'],
-  'a phone links only to a member of its own social'
-);
-select is(
-  (select count(*) from pg_constraint
-   where conrelid = 'public.member_devices'::regclass and contype = 'f'),
-  1::bigint,
-  'the composite FK replaced the single-column one (no ambiguous PostgREST embed)'
 );
 
 -- Reads: each host sees exactly their own social and its hosts -----------------
@@ -162,16 +131,10 @@ select set_eq(
   'host A sees only social A''s hosts'
 );
 select results_eq(
-  'select id from public.members',
-  $$values ('b1100000-0000-4000-8000-00000000000a'::uuid)$$,
-  'host A sees only social A''s members'
-);
-select results_eq(
   'select id from public.courts',
   $$values ('c1100000-0000-4000-8000-00000000000a'::uuid)$$,
   'host A sees only social A''s courts'
 );
-select throws_ok('select * from public.member_devices', '42501', null, 'host A cannot read member phones');
 select results_eq('select id from public.saved_setups', $$values ('f1100000-0000-4000-8000-00000000000a'::uuid)$$,
   'host A sees only social A''s saved setups');
 select results_eq('select id from public.sessions', $$values ('d1100000-0000-4000-8000-000000000001'::uuid)$$,
@@ -193,11 +156,6 @@ select set_eq(
   'manager A sees only social A''s hosts'
 );
 select results_eq(
-  'select id from public.members',
-  $$values ('b1100000-0000-4000-8000-00000000000a'::uuid)$$,
-  'manager A sees only social A''s members'
-);
-select results_eq(
   'select id from public.courts',
   $$values ('c1100000-0000-4000-8000-00000000000a'::uuid)$$,
   'manager A sees only social A''s courts'
@@ -213,11 +171,6 @@ select set_eq(
   'select user_id from public.hosts',
   $$values ('a1100000-0000-4000-8000-000000000003'::uuid), ('a1100000-0000-4000-8000-000000000004'::uuid)$$,
   'host B sees only social B''s hosts'
-);
-select results_eq(
-  'select id from public.members',
-  $$values ('b1100000-0000-4000-8000-00000000000b'::uuid)$$,
-  'host B sees only social B''s members'
 );
 select is_empty('select id from public.courts', 'host B sees none of A''s courts (B has none yet)');
 select results_eq('select id from public.saved_setups', $$values ('f1100000-0000-4000-8000-00000000000b'::uuid)$$,
@@ -238,7 +191,6 @@ set local role authenticated;
 select is(private.current_social_id(), null, 'a non-host has no current social');
 select is_empty('select * from public.socials', 'a non-host sees no socials');
 select is_empty('select * from public.hosts', 'a non-host sees no hosts');
-select is_empty('select * from public.members', 'a non-host sees no members');
 select is_empty('select * from public.courts', 'a non-host sees no courts');
 reset role;
 
@@ -252,40 +204,15 @@ select throws_ok(
   $$insert into public.courts (social_id, name) values ('51100000-0000-4000-8000-00000000000a', 'court 1')$$,
   '23505', null, 'a second "Court 1" (any case) within A is refused'
 );
-select lives_ok(
-  $$insert into public.member_devices (social_id, token_hash, member_id) values
-    ('51100000-0000-4000-8000-00000000000b', repeat('d', 64), 'b1100000-0000-4000-8000-00000000000b')$$,
-  'the same phone can be a different member in B'
-);
 select throws_ok(
-  $$insert into public.member_devices (social_id, token_hash, member_id) values
-    ('51100000-0000-4000-8000-00000000000a', repeat('d', 64), 'b1100000-0000-4000-8000-00000000000a')$$,
-  '23505', null, 'a phone is linked once per social'
-);
-select throws_ok(
-  $$insert into public.member_devices (social_id, token_hash, member_id) values
-    ('51100000-0000-4000-8000-00000000000a', repeat('e', 64), 'b1100000-0000-4000-8000-00000000000b')$$,
-  '23503', null, 'a phone in A cannot point at B''s member'
-);
-select throws_ok(
-  $$insert into public.session_participants (session_id, social_id, member_id, first_name, last_name) values
-    ('d1100000-0000-4000-8000-000000000001', '51100000-0000-4000-8000-00000000000a', 'b1100000-0000-4000-8000-00000000000b', 'Grace', 'Kimball')$$,
-  '23503', null, 'A''s session cannot list B''s member'
-);
-select throws_ok(
-  $$insert into public.session_participants (session_id, social_id, is_guest, first_name, last_name) values
-    ('d1100000-0000-4000-8000-000000000003', '51100000-0000-4000-8000-00000000000a', true, 'Gus', 'Guest')$$,
+  $$insert into public.session_participants (session_id, social_id, first_name, last_name, skill_level) values
+    ('d1100000-0000-4000-8000-000000000003', '51100000-0000-4000-8000-00000000000a', 'Gus', 'Guest', 'beginner')$$,
   '23503', null, 'a participant cannot claim A while joining B''s session'
 );
 select throws_ok(
   $$insert into public.checkin_requests (session_id, social_id, first_name, last_name, skill_level, device_token_hash, ip_hash) values
     ('d1100000-0000-4000-8000-000000000001', '51100000-0000-4000-8000-00000000000b', 'Rhea', 'Request', 'beginner', repeat('6', 64), repeat('2', 64))$$,
   '23503', null, 'a check-in request cannot claim B while asking for A''s session'
-);
-select throws_ok(
-  $$insert into public.checkin_requests (session_id, social_id, member_id, first_name, last_name, device_token_hash, ip_hash) values
-    ('d1100000-0000-4000-8000-000000000001', '51100000-0000-4000-8000-00000000000a', 'b1100000-0000-4000-8000-00000000000b', 'Grace', 'Kimball', repeat('6', 64), repeat('2', 64))$$,
-  '23503', null, 'a check-in request in A cannot name B''s member'
 );
 select throws_ok(
   $$insert into public.sessions (social_id, host_id, name, host_name, planned_start, planned_end) values
@@ -304,15 +231,6 @@ select throws_ok(
 );
 
 -- Directory rows never move to another social ----------------------------------------
-select throws_ok(
-  $$update public.members set social_id = '51100000-0000-4000-8000-00000000000b' where id = 'b1100000-0000-4000-8000-00000000000a'$$,
-  'P0001', 'SOCIAL_ID_IMMUTABLE', 'a member cannot be moved to another social'
-);
-select throws_ok(
-  $$update public.member_devices set social_id = '51100000-0000-4000-8000-00000000000b'
-    where social_id = '51100000-0000-4000-8000-00000000000a' and token_hash = repeat('d', 64)$$,
-  'P0001', 'SOCIAL_ID_IMMUTABLE', 'a member phone cannot be moved to another social'
-);
 select throws_ok(
   $$update public.courts set social_id = '51100000-0000-4000-8000-00000000000b' where id = 'c1100000-0000-4000-8000-00000000000a'$$,
   'P0001', 'SOCIAL_ID_IMMUTABLE', 'a court cannot be moved to another social'
@@ -335,75 +253,40 @@ select throws_ok(
 );
 
 -- Check-in and attendance stay within the session's social -----------------------------
-select results_eq(
-  $$select member_id from public.search_checkin_names('tagsociala00000001', 'grace k', repeat('1', 64), repeat('2', 64))$$,
-  $$values ('b1100000-0000-4000-8000-00000000000a'::uuid)$$,
-  'A''s tag searches only A''s members'
-);
-select results_eq(
-  $$select member_id from public.search_checkin_names('tagsocialb00000001', 'grace k', repeat('1', 64), repeat('2', 64))$$,
-  $$values ('b1100000-0000-4000-8000-00000000000b'::uuid)$$,
-  'B''s tag searches only B''s members'
-);
 select is(
-  public.submit_checkin('tagsociala00000001', repeat('3', 64), repeat('2', 64), 'Grace', 'Kimball', null,
-    'b1100000-0000-4000-8000-00000000000b') ->> 'status',
-  'member_not_found',
-  'A''s tag with B''s member answers member_not_found'
+  public.submit_checkin('tagsociala00000001', 'd1100000-0000-4000-8000-000000000001'::uuid, repeat('3', 64), repeat('2', 64), 'Grace', 'Kimball', 'beginner') ->> 'status',
+  'pending',
+  'A''s tag with the name of B''s participant gives an ordinary pending request'
 );
-select is(
-  (select count(*) from public.checkin_requests where device_token_hash = repeat('3', 64)),
-  0::bigint,
-  'and creates no request'
+select results_eq(
+  $$select social_id, session_id from public.checkin_requests where device_token_hash = repeat('3', 64)$$,
+  $$values ('51100000-0000-4000-8000-00000000000a'::uuid, 'd1100000-0000-4000-8000-000000000001'::uuid)$$,
+  'the request belongs to A''s open session'
 );
 
--- Host A's draft.
-select lives_ok(
-  $$select public.set_draft_member_attendance('a1100000-0000-4000-8000-000000000002', 'd1100000-0000-4000-8000-000000000001',
-    array['b1100000-0000-4000-8000-00000000000a', 'b1100000-0000-4000-8000-00000000000b']::uuid[], true)$$,
-  'attendance with A''s and B''s members'
-);
-select results_eq(
-  $$select member_id from public.session_participants where session_id = 'd1100000-0000-4000-8000-000000000001'$$,
-  $$values ('b1100000-0000-4000-8000-00000000000a'::uuid)$$,
-  'only A''s member joins A''s draft; B''s is skipped'
-);
-
--- Approving in A's draft: a new player (on the phone B also knows). A request
--- naming B's member can't exist in A (composite FK, checked above).
-insert into public.checkin_requests (id, session_id, social_id, member_id, first_name, last_name, skill_level, device_token_hash, ip_hash) values
-  ('c2100000-0000-4000-8000-000000000001', 'd1100000-0000-4000-8000-000000000001', '51100000-0000-4000-8000-00000000000a', null, 'Nina', 'New', 'beginner', repeat('d', 64), repeat('2', 64));
+-- Approving in A's draft: names are unique per session, never across socials.
 select is(
-  public.approve_checkin('a1100000-0000-4000-8000-000000000002', 'c2100000-0000-4000-8000-000000000001',
+  public.approve_checkin('a1100000-0000-4000-8000-000000000002',
+    (select id from public.checkin_requests where device_token_hash = repeat('3', 64)),
     'e2100000-0000-4000-8000-000000000001') ->> 'status',
   'approved',
-  'host A approves a new player'
+  'host A approves a name B''s session also has'
 );
 select results_eq(
-  $$select member.social_id from public.members as member
-    join public.checkin_requests as request on request.member_id = member.id
-    where request.id = 'c2100000-0000-4000-8000-000000000001'$$,
-  $$values ('51100000-0000-4000-8000-00000000000a'::uuid)$$,
-  'the new member joins A''s directory'
+  $$select social_id, session_id from public.session_participants where id = 'e2100000-0000-4000-8000-000000000001'$$,
+  $$values ('51100000-0000-4000-8000-00000000000a'::uuid, 'd1100000-0000-4000-8000-000000000001'::uuid)$$,
+  'the new participant joins A''s draft in A'
 );
 select results_eq(
-  $$select device.social_id, device.member_id = request.member_id from public.member_devices as device
-    cross join public.checkin_requests as request
-    where device.token_hash = repeat('d', 64) and request.id = 'c2100000-0000-4000-8000-000000000001'
-    order by device.social_id$$,
-  $$values ('51100000-0000-4000-8000-00000000000a'::uuid, true), ('51100000-0000-4000-8000-00000000000b'::uuid, false)$$,
-  'the phone now means the new member in A and still B''s member in B'
-);
-select results_eq(
-  $$select first_name::text, last_name::text, skill_level::text, last_checked_in_at from public.members
-    where id = 'b1100000-0000-4000-8000-00000000000b'$$,
-  $$values ('Grace', 'Kimball', 'beginner', null::timestamptz)$$,
-  'B''s member is unchanged'
+  $$select first_name::text, last_name::text, skill_level::text from public.session_participants
+    where id = 'e1100000-0000-4000-8000-00000000000b'$$,
+  $$values ('Grace', 'Kimball', 'beginner')$$,
+  'B''s participant is unchanged'
 );
 
 -- Only A's hosts decide A's requests; anyone else is told it doesn't exist.
-insert into public.checkin_requests (id, session_id, social_id, member_id, first_name, last_name, skill_level, device_token_hash, ip_hash) values
-  ('c2100000-0000-4000-8000-000000000003', 'd1100000-0000-4000-8000-000000000001', '51100000-0000-4000-8000-00000000000a', null, 'Pia', 'Pending', 'beginner', repeat('8', 64), repeat('2', 64));
+insert into public.checkin_requests (id, session_id, social_id, first_name, last_name, skill_level, device_token_hash, ip_hash) values
+  ('c2100000-0000-4000-8000-000000000003', 'd1100000-0000-4000-8000-000000000001', '51100000-0000-4000-8000-00000000000a', 'Pia', 'Pending', 'beginner', repeat('8', 64), repeat('2', 64));
 select throws_ok(
   $$select public.approve_checkin('a1100000-0000-4000-8000-000000000004', 'c2100000-0000-4000-8000-000000000003',
     'e2100000-0000-4000-8000-000000000003')$$,
@@ -414,20 +297,10 @@ select throws_ok(
   'P0002', 'CHECKIN_REQUEST_NOT_FOUND', 'host B cannot reject A''s request (it looks missing)'
 );
 select results_eq(
-  $$select status::text, decided_by, member_id, session_participant_id from public.checkin_requests
+  $$select status::text, decided_by, session_participant_id from public.checkin_requests
     where id = 'c2100000-0000-4000-8000-000000000003'$$,
-  $$values ('pending', null::uuid, null::uuid, null::uuid)$$,
+  $$values ('pending', null::uuid, null::uuid)$$,
   'A''s request is still pending and undecided'
-);
-select is(
-  (select count(*) from public.member_devices where token_hash = repeat('8', 64)),
-  0::bigint,
-  'no phone was linked'
-);
-select is(
-  (select count(*) from public.members where social_id = '51100000-0000-4000-8000-00000000000a'),
-  2::bigint,
-  'A''s directory is unchanged (Grace and the approved Nina)'
 );
 select is(
   (select count(*) from public.session_participants where session_id = 'd1100000-0000-4000-8000-000000000001'),
@@ -459,9 +332,9 @@ select throws_ok(
   'P0002', 'SESSION_NOT_FOUND', 'host A cannot start B''s session'
 );
 select throws_ok(
-  $$select public.add_guest_mid_session('a1100000-0000-4000-8000-000000000002', 'd1100000-0000-4000-8000-000000000003',
-    gen_random_uuid(), 'Gus', 'Guest', null, gen_random_uuid(), 1, now())$$,
-  'P0002', 'SESSION_NOT_FOUND', 'host A cannot add a guest to B''s live session'
+  $$select public.add_participant_mid_session('a1100000-0000-4000-8000-000000000002', 'd1100000-0000-4000-8000-000000000003',
+    gen_random_uuid(), 'Gus', 'Guest', 'beginner', gen_random_uuid(), 1, now())$$,
+  'P0002', 'SESSION_NOT_FOUND', 'host A cannot add a participant to B''s live session'
 );
 select throws_ok(
   $$select public.cancel_draft_session('a1100000-0000-4000-8000-000000000004', 'd1100000-0000-4000-8000-000000000001')$$,
@@ -477,19 +350,9 @@ select throws_ok(
   'P0002', 'DRAFT_NOT_OPEN', 'host B cannot save A''s draft'
 );
 select throws_ok(
-  $$select public.set_draft_member_attendance('a1100000-0000-4000-8000-000000000004', 'd1100000-0000-4000-8000-000000000001',
-    array['b1100000-0000-4000-8000-00000000000a']::uuid[], false)$$,
-  'P0002', 'DRAFT_NOT_OPEN', 'host B cannot change A''s attendance'
-);
-select throws_ok(
-  $$select public.add_draft_guest('a1100000-0000-4000-8000-000000000004', 'd1100000-0000-4000-8000-000000000001',
-    gen_random_uuid(), 'Gus', 'Guest', null)$$,
-  'P0002', 'DRAFT_NOT_OPEN', 'host B cannot add a guest to A''s draft'
-);
-select throws_ok(
-  $$select public.remove_draft_guest('a1100000-0000-4000-8000-000000000004', 'd1100000-0000-4000-8000-000000000001',
-    'e1100000-0000-4000-8000-00000000000a')$$,
-  'P0002', 'DRAFT_NOT_OPEN', 'host B cannot remove anyone from A''s draft'
+  $$select public.add_draft_participant('a1100000-0000-4000-8000-000000000004', 'd1100000-0000-4000-8000-000000000001',
+    gen_random_uuid(), 'Gus', 'Guest', 'beginner')$$,
+  'P0002', 'DRAFT_NOT_OPEN', 'host B cannot add a participant to A''s draft'
 );
 select throws_ok(
   $$select public.apply_saved_setup('a1100000-0000-4000-8000-000000000002', 'd1100000-0000-4000-8000-000000000001',

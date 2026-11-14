@@ -1,12 +1,10 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { ActiveMemberChoice } from "@/server/members/memberDirectory";
 import {
-  addDraftGuest,
+  addDraftParticipant,
   readSessionDraft,
-  removeDraftGuest,
-  setDraftMemberAttendance,
+  removeDraftParticipant,
   type DraftAttendanceResult,
 } from "@/server/setup/setupActions";
 import type { DraftParticipant } from "@/server/setup/setupDraft";
@@ -25,22 +23,16 @@ function submitAttendanceChange(
   change: AttendanceChange,
 ): Promise<DraftAttendanceResult> {
   switch (change.kind) {
-    case "setMembers":
-      return setDraftMemberAttendance({
-        sessionId,
-        memberIds: change.memberIds,
-        attending: change.attending,
-      });
-    case "addGuest":
-      return addDraftGuest({
+    case "addParticipant":
+      return addDraftParticipant({
         sessionId,
         participantId: change.participantId,
-        firstName: change.guest.firstName,
-        lastName: change.guest.lastName,
-        skillLevel: change.guest.skillLevel ?? "",
+        firstName: change.participant.firstName,
+        lastName: change.participant.lastName,
+        skillLevel: change.participant.skillLevel,
       });
-    case "removeGuest":
-      return removeDraftGuest({
+    case "removeParticipant":
+      return removeDraftParticipant({
         sessionId,
         participantId: change.participantId,
       });
@@ -60,7 +52,6 @@ function submitAttendanceChange(
 export function useDraftAttendance(
   sessionId: string,
   initialParticipants: DraftParticipant[],
-  activeMembers: readonly ActiveMemberChoice[],
 ) {
   const [savedParticipants, setSavedParticipants] =
     useState(initialParticipants);
@@ -77,11 +68,6 @@ export function useDraftAttendance(
   const savedListVersionRef = useRef(0);
   /** The newest re-read started; an earlier one answering later is dropped. */
   const latestRereadRef = useRef(0);
-
-  const activeMembersById = useMemo(
-    () => new Map(activeMembers.map((member) => [member.id, member])),
-    [activeMembers],
-  );
 
   const writeQueuedChanges = useCallback(async () => {
     if (isWritingRef.current) return;
@@ -106,17 +92,13 @@ export function useDraftAttendance(
       } else {
         // Saved: keep showing it, and ask for a reload to see the real list.
         setSavedParticipants((currentParticipants) =>
-          applyAttendanceChange(
-            currentParticipants,
-            queued.change,
-            activeMembersById,
-          ),
+          applyAttendanceChange(currentParticipants, queued.change),
         );
         setRefreshProblem(result.message);
       }
     }
     isWritingRef.current = false;
-  }, [sessionId, activeMembersById]);
+  }, [sessionId]);
 
   const queueChange = useCallback(
     (queued: QueuedAttendanceChange) => {
@@ -184,14 +166,10 @@ export function useDraftAttendance(
     () =>
       queuedChanges.reduce(
         (currentParticipants, queued) =>
-          applyAttendanceChange(
-            currentParticipants,
-            queued.change,
-            activeMembersById,
-          ),
+          applyAttendanceChange(currentParticipants, queued.change),
         savedParticipants,
       ),
-    [queuedChanges, savedParticipants, activeMembersById],
+    [queuedChanges, savedParticipants],
   );
 
   return {

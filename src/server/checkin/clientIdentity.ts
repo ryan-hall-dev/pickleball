@@ -32,7 +32,7 @@ export function hashClientIp(clientIp: string): string {
 
 /**
  * SHA-256 of the random device token from the player's cookie (lowercase hex),
- * the form stored in member_devices and checkin_requests.
+ * the form stored in checkin_requests.
  */
 export function hashDeviceToken(deviceToken: string): string {
   if (deviceToken === "") {

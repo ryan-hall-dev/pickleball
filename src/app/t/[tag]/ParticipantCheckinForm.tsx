@@ -9,62 +9,60 @@ import {
 } from "@/components/controlStyles";
 import type { OpenCheckinPage } from "@/server/checkin/checkinResults";
 import {
-  validateGuestForm,
-  type GuestCheckinInput,
-  type GuestFormFieldErrors,
-  type GuestFormValues,
+  validateCheckinForm,
+  type ParticipantCheckinInput,
+  type CheckinFormFieldErrors,
+  type CheckinFormValues,
 } from "@/server/checkin/checkinRules";
-import { CheckMarkIcon, ChevronIcon } from "./CheckinIcons";
+import { CheckMarkIcon } from "./CheckinIcons";
 import {
   BrandLine,
   HOST_APPROVES_NOTE,
   InfoNotice,
   SkillLevelOptions,
 } from "./CheckinParts";
-import { formatCheckinSessionWhen } from "./checkinHeaderFormatting";
+import { LiveSessionCard } from "./LiveSessionCard";
 import { BOTTOM_ACTION_BAR_CLASS_NAME } from "./checkinStyles";
 
-const FORM_ID = "checkin-guest-form";
+const FORM_ID = "checkin-participant-form";
 const FIELD_IDS = {
-  firstName: "checkin-guest-first-name",
-  lastName: "checkin-guest-last-name",
-  skillLevel: "checkin-guest-level",
+  firstName: "checkin-participant-first-name",
+  lastName: "checkin-participant-last-name",
+  skillLevel: "checkin-participant-level",
 } as const;
-const SKILL_LABEL_ID = "checkin-guest-level-label";
+const SKILL_LABEL_ID = "checkin-participant-level-label";
 
 function errorIdFor(field: keyof typeof FIELD_IDS): string {
   return `${FIELD_IDS[field]}-error`;
 }
 
 /**
- * P05: a first-time player (guest) gives first name, last name and level, all
+ * P05: every player gives first name, last name and level, all
  * required. Errors appear only after pressing Check in, then follow the edits
  * (orange border, "!" plus words, linked with aria-describedby).
  */
-export function GuestCheckinForm({
+export function ParticipantCheckinForm({
   page,
   values,
   onValuesChange,
   serverFieldErrors,
   isBusy,
-  onBack,
   onCheckIn,
 }: {
   page: OpenCheckinPage;
   /** Kept by the page, so a failed submit's Try again returns to them. */
-  values: GuestFormValues;
-  onValuesChange: (values: GuestFormValues) => void;
-  serverFieldErrors: GuestFormFieldErrors;
+  values: CheckinFormValues;
+  onValuesChange: (values: CheckinFormValues) => void;
+  serverFieldErrors: CheckinFormFieldErrors;
   isBusy: boolean;
-  onBack: () => void;
-  onCheckIn: (input: GuestCheckinInput) => void;
+  onCheckIn: (input: ParticipantCheckinInput) => void;
 }) {
   const [hasPressedCheckIn, setHasPressedCheckIn] = useState(false);
   const firstNameInputRef = useRef<HTMLInputElement>(null);
   const lastNameInputRef = useRef<HTMLInputElement>(null);
   const skillGroupRef = useRef<HTMLDivElement>(null);
 
-  const validation = validateGuestForm(values);
+  const validation = validateCheckinForm(values);
   const browserFieldErrors =
     hasPressedCheckIn && !validation.isValid ? validation.fieldErrors : {};
   const fieldErrors =
@@ -90,30 +88,20 @@ export function GuestCheckinForm({
   return (
     <>
       <BrandLine name={page.socialName} />
-      <div className="flex items-center">
-        <button
-          type="button"
-          onClick={onBack}
-          disabled={isBusy}
-          className="inline-flex min-h-11 items-center gap-1.5 text-[15px] font-semibold text-link hover:text-link-hover"
-        >
-          <ChevronIcon direction="left" />
-          Back to find your name
-        </button>
-      </div>
       <div>
         <h1 className="text-[26px] leading-[1.15] font-extrabold">
-          Check in as a guest
+          Welcome to {page.socialName}
         </h1>
-        <p className="mt-1 text-sm text-muted tabular-nums">
-          {page.session.name} · {formatCheckinSessionWhen(page.session)}
+        <p className="mt-1 text-sm text-muted">
+          Please enter your details to check in.
         </p>
       </div>
+      <LiveSessionCard page={page} />
       <form
         id={FORM_ID}
         noValidate
         onSubmit={submit}
-        aria-label="Check in as a guest"
+        aria-label="Check in"
         className="flex flex-col gap-4 rounded-card border border-card-border bg-card p-[18px]"
       >
         <NameField

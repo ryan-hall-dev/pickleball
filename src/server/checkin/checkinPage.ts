@@ -1,4 +1,5 @@
 import "server-only";
+import { readDeviceTokenHash } from "./checkinDevice";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   checkinPageFromRpc,
@@ -51,12 +52,16 @@ export async function fetchCheckinPage(
 /** The page read as a result for the page: never throws. */
 export async function loadCheckinPage(
   checkinTag: string,
-  deviceTokenHash: string | null,
 ): Promise<ReadCheckinPageResult> {
   try {
+    const publicPage = await fetchCheckinPage(checkinTag, null);
+    if (publicPage.status !== "open") return { ok: true, page: publicPage };
+    const deviceHash = await readDeviceTokenHash(publicPage.session.sessionId);
     return {
       ok: true,
-      page: await fetchCheckinPage(checkinTag, deviceTokenHash),
+      page: deviceHash
+        ? await fetchCheckinPage(checkinTag, deviceHash)
+        : publicPage,
     };
   } catch (error) {
     logCheckinFailure("Reading the check-in page failed", error);

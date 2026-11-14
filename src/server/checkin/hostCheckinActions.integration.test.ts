@@ -1,13 +1,14 @@
 // @vitest-environment node
 // The host pending check-in tray's server actions against the LOCAL Supabase
-// stack (`pnpm db:start`): the list shows only the host's own social's open
-// session's pending requests, oldest first, with the already-attending and
-// possible-duplicate (D-D: a member or a host-added guest) flags; approve adds
-// a member for a first-timer, links the phone and returns the attendee;
-// approving an attending member is refused with no phone link; close and
-// reject (both idempotent); a second host deciding the same request is told
-// another host decided first; another social's host can neither list nor
-// decide anything here. Requests are inserted with the secret key as a phone
+// stack (`pnpm db:start`), after session-only participants (20261112090000):
+// the list shows only the host's own social's open session's pending
+// requests, oldest first, flagging names already in the session (case,
+// accents and spacing ignored); approve adds the participant from the
+// request and returns it; a name already in the session is refused and the
+// request stays pending, including when two approvals of same-named
+// requests race; reject is idempotent; a second host deciding the same
+// request is told another host decided first; another social's host can
+// neither list nor decide anything here. Requests are inserted with the secret key as a phone
 // would leave them (submit_checkin is covered by checkinActions tests).
 // Skips when the stack isn't running, unless REQUIRE_LOCAL_SUPABASE=1.
 // Everything deletable is removed afterwards.
@@ -16,11 +17,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/lib/database.types";
-import type { SkillLevel } from "@/server/members/memberSearch";
+import type { SkillLevel } from "@/server/skillLevels";
 import { deleteTestSocials } from "@/server/testing/deleteTestSocials";
 import {
   approveCheckin,
-  closeCheckinAlreadyCheckedIn,
   listPendingCheckins,
   rejectCheckin,
 } from "./hostCheckinActions";
@@ -179,73 +179,52 @@ describe.skipIf(!localStack)(
       return { socialId: social.id, sessionId: session.id, manager };
     }
 
-    async function insertMember(
-      social: TestSocial,
-      firstName: string,
-      lastName: string,
-      skillLevel: SkillLevel | null,
-    ): Promise<string> {
-      const { data, error } = await admin
-        .from("members")
-        .insert({
-          social_id: social.socialId,
-          first_name: firstName,
-          last_name: lastName,
-          skill_level: skillLevel,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      return data.id;
-    }
-
     /** A pending request as a phone leaves it, each a minute newer than the last. */
     async function insertRequest(
       social: TestSocial,
-      request: {
-        memberId?: string;
-        firstName: string;
-        lastName: string;
-        skillLevel: SkillLevel | null;
-      },
-    ): Promise<{ checkinRequestId: string; deviceTokenHash: string }> {
+      request: { firstName: string; lastName: string; skillLevel: SkillLevel },
+    ): Promise<{ checkinRequestId: string }> {
       minutesAgo -= 1;
-      const deviceTokenHash = randomSha256Hex();
       const { data, error } = await admin
         .from("checkin_requests")
         .insert({
           social_id: social.socialId,
           session_id: social.sessionId,
-          member_id: request.memberId ?? null,
           first_name: request.firstName,
           last_name: request.lastName,
           skill_level: request.skillLevel,
-          device_token_hash: deviceTokenHash,
+          device_token_hash: randomSha256Hex(),
           ip_hash: randomSha256Hex(),
           created_at: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
         })
         .select("id")
         .single();
       if (error) throw error;
-      return { checkinRequestId: data.id, deviceTokenHash };
+      return { checkinRequestId: data.id };
+    }
+
+    async function addDraftPlayer(
+      firstName: string,
+      lastName: string,
+      skillLevel: SkillLevel,
+    ) {
+      const { error } = await admin.rpc("add_draft_participant", {
+        p_actor_user_id: managerAlice.userId,
+        p_session_id: riverside.sessionId,
+        p_session_participant_id: randomUUID(),
+        p_first_name: firstName,
+        p_last_name: lastName,
+        p_skill_level: skillLevel,
+      });
+      if (error) throw error;
     }
 
     async function requestRow(checkinRequestId: string) {
       const { data, error } = await admin
         .from("checkin_requests")
-        .select("status, decided_by, member_id, session_participant_id")
+        .select("status, decided_by, session_participant_id")
         .eq("id", checkinRequestId)
         .single();
-      if (error) throw error;
-      return data;
-    }
-
-    async function phoneLinks(social: TestSocial, deviceTokenHash: string) {
-      const { data, error } = await admin
-        .from("member_devices")
-        .select("member_id")
-        .eq("social_id", social.socialId)
-        .eq("token_hash", deviceTokenHash);
       if (error) throw error;
       return data;
     }
@@ -275,14 +254,11 @@ describe.skipIf(!localStack)(
       );
     }
 
-    // Riverside's members and attendees, set up once.
-    let graceMemberId: string;
-    let peterMemberId: string;
-    let graceRequest: { checkinRequestId: string; deviceTokenHash: string };
-    let peterRequest: { checkinRequestId: string; deviceTokenHash: string };
-    let newPlayerRequest: { checkinRequestId: string; deviceTokenHash: string };
-    let likeAttendingMemberRequest: { checkinRequestId: string };
-    let likeHostAddedGuestRequest: { checkinRequestId: string };
+    // Riverside's players and requests, set up once.
+    let peterRequest: { checkinRequestId: string };
+    let newPlayerRequest: { checkinRequestId: string };
+    let likeAttendingRequest: { checkinRequestId: string };
+    let likeHostAddedRequest: { checkinRequestId: string };
     let rejectedRequestId: string;
     let otherSocialRequestId: string;
 
@@ -316,42 +292,11 @@ describe.skipIf(!localStack)(
       otherSocial = otherWithManager;
       otherManagerOmar = otherWithManager.manager;
 
-      graceMemberId = await insertMember(riverside, "Grace", "Kim", "beginner");
-      peterMemberId = await insertMember(
-        riverside,
-        "Peter",
-        "Lindqvist",
-        "advanced",
-      );
-      // Grace is attending already; a host added the guest "Kai Moreno".
-      const { error: attendanceError } = await admin.rpc(
-        "set_draft_member_attendance",
-        {
-          p_actor_user_id: managerAlice.userId,
-          p_session_id: riverside.sessionId,
-          p_member_ids: [graceMemberId],
-          p_attending: true,
-        },
-      );
-      if (attendanceError) throw attendanceError;
-      const { error: guestError } = await admin.rpc("add_draft_guest", {
-        p_actor_user_id: managerAlice.userId,
-        p_session_id: riverside.sessionId,
-        p_session_participant_id: randomUUID(),
-        p_first_name: "Kai",
-        p_last_name: "Moreno",
-        p_skill_level: "beginner",
-      });
-      if (guestError) throw guestError;
+      // Grace Kim and Kai Moreno are already playing (added by a host).
+      await addDraftPlayer("Grace", "Kim", "beginner");
+      await addDraftPlayer("Kai", "Moreno", "beginner");
 
-      graceRequest = await insertRequest(riverside, {
-        memberId: graceMemberId,
-        firstName: "Grace",
-        lastName: "Kim",
-        skillLevel: null,
-      });
       peterRequest = await insertRequest(riverside, {
-        memberId: peterMemberId,
         firstName: "Peter",
         lastName: "Lindqvist",
         skillLevel: "intermediate",
@@ -361,12 +306,12 @@ describe.skipIf(!localStack)(
         lastName: "Park",
         skillLevel: "advanced",
       });
-      likeAttendingMemberRequest = await insertRequest(riverside, {
+      likeAttendingRequest = await insertRequest(riverside, {
         firstName: "GRACE",
         lastName: "kim",
         skillLevel: "beginner",
       });
-      likeHostAddedGuestRequest = await insertRequest(riverside, {
+      likeHostAddedRequest = await insertRequest(riverside, {
         firstName: "Kái",
         lastName: "moreno",
         skillLevel: "intermediate",
@@ -403,60 +348,37 @@ describe.skipIf(!localStack)(
     });
 
     // Order matters below: the list is checked before any decision.
-    it("lists only the social's open session's pending requests, oldest first, with their flags", async () => {
+    it("lists only the social's open session's pending requests, oldest first, flagging names already in the session", async () => {
       const requests = await listAs(hostAna);
       expect(requests.map((request) => request.checkinRequestId)).toEqual([
-        graceRequest.checkinRequestId,
         peterRequest.checkinRequestId,
         newPlayerRequest.checkinRequestId,
-        likeAttendingMemberRequest.checkinRequestId,
-        likeHostAddedGuestRequest.checkinRequestId,
+        likeAttendingRequest.checkinRequestId,
+        likeHostAddedRequest.checkinRequestId,
       ]);
-      expect(requestFor(requests, graceRequest.checkinRequestId)).toMatchObject(
-        {
-          memberId: graceMemberId,
-          requestedSkillLevel: null,
-          savedSkillLevel: "beginner",
-          isAlreadyAttending: true,
-          isPossibleDuplicate: false,
-        },
-      );
-      expect(requestFor(requests, peterRequest.checkinRequestId)).toMatchObject(
-        {
-          requestedSkillLevel: "intermediate",
-          savedSkillLevel: "advanced",
-          isAlreadyAttending: false,
-          isPossibleDuplicate: false,
-        },
-      );
-      expect(
-        requestFor(requests, newPlayerRequest.checkinRequestId),
-      ).toMatchObject({
-        memberId: null,
-        savedSkillLevel: null,
-        isPossibleDuplicate: false,
+      expect(requestFor(requests, peterRequest.checkinRequestId)).toEqual({
+        checkinRequestId: peterRequest.checkinRequestId,
+        createdAt: expect.any(String),
+        firstName: "Peter",
+        lastName: "Lindqvist",
+        skillLevel: "intermediate",
+        isNameAlreadyInSession: false,
       });
-      // D-D: named like an attending member, and like a host-added guest
-      // (case and accents folded).
       expect(
-        requestFor(requests, likeAttendingMemberRequest.checkinRequestId)
-          ?.isPossibleDuplicate,
+        requestFor(requests, newPlayerRequest.checkinRequestId)
+          ?.isNameAlreadyInSession,
+      ).toBe(false);
+      // Case and accents folded.
+      expect(
+        requestFor(requests, likeAttendingRequest.checkinRequestId)
+          ?.isNameAlreadyInSession,
       ).toBe(true);
       expect(
-        requestFor(requests, likeHostAddedGuestRequest.checkinRequestId)
-          ?.isPossibleDuplicate,
+        requestFor(requests, likeHostAddedRequest.checkinRequestId)
+          ?.isNameAlreadyInSession,
       ).toBe(true);
       expect(requestFor(requests, rejectedRequestId)).toBeUndefined();
       expect(requestFor(requests, otherSocialRequestId)).toBeUndefined();
-    });
-
-    it("creates no member record for the duplicate check", async () => {
-      const { count, error } = await admin
-        .from("members")
-        .select("id", { count: "exact", head: true })
-        .eq("social_id", riverside.socialId);
-      if (error) throw error;
-      expect(count).toBe(2);
     });
 
     it("lets another social's host neither see nor decide this social's requests", async () => {
@@ -472,80 +394,43 @@ describe.skipIf(!localStack)(
       expect(await rejectCheckin(peterRequest.checkinRequestId)).toEqual({
         kind: "already_decided",
       });
-      expect(
-        await closeCheckinAlreadyCheckedIn(graceRequest.checkinRequestId),
-      ).toEqual({ kind: "already_decided" });
       expect((await requestRow(peterRequest.checkinRequestId)).status).toBe(
-        "pending",
-      );
-      expect((await requestRow(graceRequest.checkinRequestId)).status).toBe(
         "pending",
       );
       expect(await attendeeCount(riverside)).toBe(attendeesBefore);
     });
 
-    it("refuses to approve a member already attending, and links no phone", async () => {
+    it("refuses to approve a name already in the session and leaves the request pending", async () => {
       actingClient = hostAna.client;
-      expect(await approveCheckin(graceRequest.checkinRequestId)).toEqual({
-        kind: "already_in_session",
+      const attendeesBefore = await attendeeCount(riverside);
+      expect(
+        await approveCheckin(likeAttendingRequest.checkinRequestId),
+      ).toEqual({ kind: "name_already_in_session" });
+      expect(await requestRow(likeAttendingRequest.checkinRequestId)).toEqual({
+        status: "pending",
+        decided_by: null,
+        session_participant_id: null,
       });
-      expect((await requestRow(graceRequest.checkinRequestId)).status).toBe(
-        "pending",
-      );
-      expect(await phoneLinks(riverside, graceRequest.deviceTokenHash)).toEqual(
-        [],
-      );
+      expect(await attendeeCount(riverside)).toBe(attendeesBefore);
     });
 
-    it("closes an already-attending request (idempotent) and links no phone", async () => {
-      actingClient = hostAna.client;
-      expect(
-        await closeCheckinAlreadyCheckedIn(graceRequest.checkinRequestId),
-      ).toEqual({ kind: "closed" });
-      expect(
-        await closeCheckinAlreadyCheckedIn(graceRequest.checkinRequestId),
-      ).toEqual({ kind: "closed" });
-      expect(await requestRow(graceRequest.checkinRequestId)).toMatchObject({
-        status: "already_checked_in",
-        decided_by: hostAna.userId,
-      });
-      expect(await phoneLinks(riverside, graceRequest.deviceTokenHash)).toEqual(
-        [],
-      );
-    });
-
-    it("refuses to close a request whose member isn't attending", async () => {
-      actingClient = hostAna.client;
-      expect(
-        await closeCheckinAlreadyCheckedIn(peterRequest.checkinRequestId),
-      ).toEqual({ kind: "not_already_in_session" });
-      expect((await requestRow(peterRequest.checkinRequestId)).status).toBe(
-        "pending",
-      );
-    });
-
-    it("approves a member: attendee returned, chosen level saved, phone linked", async () => {
+    it("approves a request: the participant is made from its name and level and returned", async () => {
       actingClient = hostAna.client;
       const result = await approveCheckin(peterRequest.checkinRequestId);
       if (result.kind !== "approved" || !result.participant) {
         throw new Error(`expected an approval, got ${JSON.stringify(result)}`);
       }
-      expect(result.participant).toMatchObject({
-        memberId: peterMemberId,
-        isGuest: false,
+      expect(result.participant).toEqual({
+        participantId: expect.any(String),
         firstName: "Peter",
         lastName: "Lindqvist",
         skillLevel: "intermediate",
-        isMemberActive: true,
       });
-      expect(await requestRow(peterRequest.checkinRequestId)).toMatchObject({
+      expect(await requestRow(peterRequest.checkinRequestId)).toEqual({
         status: "approved",
         decided_by: hostAna.userId,
         session_participant_id: result.participant.participantId,
       });
-      expect(await phoneLinks(riverside, peterRequest.deviceTokenHash)).toEqual(
-        [{ member_id: peterMemberId }],
-      );
     });
 
     it("tells the second host that another host decided first, and the same host that it's done", async () => {
@@ -561,11 +446,11 @@ describe.skipIf(!localStack)(
       const retried = await approveCheckin(peterRequest.checkinRequestId);
       expect(retried).toMatchObject({
         kind: "approved",
-        participant: { memberId: peterMemberId },
+        participant: { firstName: "Peter", lastName: "Lindqvist" },
       });
     });
 
-    it("approves a new player once when two approvals race: a member is made and the phone linked", async () => {
+    it("approves a request once when two approvals of it race", async () => {
       actingClient = hostAna.client;
       const attendeesBefore = await attendeeCount(riverside);
       const results = await Promise.all([
@@ -577,30 +462,95 @@ describe.skipIf(!localStack)(
         "approved",
       ]);
       expect(await attendeeCount(riverside)).toBe(attendeesBefore + 1);
-      const request = await requestRow(newPlayerRequest.checkinRequestId);
-      expect(request.status).toBe("approved");
-      const { data: member, error } = await admin
-        .from("members")
-        .select("first_name, last_name, skill_level")
-        .eq("id", request.member_id!)
-        .single();
-      if (error) throw error;
-      expect(member).toEqual({
-        first_name: "Zoe",
-        last_name: "Park",
-        skill_level: "advanced",
-      });
-      expect(
-        await phoneLinks(riverside, newPlayerRequest.deviceTokenHash),
-      ).toEqual([{ member_id: request.member_id }]);
+      expect((await requestRow(newPlayerRequest.checkinRequestId)).status).toBe(
+        "approved",
+      );
       expect(results[0]).toMatchObject({
-        participant: { memberId: request.member_id, isGuest: false },
+        participant: { firstName: "Zoe", lastName: "Park" },
+      });
+    });
+
+    it("adds exactly one player when approvals of two same-named requests race", async () => {
+      const firstTwin = await insertRequest(riverside, {
+        firstName: "Pat",
+        lastName: "Twin",
+        skillLevel: "beginner",
+      });
+      const secondTwin = await insertRequest(riverside, {
+        firstName: "PAT",
+        lastName: "twin",
+        skillLevel: "advanced",
+      });
+      // Two concurrent database transactions (the session lock serialises
+      // them; the unique name index is the backstop).
+      actingClient = hostAna.client;
+      const results = await Promise.all([
+        approveCheckin(firstTwin.checkinRequestId),
+        approveCheckin(secondTwin.checkinRequestId),
+      ]);
+      expect(results.map((result) => result.kind).sort()).toEqual([
+        "approved",
+        "name_already_in_session",
+      ]);
+      const { data: twins, error } = await admin
+        .from("session_participants")
+        .select("id")
+        .eq("session_id", riverside.sessionId)
+        .ilike("first_name", "pat")
+        .ilike("last_name", "twin");
+      if (error) throw error;
+      expect(twins).toHaveLength(1);
+      const statuses = [
+        (await requestRow(firstTwin.checkinRequestId)).status,
+        (await requestRow(secondTwin.checkinRequestId)).status,
+      ].sort();
+      expect(statuses).toEqual(["approved", "pending"]);
+    });
+
+    it("adds one participant when a host-add races approval of the same normalised name", async () => {
+      const { checkinRequestId } = await insertRequest(riverside, {
+        firstName: "Renée",
+        lastName: "Race Person",
+        skillLevel: "beginner",
+      });
+      const participantIds = [randomUUID(), randomUUID()];
+      const results = await Promise.all([
+        admin.rpc("add_draft_participant", {
+          p_actor_user_id: managerAlice.userId,
+          p_session_id: riverside.sessionId,
+          p_session_participant_id: participantIds[0],
+          p_first_name: "RENEE",
+          p_last_name: " race   person ",
+          p_skill_level: "advanced",
+        }),
+        admin.rpc("approve_checkin", {
+          p_actor_user_id: hostAna.userId,
+          p_checkin_request_id: checkinRequestId,
+          p_session_participant_id: participantIds[1],
+        }),
+      ]);
+      expect(results.filter((result) => !result.error)).toHaveLength(1);
+      expect(
+        results
+          .filter((result) => result.error)
+          .map((result) => result.error?.message),
+      ).toEqual(["NAME_ALREADY_IN_SESSION"]);
+      const { data, error } = await admin
+        .from("session_participants")
+        .select("id")
+        .eq("session_id", riverside.sessionId)
+        .in("id", participantIds);
+      if (error) throw error;
+      expect(data).toHaveLength(1);
+      expect(await requestRow(checkinRequestId)).toMatchObject({
+        status: results[1].error ? "pending" : "approved",
+        session_participant_id: results[1].error ? null : participantIds[1],
       });
     });
 
     it("rejects (idempotent) and the request leaves the list", async () => {
       actingClient = managerAlice.client;
-      const { checkinRequestId } = likeAttendingMemberRequest;
+      const { checkinRequestId } = likeAttendingRequest;
       expect(await rejectCheckin(checkinRequestId)).toEqual({
         kind: "rejected",
       });
@@ -612,12 +562,20 @@ describe.skipIf(!localStack)(
         decided_by: managerAlice.userId,
       });
       const remaining = await listAs(managerAlice);
-      expect(remaining.map((request) => request.checkinRequestId)).toEqual([
-        likeHostAddedGuestRequest.checkinRequestId,
-      ]);
+      expect(
+        remaining.some(
+          (request) => request.checkinRequestId === checkinRequestId,
+        ),
+      ).toBe(false);
+      expect(
+        remaining.some(
+          (request) =>
+            request.checkinRequestId === likeHostAddedRequest.checkinRequestId,
+        ),
+      ).toBe(true);
     });
 
-    it("tells the second host to reject or close a request that another host decided first", async () => {
+    it("tells the second host to reject a request that another host decided first", async () => {
       const twiceRejected = await insertRequest(riverside, {
         firstName: "Twice",
         lastName: "Rejected",
@@ -631,11 +589,6 @@ describe.skipIf(!localStack)(
       expect(await rejectCheckin(twiceRejected.checkinRequestId)).toEqual({
         kind: "already_decided",
       });
-      // Grace's request was closed by Ana earlier.
-      actingClient = managerAlice.client;
-      expect(
-        await closeCheckinAlreadyCheckedIn(graceRequest.checkinRequestId),
-      ).toEqual({ kind: "already_decided" });
       expect(await requestRow(twiceRejected.checkinRequestId)).toMatchObject({
         status: "rejected",
         decided_by: managerAlice.userId,
@@ -656,10 +609,10 @@ describe.skipIf(!localStack)(
       );
       expect(await listPendingCheckins()).toEqual({ ok: false });
       expect(
-        await approveCheckin(likeHostAddedGuestRequest.checkinRequestId),
+        await approveCheckin(likeHostAddedRequest.checkinRequestId),
       ).toEqual({ kind: "failed" });
       expect(
-        (await requestRow(likeHostAddedGuestRequest.checkinRequestId)).status,
+        (await requestRow(likeHostAddedRequest.checkinRequestId)).status,
       ).toBe("pending");
     });
   },

@@ -15,48 +15,43 @@ import {
   SECONDARY_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
 import { InitialsAvatar } from "@/components/InitialsAvatar";
-import {
-  MEMBER_NAME_MAX_LENGTH,
-  type MemberInput,
-} from "@/server/members/memberRules";
-import {
-  SKILL_LEVEL_LABELS,
-  SKILL_LEVELS,
-} from "@/server/members/memberSearch";
+import { PERSON_NAME_MAX_LENGTH } from "@/server/participantRules";
+import { SKILL_LEVEL_LABELS, SKILL_LEVELS } from "@/server/skillLevels";
 import type { DraftParticipant } from "@/server/setup/setupDraft";
+import type { DraftParticipantInput } from "@/server/setup/setupRules";
 import {
-  EMPTY_GUEST_FORM,
-  validateGuestForm,
-  type GuestForm,
-  type GuestFormErrors,
+  EMPTY_PARTICIPANT_FORM,
+  validateParticipantForm,
+  type ParticipantForm,
+  type ParticipantFormErrors,
 } from "./whosPlaying";
 
 /**
- * "Quick add a guest": someone playing this session only. Guests are added
- * to the attendee list, never to the members directory.
+ * "Add a player": someone playing this session only (session-only
+ * participants), with the draft's players listed below.
  */
-export function QuickAddGuestBox({
+export function QuickAddParticipantBox({
   form,
   onFormChange,
-  guests,
+  participants,
   pendingParticipantIds,
-  onAddGuest,
-  onRemoveGuest,
+  onAddParticipant,
+  onRemoveParticipant,
 }: {
   /** Held by the editor: setup readiness flags an unfinished entry. */
-  form: GuestForm;
+  form: ParticipantForm;
   /** A state setter: field edits use the functional form so none are lost. */
-  onFormChange: Dispatch<SetStateAction<GuestForm>>;
-  guests: DraftParticipant[];
-  /** Guests still being written (their remove button waits). */
+  onFormChange: Dispatch<SetStateAction<ParticipantForm>>;
+  participants: DraftParticipant[];
+  /** Players still being written (their remove button waits). */
   pendingParticipantIds: ReadonlySet<string>;
-  onAddGuest: (guest: MemberInput) => void;
-  onRemoveGuest: (guest: DraftParticipant) => void;
+  onAddParticipant: (participant: DraftParticipantInput) => void;
+  onRemoveParticipant: (participant: DraftParticipant) => void;
 }) {
-  const [fieldErrors, setFieldErrors] = useState<GuestFormErrors>({});
+  const [fieldErrors, setFieldErrors] = useState<ParticipantFormErrors>({});
   const firstNameInputRef = useRef<HTMLInputElement>(null);
 
-  function updateField(field: keyof GuestForm, value: string) {
+  function updateField(field: keyof ParticipantForm, value: string) {
     onFormChange((currentForm) => ({ ...currentForm, [field]: value }));
     // An edited field's old error no longer applies.
     setFieldErrors((currentErrors) => ({
@@ -67,64 +62,62 @@ export function QuickAddGuestBox({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const validation = validateGuestForm(form);
+    const validation = validateParticipantForm(form);
     if (!validation.ok) {
       setFieldErrors(validation.fieldErrors);
       return;
     }
-    onAddGuest(validation.guest);
-    onFormChange(EMPTY_GUEST_FORM);
+    onAddParticipant(validation.participant);
+    onFormChange(EMPTY_PARTICIPANT_FORM);
     setFieldErrors({});
-    // Ready for the next guest.
+    // Ready for the next player.
     firstNameInputRef.current?.focus();
   }
 
   return (
     <div className="mt-[18px] rounded-[20px] border border-inner-border bg-inner p-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 id="quick-add-guest-heading" className="text-base font-bold">
-          Quick add a guest
+        <h3 id="quick-add-participant-heading" className="text-base font-bold">
+          Add a player
         </h3>
-        <span className="text-[13px] text-muted">
-          Plays today only; no club membership needed
-        </span>
+        <span className="text-[13px] text-muted">Plays this session only</span>
       </div>
       <form
         onSubmit={submit}
-        aria-labelledby="quick-add-guest-heading"
+        aria-labelledby="quick-add-participant-heading"
         noValidate
         className="flex flex-wrap items-start gap-2.5"
       >
-        <GuestNameField
-          id="guest-first-name"
+        <ParticipantNameField
+          id="participant-first-name"
           label="First name"
           value={form.firstName}
           error={fieldErrors.firstName}
           inputRef={firstNameInputRef}
           onChange={(value) => updateField("firstName", value)}
         />
-        <GuestNameField
-          id="guest-last-name"
+        <ParticipantNameField
+          id="participant-last-name"
           label="Last name"
           value={form.lastName}
           error={fieldErrors.lastName}
           onChange={(value) => updateField("lastName", value)}
         />
         <div className="flex flex-[1_1_150px] flex-col gap-1.5">
-          <label htmlFor="guest-skill" className={FIELD_LABEL_CLASS_NAME}>
-            Skill (optional)
+          <label htmlFor="participant-skill" className={FIELD_LABEL_CLASS_NAME}>
+            Skill
           </label>
           <select
-            id="guest-skill"
+            id="participant-skill"
             value={form.skillLevel}
             onChange={(event) => updateField("skillLevel", event.target.value)}
             aria-invalid={fieldErrors.skillLevel ? true : undefined}
             aria-describedby={
-              fieldErrors.skillLevel ? "guest-skill-error" : undefined
+              fieldErrors.skillLevel ? "participant-skill-error" : undefined
             }
             className={INNER_BOX_TEXT_INPUT_CLASS_NAME}
           >
-            <option value="">Not set</option>
+            <option value="">Choose…</option>
             {SKILL_LEVELS.map((skillLevel) => (
               <option key={skillLevel} value={skillLevel}>
                 {SKILL_LEVEL_LABELS[skillLevel]}
@@ -132,7 +125,7 @@ export function QuickAddGuestBox({
             ))}
           </select>
           {fieldErrors.skillLevel && (
-            <AttentionMessage id="guest-skill-error">
+            <AttentionMessage id="participant-skill-error">
               {fieldErrors.skillLevel}
             </AttentionMessage>
           )}
@@ -142,17 +135,17 @@ export function QuickAddGuestBox({
           type="submit"
           className={`${SECONDARY_BUTTON_CLASS_NAME} mt-[25px]`}
         >
-          Add guest
+          Add player
         </button>
       </form>
-      {guests.length > 0 && (
-        <ul aria-label="Guests" className="mt-3.5 flex flex-wrap gap-2">
-          {guests.map((guest) => (
-            <GuestChip
-              key={guest.participantId}
-              guest={guest}
-              isPending={pendingParticipantIds.has(guest.participantId)}
-              onRemove={() => onRemoveGuest(guest)}
+      {participants.length > 0 && (
+        <ul aria-label="Players" className="mt-3.5 flex flex-wrap gap-2">
+          {participants.map((participant) => (
+            <ParticipantChip
+              key={participant.participantId}
+              participant={participant}
+              isPending={pendingParticipantIds.has(participant.participantId)}
+              onRemove={() => onRemoveParticipant(participant)}
             />
           ))}
         </ul>
@@ -161,7 +154,7 @@ export function QuickAddGuestBox({
   );
 }
 
-function GuestNameField({
+function ParticipantNameField({
   id,
   label,
   value,
@@ -189,7 +182,7 @@ function GuestNameField({
         // A host types other people's names: never autofill their own.
         autoComplete="off"
         required
-        maxLength={MEMBER_NAME_MAX_LENGTH}
+        maxLength={PERSON_NAME_MAX_LENGTH}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         aria-invalid={error ? true : undefined}
@@ -201,19 +194,19 @@ function GuestNameField({
   );
 }
 
-function GuestChip({
-  guest,
+function ParticipantChip({
+  participant,
   isPending,
   onRemove,
 }: {
-  guest: DraftParticipant;
+  participant: DraftParticipant;
   isPending: boolean;
   onRemove: () => void;
 }) {
-  const fullName = `${guest.firstName} ${guest.lastName}`;
-  const label = guest.skillLevel
-    ? `Guest · ${SKILL_LEVEL_LABELS[guest.skillLevel]}`
-    : "Guest";
+  const fullName = `${participant.firstName} ${participant.lastName}`;
+  const label = participant.skillLevel
+    ? SKILL_LEVEL_LABELS[participant.skillLevel]
+    : "No level";
   return (
     <li className="flex max-w-full min-w-0 items-center gap-2 rounded-full border border-blue-edge bg-blue-surface p-1">
       <InitialsAvatar name={fullName} tone="next" size="chip" />
@@ -223,7 +216,7 @@ function GuestChip({
       </span>
       <button
         type="button"
-        aria-label={`Remove guest ${fullName}`}
+        aria-label={`Remove ${fullName}`}
         disabled={isPending}
         onClick={onRemove}
         // 30px in the design; 44px where the pointer is a finger.

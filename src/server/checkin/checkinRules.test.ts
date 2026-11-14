@@ -3,15 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   checkinSubmitInputSchema,
   checkinTagSchema,
-  isSearchableQuery,
-  searchQuerySchema,
-  validateGuestForm,
+  validateCheckinForm,
 } from "./checkinRules";
 
-describe("validateGuestForm", () => {
+describe("validateCheckinForm", () => {
   it("needs all three fields, with the copy deck's messages", () => {
     expect(
-      validateGuestForm({ firstName: "", lastName: "  ", skillLevel: null }),
+      validateCheckinForm({ firstName: "", lastName: "  ", skillLevel: null }),
     ).toEqual({
       isValid: false,
       fieldErrors: {
@@ -24,7 +22,7 @@ describe("validateGuestForm", () => {
 
   it("reports only the missing field", () => {
     expect(
-      validateGuestForm({
+      validateCheckinForm({
         firstName: "Kai",
         lastName: "",
         skillLevel: "beginner",
@@ -41,7 +39,7 @@ describe("validateGuestForm", () => {
 
   it("tidies the names and accepts a complete form", () => {
     expect(
-      validateGuestForm({
+      validateCheckinForm({
         firstName: "  Kai ",
         lastName: "de  la Moreno",
         skillLevel: "intermediate",
@@ -49,7 +47,6 @@ describe("validateGuestForm", () => {
     ).toEqual({
       isValid: true,
       input: {
-        kind: "guest",
         firstName: "Kai",
         lastName: "de la Moreno",
         skillLevel: "intermediate",
@@ -58,7 +55,7 @@ describe("validateGuestForm", () => {
   });
 
   it("refuses names longer than the database allows", () => {
-    const validation = validateGuestForm({
+    const validation = validateCheckinForm({
       firstName: "K".repeat(51),
       lastName: "Moreno",
       skillLevel: "advanced",
@@ -79,49 +76,12 @@ describe("checkinSubmitInputSchema", () => {
     updatedSkillLevel: null,
   };
 
-  it("accepts a member with or without an updated level", () => {
-    expect(checkinSubmitInputSchema.safeParse(memberInput).success).toBe(true);
-    expect(
-      checkinSubmitInputSchema.safeParse({
-        ...memberInput,
-        updatedSkillLevel: "advanced",
-      }).success,
-    ).toBe(true);
-  });
-
-  it("refuses a malformed member id or level", () => {
-    expect(
-      checkinSubmitInputSchema.safeParse({ ...memberInput, memberId: "42" })
-        .success,
-    ).toBe(false);
-    expect(
-      checkinSubmitInputSchema.safeParse({
-        ...memberInput,
-        updatedSkillLevel: "pro",
-      }).success,
-    ).toBe(false);
-    expect(
-      checkinSubmitInputSchema.safeParse({ ...memberInput, kind: "host" })
-        .success,
-    ).toBe(false);
+  it("refuses the obsolete member path", () => {
+    expect(checkinSubmitInputSchema.safeParse(memberInput).success).toBe(false);
   });
 });
 
-describe("search and tag inputs", () => {
-  it("searches only from 2 letters, folded like search_name", () => {
-    expect(isSearchableQuery("")).toBe(false);
-    expect(isSearchableQuery(" P ")).toBe(false);
-    expect(isSearchableQuery("Pe")).toBe(true);
-    expect(isSearchableQuery("É ")).toBe(false);
-    expect(isSearchableQuery("Él")).toBe(true);
-  });
-
-  it("refuses queries longer than any name", () => {
-    expect(searchQuerySchema.safeParse("a".repeat(50)).success).toBe(true);
-    expect(searchQuerySchema.safeParse("a".repeat(51)).success).toBe(false);
-    expect(searchQuerySchema.safeParse(42).success).toBe(false);
-  });
-
+describe("tag inputs", () => {
   it("accepts only the check-in tag format", () => {
     expect(checkinTagSchema.safeParse("k7qm2xpa0123456789ab").success).toBe(
       true,

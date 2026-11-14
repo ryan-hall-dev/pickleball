@@ -13,7 +13,6 @@ import {
   ATTENTION_OUTLINE_BUTTON_CLASS_NAME,
   LINK_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
-import type { ActiveMemberChoice } from "@/server/members/memberDirectory";
 import {
   applySavedSetup,
   readSessionDraft,
@@ -58,7 +57,7 @@ import {
   type SetupForm,
 } from "./setupPlanning";
 import { useDraftAttendance } from "./useDraftAttendance";
-import { EMPTY_GUEST_FORM, type GuestForm } from "./whosPlaying";
+import { EMPTY_PARTICIPANT_FORM, type ParticipantForm } from "./whosPlaying";
 import { WhosPlayingCard } from "./WhosPlayingCard";
 
 /** Edits settle for this long before they are saved. */
@@ -534,7 +533,6 @@ function wholeNumberOrNull(text: string): number | null {
 interface SessionSetupFormProps {
   draft: SessionDraft;
   initialClubCourts: ClubCourt[];
-  activeMembers: ActiveMemberChoice[];
   /** Only the social manager adds courts. */
   canAddCourts: boolean;
   /** The host's own saved setups, most recently used first. */
@@ -569,7 +567,6 @@ function draftWriteResultOf(
 function SessionSetupForm({
   draft,
   initialClubCourts,
-  activeMembers,
   canAddCourts,
   initialSavedSetups,
   socialName,
@@ -583,7 +580,9 @@ function SessionSetupForm({
       new Set(initialClubCourts.map((court) => court.id)),
     ),
   );
-  const [guestForm, setGuestForm] = useState<GuestForm>(EMPTY_GUEST_FORM);
+  const [participantForm, setParticipantForm] = useState<ParticipantForm>(
+    EMPTY_PARTICIPANT_FORM,
+  );
   const [isAutosavePaused, setIsAutosavePaused] = useState(false);
   const [savedSetups, setSavedSetups] = useState(initialSavedSetups);
   const [appliedSavedSetupId, setAppliedSavedSetupId] = useState(
@@ -624,11 +623,7 @@ function SessionSetupForm({
       ? { kind: "reloadRequired" }
       : autosaveStatus;
   const { fieldErrors, durationMinutes } = validation;
-  const attendance = useDraftAttendance(
-    draft.sessionId,
-    draft.participants,
-    activeMembers,
-  );
+  const attendance = useDraftAttendance(draft.sessionId, draft.participants);
   const { addApprovedParticipant, rereadParticipants } = attendance;
   const showApprovedCheckin = useCallback(
     (approvedParticipant: DraftParticipant | null) => {
@@ -641,15 +636,12 @@ function SessionSetupForm({
     void rereadParticipants();
   }, [rereadParticipants]);
   const attendingPlayerCount = attendance.participants.length;
-  const attendingGuestCount = attendance.participants.filter(
-    (participant) => participant.isGuest,
-  ).length;
   const readiness = setupReadiness({
     fieldErrors,
     selectedCourtCount: form.selectedCourtIds.length,
     matchFormat: form.matchFormat,
     attendingPlayerCount,
-    guestForm,
+    participantForm,
     isDraftSaved: status.kind === "saved",
   });
 
@@ -894,10 +886,9 @@ function SessionSetupForm({
             />
           </fieldset>
           <WhosPlayingCard
-            activeMembers={activeMembers}
             attendance={attendance}
-            guestForm={guestForm}
-            onGuestFormChange={setGuestForm}
+            participantForm={participantForm}
+            onParticipantFormChange={setParticipantForm}
           />
           <fieldset disabled={isApplyingSetup} className="contents">
             <RotationCard
@@ -914,7 +905,6 @@ function SessionSetupForm({
           courtCount={form.selectedCourtIds.length}
           matchFormat={form.matchFormat}
           attendingPlayerCount={attendingPlayerCount}
-          attendingGuestCount={attendingGuestCount}
           rotationSummary={topObjectiveSummary(form.rotation)}
           readiness={readiness}
         />

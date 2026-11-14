@@ -1,13 +1,13 @@
 -- Row-level security and grants (docs/decisions/0002-server-only-writes.md):
 -- anon reads and executes nothing; a signed-in non-host reads nothing; a host
--- reads their own social and everything in it (hosts, members, courts, saved
--- setups, sessions and everything under them) but writes nothing with their
--- own session;
+-- reads their own social and everything in it (hosts, courts, saved setups,
+-- sessions and everything under them) but writes nothing with their own
+-- session;
 -- only service_role executes the public functions; the log is append-only for
 -- every role. Isolation between socials: 11_social_isolation.test.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(58);
+select plan(56);
 
 -- Fixtures (as the table owner) -----------------------------------------------
 insert into auth.users (id, email) values
@@ -18,18 +18,14 @@ insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000
 insert into public.hosts (user_id, display_name, role, social_id) values
   ('a0000000-0000-4000-8000-000000000001', 'Mia Manager', 'manager', '50000000-0000-4000-8000-000000000001'),
   ('a0000000-0000-4000-8000-000000000002', 'Hal Host', 'host', '50000000-0000-4000-8000-000000000001');
-insert into public.members (social_id, id, first_name, last_name, skill_level) values
-  ('50000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'advanced');
-insert into public.member_devices (social_id, token_hash, member_id) values
-  ('50000000-0000-4000-8000-000000000001', repeat('a', 64), 'b0000000-0000-4000-8000-000000000001');
 insert into public.courts (id, social_id, name) values
   ('c0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 'pgTAP Court');
 insert into public.saved_setups (social_id, host_id, name, config) values
   ('50000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', '{}');
 insert into public.sessions (id, social_id, host_id, name, host_name, planned_start, planned_end) values
   ('d0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', 'Hal Host', now(), now() + interval '2 hours');
-insert into public.session_participants (id, session_id, social_id, member_id, first_name, last_name) values
-  ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
+insert into public.session_participants (id, session_id, social_id, first_name, last_name, skill_level) values
+  ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'advanced');
 insert into public.checkin_requests (session_id, social_id, first_name, last_name, skill_level, device_token_hash, ip_hash) values
   ('d0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 'Zoe', 'Park', 'beginner', repeat('b', 64), repeat('c', 64));
 insert into public.checkin_attempts (kind, session_id, device_token_hash, ip_hash) values
@@ -77,22 +73,28 @@ select set_eq(
   $$select proname::text from pg_proc
     where pronamespace = 'public'::regnamespace and has_function_privilege('service_role', oid, 'execute')$$,
   array[
-    'append_session_event', 'start_session', 'end_session', 'add_guest_mid_session',
+    'append_session_event', 'start_session', 'end_session', 'add_participant_mid_session',
     'cancel_draft_session', 'remove_draft_participant', 'save_session_draft',
-    'set_draft_member_attendance', 'add_draft_guest', 'remove_draft_guest',
+    'add_draft_participant',
     'save_setup', 'apply_saved_setup',
-    'approve_checkin', 'reject_checkin', 'search_checkin_names', 'submit_checkin',
-    'get_checkin_page', 'close_checkin_already_checked_in',
+    'approve_checkin', 'reject_checkin', 'submit_checkin',
+    'get_checkin_page',
     'list_checkin_requests_for_open_session', 'reissue_checkin_tag',
     'record_login_attempt', 'create_social_with_manager'
   ],
   'service_role executes exactly the public functions'
 );
+-- The one exception: the name normaliser behind the unique participant-name
+-- index, which runs with the writing role's privileges (20261112090000).
 select is(
-  (select count(*) from pg_proc
+  (select string_agg(proname::text, ',') from pg_proc
    where pronamespace = 'private'::regnamespace and has_function_privilege('service_role', oid, 'execute')),
-  0::bigint,
-  'nobody but the owner executes private helpers (besides the RLS helper)'
+  'normalise_name_for_search',
+  'service_role executes no private helper but the name normaliser (needed by the participant-name index)'
+);
+select ok(
+  not has_schema_privilege('service_role', 'private', 'usage'),
+  'service_role has no usage on the private schema (the index calls the normaliser by oid)'
 );
 select is(
   (select count(*)
@@ -104,12 +106,14 @@ select is(
   'default privileges give PUBLIC, anon and authenticated nothing on new objects'
 );
 
+-- The member directory and phone links are gone (session-only participants).
+select hasnt_table('public', 'members', 'there is no members table');
+select hasnt_table('public', 'member_devices', 'there is no member_devices table');
+
 -- anon: no table is readable --------------------------------------------------
 set local role anon;
 select throws_ok('select * from public.socials', '42501', null, 'anon cannot read socials');
 select throws_ok('select * from public.hosts', '42501', null, 'anon cannot read hosts');
-select throws_ok('select * from public.members', '42501', null, 'anon cannot read members');
-select throws_ok('select * from public.member_devices', '42501', null, 'anon cannot read member_devices');
 select throws_ok('select * from public.courts', '42501', null, 'anon cannot read courts');
 select throws_ok('select * from public.saved_setups', '42501', null, 'anon cannot read saved_setups');
 select throws_ok('select * from public.sessions', '42501', null, 'anon cannot read sessions');
@@ -119,11 +123,11 @@ select throws_ok('select * from public.matches', '42501', null, 'anon cannot rea
 select throws_ok('select * from public.checkin_requests', '42501', null, 'anon cannot read checkin_requests');
 select throws_ok('select * from public.checkin_attempts', '42501', null, 'anon cannot read checkin_attempts');
 select throws_ok(
-  $$select * from public.search_checkin_names('tag0000000000000001', 'gr', repeat('a', 64), repeat('b', 64))$$,
-  '42501', null, 'anon cannot call the check-in search directly'
+  $$select public.add_draft_participant('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Nina', 'New', 'beginner')$$,
+  '42501', null, 'anon cannot add a draft participant directly'
 );
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', repeat('a', 64), repeat('b', 64), 'Nina', 'New', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, repeat('a', 64), repeat('b', 64), 'Nina', 'New', 'beginner')$$,
   '42501', null, 'anon cannot submit a check-in directly'
 );
 reset role;
@@ -133,7 +137,6 @@ select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-0000000
 set local role authenticated;
 select is_empty('select * from public.socials', 'non-host sees no socials');
 select is_empty('select * from public.hosts', 'non-host sees no hosts');
-select is_empty('select * from public.members', 'non-host sees no members');
 select is_empty('select * from public.courts', 'non-host sees no courts');
 select is_empty('select * from public.saved_setups', 'non-host sees no saved_setups');
 select is_empty('select * from public.sessions', 'non-host sees no sessions');
@@ -141,15 +144,13 @@ select is_empty('select * from public.session_participants', 'non-host sees no s
 select is_empty('select * from public.session_events', 'non-host sees no session_events');
 select is_empty('select * from public.matches', 'non-host sees no matches');
 select is_empty('select * from public.checkin_requests', 'non-host sees no checkin_requests');
-select throws_ok('select * from public.member_devices', '42501', null, 'non-host cannot read member_devices');
 reset role;
 
--- Host: reads everything except the private device and attempt tables ------------
+-- Host: reads everything except the private attempt table -----------------------
 select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000002","role":"authenticated"}', true);
 set local role authenticated;
 select isnt_empty('select * from public.socials', 'host reads their social');
 select isnt_empty('select * from public.hosts', 'host reads hosts');
-select isnt_empty('select * from public.members', 'host reads members');
 select isnt_empty('select * from public.courts', 'host reads courts');
 select isnt_empty('select * from public.saved_setups', 'host reads saved_setups');
 select isnt_empty('select * from public.sessions', 'host reads sessions');
@@ -157,13 +158,13 @@ select isnt_empty('select * from public.session_participants', 'host reads sessi
 select isnt_empty('select * from public.session_events', 'host reads session_events');
 select isnt_empty('select * from public.matches', 'host reads matches');
 select isnt_empty('select * from public.checkin_requests', 'host reads checkin_requests');
-select throws_ok('select * from public.member_devices', '42501', null, 'host cannot read device token hashes');
 select throws_ok('select * from public.checkin_attempts', '42501', null, 'host cannot read check-in attempts');
 
 -- ...and writes nothing with their own session.
 select throws_ok(
-  $$insert into public.members (social_id, first_name, last_name) values ('50000000-0000-4000-8000-000000000001', 'Kofi', 'Mensah')$$,
-  '42501', null, 'host cannot insert members with their session'
+  $$insert into public.session_participants (session_id, social_id, first_name, last_name, skill_level)
+    values ('d0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 'Kofi', 'Mensah', 'beginner')$$,
+  '42501', null, 'host cannot insert participants with their session'
 );
 select throws_ok(
   $$update public.sessions set name = 'Renamed social' where id = 'd0000000-0000-4000-8000-000000000001'$$,
@@ -186,6 +187,10 @@ select throws_ok(
   $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', gen_random_uuid(), gen_random_uuid())$$,
   '42501', null, 'host cannot execute check-in decisions with their session'
 );
+select throws_ok(
+  $$select public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Nina', 'New', 'beginner', gen_random_uuid(), 0, now())$$,
+  '42501', null, 'host cannot add participants mid-session with their session'
+);
 reset role;
 
 -- Not even a social manager writes with their session (invites go through server code).
@@ -204,9 +209,8 @@ reset role;
 -- The server (service_role) writes tables directly, after its own host check.
 set local role service_role;
 select lives_ok(
-  $$insert into public.members (social_id, first_name, last_name, skill_level)
-    values ('50000000-0000-4000-8000-000000000001', 'Kofi', 'Mensah', 'intermediate')$$,
-  'service_role can add a member'
+  $$insert into public.courts (social_id, name) values ('50000000-0000-4000-8000-000000000001', 'Second court')$$,
+  'service_role can add a court'
 );
 select throws_ok(
   $$insert into public.session_events (session_id, seq, event_id, type, payload, occurred_at, actor_user_id)

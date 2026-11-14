@@ -297,6 +297,45 @@ describe("PlayerJoined / PlayerLeft", () => {
     expect(session.player(p(1)).participant.firstName).not.toBe("Renamed");
   });
 
+  it("replays historical payloads that still carry isGuest", () => {
+    // Logs recorded before session-only participants (2026-11-12) put an
+    // `isGuest` flag on every participant snapshot; the engine ignores it.
+    const withHistoricalGuestFlag = <T extends object>(participant: T) => ({
+      ...participant,
+      isGuest: true,
+    });
+    const participants = makeParticipants(4);
+    const log = createEventLog();
+    log.add("SessionStarted", {
+      config: makeConfig({
+        participants: participants.map(withHistoricalGuestFlag),
+        courts: 1,
+      }),
+      initialAttendeeIds: participants.map(
+        (participant) => participant.participantId,
+      ),
+    });
+    const [lateArrival] = makeParticipants(1, 77).map((participant) => ({
+      ...participant,
+      participantId: "late-1",
+    }));
+    log.add("PlayerJoined", {
+      participant: withHistoricalGuestFlag(lateArrival),
+    });
+
+    const result = replay(log.events);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(Object.keys(result.state.participants)).toEqual([
+        ...participants.map((participant) => participant.participantId),
+        "late-1",
+      ]);
+      expect(result.state.participants["late-1"].participant).toMatchObject(
+        lateArrival,
+      );
+    }
+  });
+
   it("rejects joining twice, leaving twice, leaving mid-match and unknown players", () => {
     const session = TestSession.start({ participantCount: 5, courts: 1 });
     expectRejected(

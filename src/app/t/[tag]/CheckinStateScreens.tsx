@@ -235,17 +235,15 @@ export function ApprovedScreen({
   );
 }
 
-/** P09 (this phone's own member, straight away) and P09b (a host closed the request). */
+/** Already checked in: answered only to this phone's own approved request. */
 export function AlreadyCheckedInScreen({
   socialName,
   session,
   requester,
-  confirmedBy,
 }: {
   socialName: string;
   session: CheckinSessionHeader;
   requester: Requester;
-  confirmedBy: "own_phone" | "host";
 }) {
   return (
     <StateScreen
@@ -265,9 +263,7 @@ export function AlreadyCheckedInScreen({
       }
     >
       <StateText>
-        {confirmedBy === "own_phone"
-          ? `Nothing more to do, ${requester.firstName}. Stay near the courts and listen for your name.`
-          : "A host confirmed you're on the list. Nothing else to do."}
+        {`Nothing more to do, ${requester.firstName}. Stay near the courts and listen for your name.`}
       </StateText>
     </StateScreen>
   );

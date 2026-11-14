@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CARD_CLASS_NAME } from "@/components/controlStyles";
 import { readHostAccess } from "@/server/auth/currentHost";
-import { listAllActiveMembers } from "@/server/members/memberDirectory";
 import {
   listActiveClubCourts,
   listSocialSavedSetupsUnderRls,
@@ -47,9 +46,8 @@ async function SessionSetupContent() {
   const openSession = await readSocialOpenSession(hostAccess.host.socialId);
 
   if (openSession.status === "draft") {
-    const [clubCourts, activeMembers, savedSetups] = await Promise.all([
+    const [clubCourts, savedSetups] = await Promise.all([
       listActiveClubCourts(),
-      listAllActiveMembers(),
       listSocialSavedSetupsUnderRls(hostAccess.host.socialId),
     ]);
     return (
@@ -58,7 +56,6 @@ async function SessionSetupContent() {
         key={openSession.draft.sessionId}
         draft={openSession.draft}
         initialClubCourts={clubCourts}
-        activeMembers={activeMembers}
         canAddCourts={hostAccess.host.role === "manager"}
         initialSavedSetups={savedSetups}
         socialName={hostAccess.host.socialName}

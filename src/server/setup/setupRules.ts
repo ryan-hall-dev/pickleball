@@ -7,7 +7,8 @@ import {
   type RotationPreferences,
   type RotationRules,
 } from "@/engine/session";
-import { memberInputSchema } from "@/server/members/memberRules";
+import { personNameSchema } from "@/server/participantRules";
+import { SKILL_LEVELS } from "@/server/skillLevels";
 
 // Validation and the draft config shape for the Setup screen (plan §4, §7 M4).
 // Shared by the server actions and the client form, so both apply the same
@@ -204,36 +205,40 @@ export const addClubCourtInputSchema = z.object({
 
 export type AddClubCourtInput = z.input<typeof addClubCourtInputSchema>;
 
-/** "Who's playing?": mark members as attending or not (Select all, Clear, one row). */
-export const setDraftMemberAttendanceInputSchema = z.object({
-  sessionId: z.uuid(),
-  // No size limit: any number of members can attend.
-  memberIds: z.array(z.uuid()),
-  attending: z.boolean(),
+/**
+ * A player the host adds to the draft (session-only participants): first
+ * name, last name and level, all required. The database also refuses a name
+ * already in the session (NAME_ALREADY_IN_SESSION).
+ */
+export const draftParticipantInputSchema = z.object({
+  firstName: personNameSchema("Enter a first name."),
+  lastName: personNameSchema("Enter a last name."),
+  skillLevel: z.enum(SKILL_LEVELS, { error: "Choose a level." }),
 });
 
-export type SetDraftMemberAttendanceInput = z.input<
-  typeof setDraftMemberAttendanceInputSchema
+export type DraftParticipantInput = z.output<
+  typeof draftParticipantInputSchema
 >;
 
-/**
- * "Quick add a guest": the same name and skill rules as a member (first and
- * last name required, skill optional, "" = not set).
- */
-export const addDraftGuestInputSchema = memberInputSchema.extend({
+export const addDraftParticipantInputSchema =
+  draftParticipantInputSchema.extend({
+    sessionId: z.uuid(),
+    // Chosen by the browser so a retried add can't add the player twice.
+    participantId: z.uuid(),
+  });
+
+export type AddDraftParticipantInput = z.input<
+  typeof addDraftParticipantInputSchema
+>;
+
+export const removeDraftParticipantInputSchema = z.object({
   sessionId: z.uuid(),
-  // Chosen by the browser so a retried add can't add the guest twice.
   participantId: z.uuid(),
 });
 
-export type AddDraftGuestInput = z.input<typeof addDraftGuestInputSchema>;
-
-export const removeDraftGuestInputSchema = z.object({
-  sessionId: z.uuid(),
-  participantId: z.uuid(),
-});
-
-export type RemoveDraftGuestInput = z.input<typeof removeDraftGuestInputSchema>;
+export type RemoveDraftParticipantInput = z.input<
+  typeof removeDraftParticipantInputSchema
+>;
 
 /**
  * The part of `sessions.config_snapshot` the Setup screen owns while the

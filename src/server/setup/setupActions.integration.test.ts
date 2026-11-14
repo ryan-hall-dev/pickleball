@@ -6,7 +6,8 @@
 //     the social's one draft (co-editing), and a host of another social can
 //     never see, edit, discard or change the attendance of it;
 //   * create / load / update / discard a draft, the one-open-session-per-social
-//     rule, adding a club court, attendance (members, guests, Clear), saved
+//     rule, adding a club court, attendance (session-only players: add,
+//     remove, one name per session), saved
 //     setups shared within a social, and the draft revision between co-hosts.
 // Every host group gets its own test social (with its own courts where it
 // needs them), so files can run in parallel. Test courts carry a unique token
@@ -25,16 +26,15 @@ import { HOST_ACCESS_DENIAL_MESSAGES } from "@/server/auth/hostAccess";
 import { deleteTestSocials } from "@/server/testing/deleteTestSocials";
 import {
   addClubCourt,
-  addDraftGuest,
+  addDraftParticipant,
   applySavedSetup,
   type ApplySavedSetupResult,
   type DraftAttendanceResult,
   discardSessionDraft,
   readSessionDraft,
-  removeDraftGuest,
+  removeDraftParticipant,
   saveSessionDraft,
   saveSetup,
-  setDraftMemberAttendance,
   startSessionDraft,
 } from "./setupActions";
 import {
@@ -369,7 +369,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     for (const userId of createdUserIds) {
       await admin.auth.admin.deleteUser(userId);
     }
-    // Then the socials, with their setups, sessions, courts and members.
+    // Then the socials, with their setups, sessions and courts.
     await deleteTestSocials(admin, createdSocialIds);
     vi.unstubAllEnvs();
   });
@@ -423,23 +423,16 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           }),
         ).toEqual(expected);
         expect(
-          await setDraftMemberAttendance({
-            sessionId: aliceDraftBefore[0].id,
-            memberIds: [],
-            attending: true,
-          }),
-        ).toEqual(expected);
-        expect(
-          await addDraftGuest({
+          await addDraftParticipant({
             sessionId: aliceDraftBefore[0].id,
             participantId: randomUUID(),
             firstName: "Sneaky",
             lastName: "Guest",
-            skillLevel: "",
+            skillLevel: "beginner",
           }),
         ).toEqual(expected);
         expect(
-          await removeDraftGuest({
+          await removeDraftParticipant({
             sessionId: aliceDraftBefore[0].id,
             participantId: randomUUID(),
           }),
@@ -849,34 +842,23 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       expect((await openDraftFor(hostBob)).config.rotation).toEqual(rotation);
     });
 
-    it("lists the draft's attending members and guests", async () => {
+    it("lists the draft's players with their names and levels", async () => {
       const draft = await openDraftFor(hostBob);
-      const { data: member, error: memberError } = await admin
-        .from("members")
-        .insert({
-          social_id: socialId,
-          first_name: "Setup",
-          last_name: RUN_TOKEN,
-        })
-        .select("id")
-        .single();
-      if (memberError) throw memberError;
       const { error } = await admin.from("session_participants").insert([
         {
           session_id: draft.sessionId,
           social_id: socialId,
-          member_id: member.id,
-          // A multi-row insert sends every column, so set it explicitly.
-          is_guest: false,
           first_name: "Setup",
           last_name: RUN_TOKEN,
+          skill_level: "advanced",
         },
         {
           session_id: draft.sessionId,
           social_id: socialId,
-          is_guest: true,
-          first_name: "Guest",
+          first_name: "Legacy",
           last_name: RUN_TOKEN,
+          // Sessions from before levels were required may have none.
+          skill_level: null,
         },
       ]);
       if (error) throw error;
@@ -887,16 +869,18 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         expect(participants).toHaveLength(2);
         expect(participants).toEqual(
           expect.arrayContaining([
-            expect.objectContaining({
-              memberId: member.id,
-              isGuest: false,
-              isMemberActive: true,
-            }),
-            expect.objectContaining({
-              memberId: null,
-              isGuest: true,
-              isMemberActive: null,
-            }),
+            {
+              participantId: expect.any(String),
+              firstName: "Setup",
+              lastName: RUN_TOKEN,
+              skillLevel: "advanced",
+            },
+            {
+              participantId: expect.any(String),
+              firstName: "Legacy",
+              lastName: RUN_TOKEN,
+              skillLevel: null,
+            },
           ]),
         );
       } finally {
@@ -1080,48 +1064,15 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     });
   });
   describe("attendance", () => {
-    let graceId: string;
-    let kofiId: string;
-    let inactiveMemberId: string;
-
-    async function insertMember(
-      firstName: string,
-      isActive = true,
-      memberSocialId = aliceSocialId,
-    ): Promise<string> {
-      const { data, error } = await admin
-        .from("members")
-        .insert({
-          social_id: memberSocialId,
-          first_name: firstName,
-          last_name: RUN_TOKEN,
-          skill_level: "intermediate",
-          is_active: isActive,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      return data.id;
-    }
-
     async function attendeeRows(sessionId: string) {
       const { data, error } = await admin
         .from("session_participants")
-        .select("id, member_id, is_guest, first_name, last_name, skill_level")
+        .select("id, first_name, last_name, skill_level")
         .eq("session_id", sessionId)
         .order("created_at")
         .order("id");
       if (error) throw error;
       return data;
-    }
-
-    async function testMemberCount(): Promise<number> {
-      const { count, error } = await admin
-        .from("members")
-        .select("id", { count: "exact", head: true })
-        .eq("last_name", RUN_TOKEN);
-      if (error) throw error;
-      return count ?? 0;
     }
 
     /** The attendee list from a successful write that read it back. */
@@ -1131,185 +1082,88 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       return result.participants;
     }
 
-    beforeAll(async () => {
-      graceId = await insertMember("Grace");
-      kofiId = await insertMember("Kofi");
-      inactiveMemberId = await insertMember("Ina", false);
-    });
-
-    it("marks active members as attending with a name snapshot, idempotently", async () => {
+    it("adds players with a trimmed name and a level, idempotently, and removes them", async () => {
       const draft = await openDraftFor(hostAlice);
       actingClient = hostAlice.client;
-      const participants = listFrom(
-        await setDraftMemberAttendance({
-          sessionId: draft.sessionId,
-          memberIds: [graceId, kofiId, inactiveMemberId],
-          attending: true,
-        }),
-      );
-      expect(
-        participants.map((participant) => participant.memberId).sort(),
-      ).toEqual([graceId, kofiId].sort());
-      expect(participants[0]).toMatchObject({
-        isGuest: false,
-        lastName: RUN_TOKEN,
-        skillLevel: "intermediate",
-        isMemberActive: true,
-      });
-      const rowsAfterFirst = await attendeeRows(draft.sessionId);
-
-      // Again (another tab, a retry): nothing changes.
-      expect(
-        await setDraftMemberAttendance({
-          sessionId: draft.sessionId,
-          memberIds: [graceId],
-          attending: true,
-        }),
-      ).toMatchObject({ ok: true });
-      expect(await attendeeRows(draft.sessionId)).toEqual(rowsAfterFirst);
-      // Reloading the page shows the same list.
-      expect((await openDraftFor(hostAlice)).participants).toEqual(
-        participants,
-      );
-    });
-
-    it("adds guests without touching the members directory, and removes them", async () => {
-      const draft = await openDraftFor(hostAlice);
-      const membersBefore = await testMemberCount();
-      actingClient = hostAlice.client;
-      const firstGuestInput = {
+      const kaiInput = {
         sessionId: draft.sessionId,
         participantId: randomUUID(),
         firstName: "  Kai ",
         lastName: RUN_TOKEN,
-        skillLevel: "",
+        skillLevel: "beginner" as const,
       };
-      listFrom(await addDraftGuest(firstGuestInput));
-      // A retry of the same add (same id) doesn't add the guest twice.
-      listFrom(await addDraftGuest(firstGuestInput));
-      // A second guest with the same name is fine.
-      const afterSecondGuest = listFrom(
-        await addDraftGuest({
-          sessionId: draft.sessionId,
-          participantId: randomUUID(),
+      const afterKai = listFrom(await addDraftParticipant(kaiInput));
+      expect(afterKai).toEqual([
+        {
+          participantId: kaiInput.participantId,
           firstName: "Kai",
           lastName: RUN_TOKEN,
           skillLevel: "beginner",
-        }),
-      );
-      const guests = afterSecondGuest.filter(
-        (participant) => participant.isGuest,
-      );
-      expect(guests).toEqual([
-        expect.objectContaining({
-          participantId: firstGuestInput.participantId,
-          memberId: null,
-          firstName: "Kai",
-          skillLevel: null,
-        }),
-        expect.objectContaining({ firstName: "Kai", skillLevel: "beginner" }),
+        },
       ]);
-      expect(await testMemberCount()).toBe(membersBefore);
-
-      const removed = listFrom(
-        await removeDraftGuest({
+      // A retry of the same add (same id) doesn't add the player twice.
+      expect(listFrom(await addDraftParticipant(kaiInput))).toEqual(afterKai);
+      const afterGrace = listFrom(
+        await addDraftParticipant({
           sessionId: draft.sessionId,
-          participantId: guests[0].participantId,
+          participantId: randomUUID(),
+          firstName: "Grace",
+          lastName: RUN_TOKEN,
+          skillLevel: "advanced",
         }),
       );
-      expect(
-        removed.map((participant) => participant.participantId),
-      ).not.toContain(guests[0].participantId);
-      // The members are still attending; removing again is fine.
-      expect(
-        removed.filter((participant) => !participant.isGuest),
-      ).toHaveLength(2);
-      expect(
-        await removeDraftGuest({
+      expect(afterGrace.map((participant) => participant.firstName)).toEqual([
+        "Kai",
+        "Grace",
+      ]);
+      // Reloading the page shows the same list.
+      expect((await openDraftFor(hostAlice)).participants).toEqual(afterGrace);
+
+      const afterRemoval = listFrom(
+        await removeDraftParticipant({
           sessionId: draft.sessionId,
-          participantId: guests[0].participantId,
+          participantId: kaiInput.participantId,
         }),
-      ).toMatchObject({ ok: true });
-      // A member's row is never removed as a guest.
-      const graceRow = removed.find(
-        (participant) => participant.memberId === graceId,
-      )!;
-      await removeDraftGuest({
-        sessionId: draft.sessionId,
-        participantId: graceRow.participantId,
-      });
-      expect(
-        (await attendeeRows(draft.sessionId)).map((row) => row.id),
-      ).toContain(graceRow.participantId);
-    });
-
-    it("keeps a deactivated member attending until removed", async () => {
-      await admin.from("members").update({ is_active: false }).eq("id", kofiId);
-      try {
-        const draft = await openDraftFor(hostAlice);
-        expect(
-          draft.participants.find(
-            (participant) => participant.memberId === kofiId,
-          ),
-        ).toMatchObject({ isMemberActive: false });
-
-        actingClient = hostAlice.client;
-        const afterRemoval = listFrom(
-          await setDraftMemberAttendance({
-            sessionId: draft.sessionId,
-            memberIds: [kofiId],
-            attending: false,
-          }),
-        );
-        expect(
-          afterRemoval.find((participant) => participant.memberId === kofiId),
-        ).toBeUndefined();
-        expect(
-          (await attendeeRows(draft.sessionId)).find(
-            (row) => row.member_id === kofiId,
-          ),
-        ).toBeUndefined();
-        // While deactivated, they can't be added back.
-        listFrom(
-          await setDraftMemberAttendance({
-            sessionId: draft.sessionId,
-            memberIds: [kofiId],
-            attending: true,
-          }),
-        );
-        expect(
-          (await attendeeRows(draft.sessionId)).find(
-            (row) => row.member_id === kofiId,
-          ),
-        ).toBeUndefined();
-      } finally {
-        await admin
-          .from("members")
-          .update({ is_active: true })
-          .eq("id", kofiId);
-      }
-    });
-
-    it("skips another social's member, like an inactive one", async () => {
-      const otherSocialMemberId = await insertMember(
-        "Omari",
-        true,
-        otherSocialId,
       );
+      expect(afterRemoval.map((participant) => participant.firstName)).toEqual([
+        "Grace",
+      ]);
+      // Removing again (already gone) counts as done.
+      expect(
+        await removeDraftParticipant({
+          sessionId: draft.sessionId,
+          participantId: kaiInput.participantId,
+        }),
+      ).toEqual({ ok: true, participants: afterRemoval });
+    });
+
+    it("refuses a name already in the session (case, accents and spacing ignored) with the host's message", async () => {
       const draft = await openDraftFor(hostAlice);
       const before = await attendeeRows(draft.sessionId);
       actingClient = hostAlice.client;
-      const participants = listFrom(
-        await setDraftMemberAttendance({
+      expect(
+        await addDraftParticipant({
           sessionId: draft.sessionId,
-          memberIds: [otherSocialMemberId],
-          attending: true,
+          participantId: randomUUID(),
+          firstName: "GRÂCE",
+          lastName: ` ${RUN_TOKEN.toLowerCase()} `,
+          skillLevel: "beginner",
+        }),
+      ).toEqual({
+        ok: false,
+        message: `Someone named GRÂCE ${RUN_TOKEN.toLowerCase()} is already in this session. Add something to tell them apart, like an initial.`,
+      });
+      expect(await attendeeRows(draft.sessionId)).toEqual(before);
+      // A distinguishing initial makes it a different name.
+      listFrom(
+        await addDraftParticipant({
+          sessionId: draft.sessionId,
+          participantId: randomUUID(),
+          firstName: "Grace",
+          lastName: `${RUN_TOKEN} B`,
+          skillLevel: "beginner",
         }),
       );
-      expect(
-        participants.map((participant) => participant.memberId),
-      ).not.toContain(otherSocialMemberId);
-      expect(await attendeeRows(draft.sessionId)).toEqual(before);
     });
 
     it("never lets another social's host change the attendance, while a co-host can", async () => {
@@ -1318,39 +1172,43 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       actingClient = hostBob.client;
       const draftNotOpen = { ok: false, message: DRAFT_NOT_OPEN };
       expect(
-        await setDraftMemberAttendance({
-          sessionId: draft.sessionId,
-          memberIds: [graceId, kofiId],
-          attending: false,
-        }),
-      ).toEqual(draftNotOpen);
-      expect(
-        await addDraftGuest({
+        await addDraftParticipant({
           sessionId: draft.sessionId,
           participantId: randomUUID(),
           firstName: "Bob's",
           lastName: "Friend",
-          skillLevel: "",
+          skillLevel: "beginner",
         }),
       ).toEqual(draftNotOpen);
-      const guestId = before.find((row) => row.is_guest)!.id;
+      // Another social's participant looks like one that's already gone.
       expect(
-        await removeDraftGuest({
+        await removeDraftParticipant({
           sessionId: draft.sessionId,
-          participantId: guestId,
-        }),
-      ).toEqual(draftNotOpen);
-      expect(await attendeeRows(draft.sessionId)).toEqual(before);
-
-      // Alice's co-host works on the same list (Grace already attends: no change).
-      actingClient = coHostAna.client;
-      expect(
-        await setDraftMemberAttendance({
-          sessionId: draft.sessionId,
-          memberIds: [graceId],
-          attending: true,
+          participantId: before[0].id,
         }),
       ).toMatchObject({ ok: true });
+      expect(await attendeeRows(draft.sessionId)).toEqual(before);
+
+      // Alice's co-host works on the same list.
+      actingClient = coHostAna.client;
+      const coHostInput = {
+        sessionId: draft.sessionId,
+        participantId: randomUUID(),
+        firstName: "Ana's",
+        lastName: RUN_TOKEN,
+        skillLevel: "intermediate" as const,
+      };
+      expect(
+        listFrom(await addDraftParticipant(coHostInput)).map(
+          (participant) => participant.participantId,
+        ),
+      ).toContain(coHostInput.participantId);
+      listFrom(
+        await removeDraftParticipant({
+          sessionId: draft.sessionId,
+          participantId: coHostInput.participantId,
+        }),
+      );
       expect(await attendeeRows(draft.sessionId)).toEqual(before);
     });
 
@@ -1359,42 +1217,32 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       const before = await attendeeRows(draft.sessionId);
       actingClient = hostAlice.client;
       expect(
-        await addDraftGuest({
+        await addDraftParticipant({
           sessionId: draft.sessionId,
           participantId: randomUUID(),
           firstName: "Kai",
           lastName: "   ",
-          skillLevel: "",
+          skillLevel: "beginner",
         }),
       ).toEqual({ ok: false, message: "Enter a last name." });
+      // A level is required for every player (Ryan, 2026-11-11).
       expect(
-        await setDraftMemberAttendance({
+        await addDraftParticipant({
           sessionId: draft.sessionId,
-          memberIds: ["not-a-uuid"],
-          attending: true,
+          participantId: randomUUID(),
+          firstName: "Kai",
+          lastName: "Lee",
+          // What a tampered or outdated page could send.
+          skillLevel: "" as "beginner",
+        }),
+      ).toEqual({ ok: false, message: "Choose a level." });
+      expect(
+        await removeDraftParticipant({
+          sessionId: draft.sessionId,
+          participantId: "not-a-uuid",
         }),
       ).toMatchObject({ ok: false });
       expect(await attendeeRows(draft.sessionId)).toEqual(before);
-    });
-
-    it("Clear removes every attending member and keeps the guests", async () => {
-      const draft = await openDraftFor(hostAlice);
-      const attendingIds = draft.participants.flatMap((participant) =>
-        participant.isGuest || !participant.memberId
-          ? []
-          : [participant.memberId],
-      );
-      actingClient = hostAlice.client;
-      const cleared = listFrom(
-        await setDraftMemberAttendance({
-          sessionId: draft.sessionId,
-          memberIds: attendingIds,
-          attending: false,
-        }),
-      );
-      expect(cleared).toEqual([
-        expect.objectContaining({ isGuest: true, firstName: "Kai" }),
-      ]);
     });
   });
   describe("saved setups", () => {
@@ -1524,12 +1372,12 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           }),
         ),
       ).toEqual({ ok: true });
-      const guestResult = await addDraftGuest({
+      const guestResult = await addDraftParticipant({
         sessionId: draft.sessionId,
         participantId: randomUUID(),
         firstName: "Kai",
         lastName: "Guest",
-        skillLevel: "",
+        skillLevel: "beginner",
       });
       expect(guestResult).toMatchObject({ ok: true });
       const beforeApply = await openDraftFor(hostDana);
@@ -1936,12 +1784,12 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       const guestParticipantId = randomUUID();
       actingClient = hostFrank.client;
       expect(
-        await addDraftGuest({
+        await addDraftParticipant({
           sessionId: loaded.sessionId,
           participantId: guestParticipantId,
           firstName: "Tab",
           lastName: "Guest",
-          skillLevel: "",
+          skillLevel: "beginner",
         }),
       ).toMatchObject({ ok: true });
       expect((await openDraftFor(hostFrank)).draftRevision).toBe(
@@ -1957,7 +1805,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
       // Removing the guest again doesn't bump it either (and lets cleanup
       // delete the draft once it is discarded).
       expect(
-        await removeDraftGuest({
+        await removeDraftParticipant({
           sessionId: loaded.sessionId,
           participantId: guestParticipantId,
         }),

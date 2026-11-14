@@ -1,4 +1,4 @@
--- An empty database works: no socials, hosts, members or sessions. Rows left
+-- An empty database works: no socials, hosts or sessions. Rows left
 -- by `pnpm seed` and other runs are cleared inside this (rolled back)
 -- transaction first. The first social and its manager come from
 -- create_social_with_manager (`pnpm create-social`).
@@ -17,8 +17,6 @@ delete from public.session_participants;
 alter table public.session_participants enable trigger session_participants_delete_only_in_draft;
 delete from public.sessions;
 delete from public.saved_setups;
-delete from public.member_devices;
-delete from public.members;
 delete from public.courts;
 -- Emptying every social at once passes the last-manager guard.
 delete from public.hosts;
@@ -28,13 +26,14 @@ insert into auth.users (id, email) values ('a0000000-0000-4000-8000-000000000009
 
 -- The server calls everything as service_role.
 set local role service_role;
-select throws_ok(
-  $$select * from public.search_checkin_names('tag0000000000000001', 'gr', repeat('a', 64), repeat('b', 64))$$,
-  'P0002', 'NO_OPEN_SESSION', 'search on an empty database says no session is open'
+select is(
+  public.get_checkin_page('tag0000000000000001', repeat('a', 64)),
+  '{"status":"inactive"}'::jsonb,
+  'the check-in page on an empty database says the link is inactive'
 );
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', repeat('a', 64), repeat('b', 64), 'Nina', 'New', 'beginner')$$,
-  'P0002', 'NO_OPEN_SESSION', 'submit on an empty database says no session is open'
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, repeat('a', 64), repeat('b', 64), 'Nina', 'New', 'beginner')$$,
+  'P0001', 'SESSION_CHANGED', 'submit on an empty database says no session is open'
 );
 select throws_ok(
   $$select public.append_session_event('a0000000-0000-4000-8000-000000000009', gen_random_uuid(), gen_random_uuid(), 0, 'Paused', '{}', now())$$,

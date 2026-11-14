@@ -1,25 +1,21 @@
 import { z } from "zod";
-import { SKILL_LEVELS } from "@/server/members/memberSearch";
-import { MAX_SEARCH_MATCHES, type GuestFormFieldErrors } from "./checkinRules";
+import type { CheckinFormFieldErrors } from "./checkinRules";
 
 // What the public check-in functions return, parsed at the boundary, and the
 // typed results the check-in server actions hand to the page. Pure (no
 // server-only imports) so the page can use the types and tests can call it.
 // Fields the SQL can leave null are nullable here even where the generated
-// types say otherwise (migration 20261111090000_m5_checkin.sql).
-
+// types say otherwise (migration 20261112090000_session_only_participants.sql).
+//
 const timestampSchema = z
   .string()
   .refine((value) => !Number.isNaN(Date.parse(value)), "Not a timestamp.");
-
-const skillLevelSchema = z.enum(SKILL_LEVELS);
 
 const checkinRequestStatusSchema = z.enum([
   "pending",
   "approved",
   "rejected",
   "withdrawn",
-  "already_checked_in",
 ]);
 
 export type CheckinRequestStatus = z.infer<typeof checkinRequestStatusSchema>;
@@ -31,6 +27,7 @@ const checkinPageRpcSchema = z.discriminatedUnion("status", [
     status: z.literal("open"),
     social_name: z.string(),
     session: z.object({
+      id: z.uuid(),
       name: z.string(),
       status: z.enum(["draft", "live"]),
       planned_start: timestampSchema,
@@ -38,41 +35,25 @@ const checkinPageRpcSchema = z.discriminatedUnion("status", [
       courts_count: z.number().int().nonnegative(),
       checked_in_count: z.number().int().nonnegative(),
     }),
-    recognised_member: z
-      .object({
-        member_id: z.uuid(),
-        first_name: z.string(),
-        last_name: z.string(),
-        skill_level: skillLevelSchema.nullable(),
-      })
-      .nullable(),
     current_request: z
       .object({
         id: z.uuid(),
         status: checkinRequestStatusSchema,
         first_name: z.string(),
-        member_id: z.uuid().nullable(),
       })
       .nullable(),
     now: timestampSchema,
   }),
 ]);
 
-export interface RecognisedMember {
-  memberId: string;
-  firstName: string;
-  lastName: string;
-  skillLevel: z.infer<typeof skillLevelSchema> | null;
-}
-
 export interface CurrentCheckinRequest {
   checkinRequestId: string;
   status: CheckinRequestStatus;
   firstName: string;
-  memberId: string | null;
 }
 
 export interface CheckinSessionHeader {
+  sessionId: string;
   name: string;
   plannedStart: string;
   plannedEnd: string;
@@ -84,8 +65,6 @@ export interface OpenCheckinPage {
   status: "open";
   socialName: string;
   session: CheckinSessionHeader;
-  /** The member this phone is linked to in this social, if any. */
-  recognisedMember: RecognisedMember | null;
   /** This phone's latest request in the open session, if any. */
   currentRequest: CurrentCheckinRequest | null;
   /** The database's clock when the page was read (ISO). */
@@ -110,52 +89,21 @@ export function checkinPageFromRpc(rpcResult: unknown): CheckinPage {
         status: "open",
         socialName: parsed.social_name,
         session: {
+          sessionId: parsed.session.id,
           name: parsed.session.name,
           plannedStart: parsed.session.planned_start,
           plannedEnd: parsed.session.planned_end,
           courtsCount: parsed.session.courts_count,
           checkedInCount: parsed.session.checked_in_count,
         },
-        recognisedMember: parsed.recognised_member && {
-          memberId: parsed.recognised_member.member_id,
-          firstName: parsed.recognised_member.first_name,
-          lastName: parsed.recognised_member.last_name,
-          skillLevel: parsed.recognised_member.skill_level,
-        },
         currentRequest: parsed.current_request && {
           checkinRequestId: parsed.current_request.id,
           status: parsed.current_request.status,
           firstName: parsed.current_request.first_name,
-          memberId: parsed.current_request.member_id,
         },
         now: parsed.now,
       };
   }
-}
-
-const nameMatchesRpcSchema = z
-  .array(
-    z.object({
-      member_id: z.uuid(),
-      first_name: z.string(),
-      last_name: z.string(),
-    }),
-  )
-  .max(MAX_SEARCH_MATCHES);
-
-/** A search result: names only, never a status or a level. */
-export interface NameMatch {
-  memberId: string;
-  firstName: string;
-  lastName: string;
-}
-
-export function nameMatchesFromRpc(rpcResult: unknown): NameMatch[] {
-  return nameMatchesRpcSchema.parse(rpcResult).map((row) => ({
-    memberId: row.member_id,
-    firstName: row.first_name,
-    lastName: row.last_name,
-  }));
 }
 
 const submitCheckinRpcSchema = z.discriminatedUnion("status", [
@@ -165,15 +113,12 @@ const submitCheckinRpcSchema = z.discriminatedUnion("status", [
     was_already_pending: z.boolean(),
   }),
   z.object({ status: z.literal("already_checked_in") }),
-  z.object({ status: z.literal("member_not_found") }),
 ]);
 
 export type SubmitCheckinOutcome =
   | { status: "pending"; checkinRequestId: string }
-  /** Only ever answered to the member's own linked phone. */
-  | { status: "already_checked_in" }
-  /** The member was deactivated (or never belonged here) since the search. */
-  | { status: "member_not_found" };
+  /** Only ever answered to the phone whose own request in this session was approved. */
+  | { status: "already_checked_in" };
 
 export function submitCheckinOutcomeFromRpc(
   rpcResult: unknown,
@@ -194,13 +139,14 @@ export type CheckinFailure =
 export type ReadCheckinPageResult =
   { ok: true; page: CheckinPage } | { ok: false; failure: "unavailable" };
 
-export type SearchCheckinNamesResult =
-  { ok: true; matches: NameMatch[] } | { ok: false; failure: CheckinFailure };
-
 export type SubmitCheckinResult =
   | { ok: true; outcome: SubmitCheckinOutcome }
-  | { ok: false; failure: CheckinFailure }
-  | { ok: false; failure: "invalid_input"; fieldErrors: GuestFormFieldErrors };
+  | { ok: false; failure: CheckinFailure | "session_changed" }
+  | {
+      ok: false;
+      failure: "invalid_input";
+      fieldErrors: CheckinFormFieldErrors;
+    };
 
 /**
  * How the check-in functions' raised errors read (migration error
@@ -209,6 +155,7 @@ export type SubmitCheckinResult =
  *     same here; the caller re-reads the page to tell them apart.
  */
 export type CheckinDatabaseErrorKind =
+  | "session_changed"
   | "rate_limited"
   | "no_open_session_or_unknown_tag"
   | "invalid_input"
@@ -218,6 +165,8 @@ export function checkinDatabaseErrorKind(error: {
   message: string;
 }): CheckinDatabaseErrorKind {
   switch (error.message) {
+    case "SESSION_CHANGED":
+      return "session_changed";
     case "RATE_LIMITED":
       return "rate_limited";
     case "NO_OPEN_SESSION":
@@ -229,3 +178,6 @@ export function checkinDatabaseErrorKind(error: {
       return "unexpected";
   }
 }
+
+export type EnsureCheckinDeviceResult =
+  { ok: true } | { ok: false; failure: CheckinFailure };

@@ -1,8 +1,8 @@
 // Session setup (/setup) against the LOCAL Supabase stack: Session details,
 // Courts, Who's playing and the Session summary. Runs on desktop and on a
-// phone (the `mobile` project). Test courts and members carry a unique token
-// in their name; test sessions belong to the test's own host. Everything is
-// removed afterwards.
+// phone (the `mobile` project). Test courts carry a unique token in their
+// name; test sessions belong to the test's own host. Everything is removed
+// afterwards. Players exist only inside their session.
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import {
@@ -23,11 +23,6 @@ const testHostUserIds: string[] = [];
 
 function uniqueCourtToken(): string {
   const token = `Zqcourt${randomUUID().slice(0, 8)}`;
-  return token;
-}
-
-function uniqueMemberToken(): string {
-  const token = `Zqmember${randomUUID().slice(0, 8)}`;
   return token;
 }
 
@@ -73,8 +68,7 @@ test.afterAll(async () => {
       }
     }
   }
-  // After the sessions, whose attendee rows point at the members: the
-  // socials, with their courts and members.
+  // After the sessions: the socials, with their courts.
   await deleteCreatedLogins();
 });
 
@@ -240,8 +234,8 @@ test("a host sets up a draft's details and courts, sees the summary, reloads and
       Array.from({ length: 10 }, (_, index) => ({
         session_id: sessionId,
         social_id: socialId,
-        is_guest: true,
         first_name: `Guest${index}`,
+        skill_level: "beginner" as const,
         last_name: courtToken,
       })),
     );
@@ -263,7 +257,7 @@ test("a host sets up a draft's details and courts, sees the summary, reloads and
   await expect(
     page.getByRole("button", { name: "Singles · 1 v 1" }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(summary).toContainText("10 (0 members + 10 guests)");
+  await expect(summary).toContainText("Players10");
   await expect(
     summary.getByRole("img", {
       name: "Capacity: 3 courts of 2 players, 6 on court, 4 waiting",
@@ -363,103 +357,6 @@ async function startNewDraft(page: Page) {
   ).toBeVisible();
 }
 
-async function expectAttendanceSaved(page: Page) {
-  await expect(page.getByText("Saving attendance…")).toHaveCount(0);
-  await expect(page.getByText(/not saved/i)).toHaveCount(0);
-}
-
-test("a host picks members and guests for a draft, and they persist", async ({
-  page,
-}) => {
-  const memberToken = uniqueMemberToken();
-  const { email } = await signInAsNewManager(
-    page,
-    "setup-players",
-    async (socialId) => {
-      const { error } = await adminClient.from("members").insert([
-        {
-          social_id: socialId,
-          first_name: "Grace",
-          last_name: memberToken,
-          skill_level: "advanced",
-        },
-        { social_id: socialId, first_name: "Kofi", last_name: memberToken },
-      ]);
-      if (error) throw error;
-    },
-  );
-  testHostUserIds.push((await findUserIdByEmail(email))!);
-  await startNewDraft(page);
-
-  const card = page.getByRole("region", { name: "Who's playing?" });
-  const summary = page.getByRole("complementary", {
-    name: "Session summary and start",
-  });
-  await card.getByLabel("Search members by name").fill(memberToken);
-  await expect(card.getByText("Showing 2 of 2 matching members")).toBeVisible();
-  const grace = card.getByRole("button", {
-    name: new RegExp(`^Grace ${memberToken}`),
-  });
-  await grace.click();
-  await expect(grace).toHaveAttribute("aria-pressed", "true");
-  await expect(grace).toContainText("Attending");
-
-  // A guest: the last name is required.
-  await card.getByLabel("First name").fill("Kai");
-  await card.getByRole("button", { name: "Add guest" }).click();
-  await expect(card.getByLabel("Last name")).toHaveAccessibleDescription(
-    "Enter a last name.",
-  );
-  await card.getByLabel("Last name").fill(memberToken);
-  await card.getByLabel("Skill (optional)").selectOption("beginner");
-  await card.getByRole("button", { name: "Add guest" }).click();
-  const removeKai = card.getByRole("button", {
-    name: `Remove guest Kai ${memberToken}`,
-  });
-  await expect(removeKai).toBeEnabled();
-  await expect(card.getByText("Guest · Beginner")).toBeVisible();
-  await expectAttendanceSaved(page);
-  await expect(summary).toContainText("2 (1 member + 1 guest)");
-
-  // Reload: both persisted, and the summary counts them.
-  await page.reload();
-  await card.getByLabel("Search members by name").fill(memberToken);
-  await expect(grace).toHaveAttribute("aria-pressed", "true");
-  await expect(removeKai).toBeVisible();
-  await expect(summary).toContainText("2 (1 member + 1 guest)");
-  await expect(card.getByText("1 attending", { exact: true })).toBeVisible();
-  await expect(card.getByText(/^\d+ registered$/)).toBeVisible();
-  await expect(card.getByText(/^\d+ not attending$/)).toBeVisible();
-  await expect(card.getByText("+1 guest")).toBeVisible();
-  await expectNoHorizontalScroll(page);
-
-  // Remove the guest; add another, then Clear removes members only.
-  await removeKai.click();
-  await expect(removeKai).toHaveCount(0);
-  await expectAttendanceSaved(page);
-  await expect(summary).toContainText("1 (1 member + 0 guests)");
-  await card.getByLabel("First name").fill("Ben");
-  await card.getByLabel("Last name").fill(memberToken);
-  await card.getByRole("button", { name: "Add guest" }).click();
-  await expectAttendanceSaved(page);
-  await card
-    .getByRole("button", { name: "Clear 1 attending member (guests stay)" })
-    .click();
-  await expect(grace).toHaveAttribute("aria-pressed", "false");
-  await expectAttendanceSaved(page);
-  await expect(
-    card.getByRole("button", { name: `Remove guest Ben ${memberToken}` }),
-  ).toBeVisible();
-  await expect(summary).toContainText("1 (0 members + 1 guest)");
-
-  // The guest never joined the members directory.
-  const { count } = await adminClient
-    .from("members")
-    .select("id", { count: "exact", head: true })
-    .eq("last_name", memberToken);
-  expect(count).toBe(2);
-});
-
 test("a host who isn't the social manager can't add courts", async ({
   page,
 }) => {
@@ -480,33 +377,20 @@ test("a host who isn't the social manager can't add courts", async ({
   ).toHaveCount(0);
 });
 
-test("a second social's manager sees only their own social's courts and members", async ({
+test("a second social's manager sees only their own social's courts", async ({
   page,
 }) => {
   const courtToken = uniqueCourtToken();
-  const memberToken = uniqueMemberToken();
-  // Social A, with nobody signed in: a court and a member that B must never see.
+  // Social A, with nobody signed in: a court that B must never see.
   const socialAId = await createSocial(uniqueSocialName("setup-social-a"));
   await insertCourts(socialAId, [`${courtToken} Court 1`]);
-  const { error: memberAError } = await adminClient.from("members").insert({
-    social_id: socialAId,
-    first_name: "Ada",
-    last_name: memberToken,
-  });
-  if (memberAError) throw memberAError;
 
-  // Social B has its own "Court 1" (names are unique per social) and member.
+  // Social B has its own "Court 1" (names are unique per social).
   const { email } = await signInAsNewManager(
     page,
     "setup-social-b",
     async (socialBId) => {
       await insertCourts(socialBId, [`${courtToken} Court 1`]);
-      const { error } = await adminClient.from("members").insert({
-        social_id: socialBId,
-        first_name: "Bea",
-        last_name: memberToken,
-      });
-      if (error) throw error;
     },
   );
   testHostUserIds.push((await findUserIdByEmail(email))!);
@@ -515,18 +399,6 @@ test("a second social's manager sees only their own social's courts and members"
   await expect(
     page.getByRole("button", { name: new RegExp(`${courtToken} Court 1`) }),
   ).toHaveCount(1);
-  const card = page.getByRole("region", { name: "Who's playing?" });
-  await card.getByLabel("Search members by name").fill(memberToken);
-  await expect(card.getByText("Showing 1 of 1 matching member")).toBeVisible();
-  await expect(
-    card.getByRole("button", { name: new RegExp(`^Bea ${memberToken}`) }),
-  ).toBeVisible();
-  await expect(card.getByText(new RegExp(`Ada ${memberToken}`))).toHaveCount(0);
-
-  await page.goto(`/members?q=${memberToken}`);
-  await expect(page.getByText("Showing 1 of 1 active member")).toBeVisible();
-  await expect(page.getByText(`Bea ${memberToken}`)).toBeVisible();
-  await expect(page.getByText(`Ada ${memberToken}`)).toHaveCount(0);
 });
 
 const RECOMMENDED_PRIORITY_LABELS = [
@@ -640,10 +512,10 @@ test("a host reorders the rotation and switches rules; it persists across naviga
     },
   });
 
-  // Away to Members and back: still there.
+  // Away to Hosts and back: still there.
   const nav = page.getByRole("navigation", { name: "Host" });
-  await nav.getByRole("link", { name: "Members" }).click();
-  await expect(page).toHaveURL(/\/members$/);
+  await nav.getByRole("link", { name: "Hosts" }).click();
+  await expect(page).toHaveURL(/\/hosts$/);
   await nav.getByRole("link", { name: "Session setup" }).click();
   await expectPriorityOrder(page, reorderedLabels);
   await expect(manualSwitch).toHaveAttribute("aria-checked", "false");
@@ -670,8 +542,8 @@ test("a host reorders the rotation and switches rules; it persists across naviga
 
   // Leaving within the autosave delay still saves the last change.
   await page.getByRole("button", { name: "Move Playing time up" }).click();
-  await nav.getByRole("link", { name: "Members" }).click();
-  await expect(page).toHaveURL(/\/members$/);
+  await nav.getByRole("link", { name: "Hosts" }).click();
+  await expect(page).toHaveURL(/\/hosts$/);
   await expect
     .poll(async () => {
       const rotation = (await savedRotation(hostUserId)) as {
@@ -821,8 +693,8 @@ test("the stepper and checklist flag a half-filled guest form", async ({
       Array.from({ length: 4 }, (_, index) => ({
         session_id: sessionId,
         social_id: socialId,
-        is_guest: true,
         first_name: `Guest${index}`,
+        skill_level: "beginner" as const,
         last_name: "Stepper",
       })),
     );
@@ -836,7 +708,7 @@ test("the stepper and checklist flag a half-filled guest form", async ({
   );
   const checklist = page.getByRole("list", { name: "Setup checklist" });
   await expect(checklist).toContainText(
-    "Guest form has an unfinished entry: add Kai's last name or clear it",
+    "Participant form has an unfinished entry: add Kai's last name or clear it",
   );
   await expect(
     page.getByRole("button", { name: /start pickleball session/i }),
@@ -914,8 +786,8 @@ test("a stale tab can't overwrite newer settings: it says so, and saves again af
 
   // A client-side trip away and back loads the newest revision too.
   const nav = tabB.getByRole("navigation", { name: "Host" });
-  await nav.getByRole("link", { name: "Members" }).click();
-  await expect(tabB).toHaveURL(/\/members$/);
+  await nav.getByRole("link", { name: "Hosts" }).click();
+  await expect(tabB).toHaveURL(/\/hosts$/);
   await nav.getByRole("link", { name: "Session setup" }).click();
   await tabB.getByLabel("Location (optional)").fill("After navigating");
   await expectSaved(tabB);
@@ -927,8 +799,7 @@ test("a stale tab can't overwrite newer settings: it says so, and saves again af
 
 // A truly fresh editor after leaving (Setup evicted from Next's <Activity>
 // cache) can't be forced here: Next keeps 3 routes per layout level and the
-// host area has only 3 sections (Setup, Members, Hosts; /members/new is under
-// Members). The component tests cover that path (SessionSetupEditor.test.tsx,
+// host area has only a few sections (Setup, Hosts, the check-in link). The component tests cover that path (SessionSetupEditor.test.tsx,
 // "after the editor truly unmounts"). This covers coming back to the cached
 // Setup while the save made on leaving is still on its way.
 test("coming back while the save made on leaving is still on its way: it lands, then the next edit saves", async ({
@@ -961,9 +832,9 @@ test("coming back while the save made on leaving is still on its way: it lands, 
   // An edit, then away within the autosave delay, and straight back.
   await page.getByLabel("Session name").fill("Saved on the way out");
   const nav = page.getByRole("navigation", { name: "Host" });
-  await nav.getByRole("link", { name: "Members" }).click();
+  await nav.getByRole("link", { name: "Hosts" }).click();
   await saveIsHeld;
-  await expect(page).toHaveURL(/\/members$/);
+  await expect(page).toHaveURL(/\/hosts$/);
   await nav.getByRole("link", { name: "Session setup" }).click();
   await expect(page).toHaveURL(/\/setup$/);
   await expect(saveStatus(page)).toHaveText("Saving…");
@@ -989,4 +860,40 @@ test("coming back while the save made on leaving is still on its way: it lands, 
       return data;
     })
     .toEqual({ name: "Saved on the way out", location: "After coming back" });
+});
+
+test("session-only players require a level, persist, reject duplicate names and can be removed", async ({
+  page,
+}) => {
+  await signInAsNewManager(page, "session-players");
+  await page.getByRole("button", { name: "Start a new session" }).click();
+  const players = page.getByRole("region", { name: "Who's playing?" });
+  const form = players.getByRole("form", { name: "Add a player" });
+  await form.getByLabel("First name").fill("Zoë");
+  await form.getByLabel("Last name").fill("Núñez");
+  await form.getByRole("button", { name: "Add player", exact: true }).click();
+  await expect(form.getByText("Choose a level.")).toBeVisible();
+  await form.getByLabel("Skill", { exact: true }).selectOption("intermediate");
+  await form.getByRole("button", { name: "Add player", exact: true }).click();
+  await expect(
+    players.getByRole("button", { name: "Remove Zoë Núñez" }),
+  ).toBeEnabled();
+  await page.reload();
+  await expect(players.getByRole("list", { name: "Players" })).toContainText(
+    "Zoë Núñez",
+  );
+  await form.getByLabel("First name").fill("ZOE");
+  await form.getByLabel("Last name").fill("nunez");
+  await form.getByLabel("Skill", { exact: true }).selectOption("advanced");
+  await form.getByRole("button", { name: "Add player", exact: true }).click();
+  await expect(players.getByText(/already in this session/)).toBeVisible();
+  await expect(
+    players.getByRole("list", { name: "Players" }).getByRole("listitem"),
+  ).toHaveCount(1);
+  await page.reload();
+  await players.getByRole("button", { name: "Remove Zoë Núñez" }).click();
+  await expect(players.getByRole("list", { name: "Players" })).toHaveCount(0);
+  await page.reload();
+  await expect(players.getByRole("list", { name: "Players" })).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
 });

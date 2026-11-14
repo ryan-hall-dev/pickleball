@@ -114,7 +114,6 @@ export function makeParticipants(count: number, seed = 1): Participant[] {
     firstName: pick(FIRST_NAMES),
     lastName: `${pick(LAST_NAMES)} ${index + 1}`,
     skill: pick(SKILLS),
-    isGuest: random() < 0.2,
   }));
 }
 

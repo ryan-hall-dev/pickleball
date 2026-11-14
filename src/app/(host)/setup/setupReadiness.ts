@@ -3,7 +3,7 @@
 // No React here.
 import { PLAYERS_PER_MATCH, type CourtFormat } from "@/engine";
 import type { SetupFormErrors, SetupFormField } from "./setupPlanning";
-import type { GuestForm } from "./whosPlaying";
+import type { ParticipantForm } from "./whosPlaying";
 
 /**
  * done: nothing left to do. attention: something to fix (orange, "N to fix").
@@ -41,8 +41,8 @@ export interface SetupReadinessInput {
   selectedCourtCount: number;
   matchFormat: CourtFormat;
   attendingPlayerCount: number;
-  /** The quick-add guest form as typed (not yet added). */
-  guestForm: GuestForm;
+  /** The quick-add participant form as typed (not yet added). */
+  participantForm: ParticipantForm;
   /** The draft autosave has nothing pending or failed. */
   isDraftSaved: boolean;
 }
@@ -63,18 +63,22 @@ function plural(count: number, singular: string, pluralForm: string): string {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 
-export function isGuestFormUnfinished(guestForm: GuestForm): boolean {
-  return Object.values(guestForm).some((value) => value.trim() !== "");
+export function isParticipantFormUnfinished(
+  participantForm: ParticipantForm,
+): boolean {
+  return Object.values(participantForm).some((value) => value.trim() !== "");
 }
 
-/** "Guest form has an unfinished entry: add Kai's last name or clear it". */
-export function unfinishedGuestFormMessage(guestForm: GuestForm): string {
-  const firstName = guestForm.firstName.trim();
+/** "Participant form has an unfinished entry: add Kai's last name or clear it". */
+export function unfinishedParticipantFormMessage(
+  participantForm: ParticipantForm,
+): string {
+  const firstName = participantForm.firstName.trim();
   const fix =
-    firstName !== "" && guestForm.lastName.trim() === ""
+    firstName !== "" && participantForm.lastName.trim() === ""
       ? `add ${firstName}'s last name or clear it`
-      : "add the guest or clear it";
-  return `Guest form has an unfinished entry: ${fix}`;
+      : "add the participant or clear it";
+  return `Participant form has an unfinished entry: ${fix}`;
 }
 
 function playersChecklistItem(
@@ -118,7 +122,7 @@ export function setupReadiness({
   selectedCourtCount,
   matchFormat,
   attendingPlayerCount,
-  guestForm,
+  participantForm,
   isDraftSaved,
 }: SetupReadinessInput): SetupReadiness {
   const checklist: ChecklistItem[] = [];
@@ -149,15 +153,15 @@ export function setupReadiness({
     matchFormat,
   );
   checklist.push(playersItem);
-  const hasUnfinishedGuest = isGuestFormUnfinished(guestForm);
-  if (hasUnfinishedGuest) {
+  const hasUnfinishedParticipant = isParticipantFormUnfinished(participantForm);
+  if (hasUnfinishedParticipant) {
     checklist.push({
       isDone: false,
-      text: unfinishedGuestFormMessage(guestForm),
+      text: unfinishedParticipantFormMessage(participantForm),
     });
   }
   const playersIssueCount =
-    (playersItem.isDone ? 0 : 1) + (hasUnfinishedGuest ? 1 : 0);
+    (playersItem.isDone ? 0 : 1) + (hasUnfinishedParticipant ? 1 : 0);
 
   const stateFor = (issueCount: number, isUntouched: boolean) =>
     issueCount === 0 ? "done" : isUntouched ? "notStarted" : "attention";
@@ -179,7 +183,7 @@ export function setupReadiness({
       label: "Players",
       state: stateFor(
         playersIssueCount,
-        attendingPlayerCount === 0 && !hasUnfinishedGuest,
+        attendingPlayerCount === 0 && !hasUnfinishedParticipant,
       ),
       issueCount: playersIssueCount,
     },

@@ -325,7 +325,6 @@ async function createHostedDraftSession(
         PLAYER_FIRST_NAMES.slice(0, playerCount).map((firstName) => ({
           session_id: sessionId,
           social_id: socialId,
-          is_guest: true,
           first_name: firstName,
           last_name: "Tester",
           skill_level: "intermediate" as const,
@@ -349,7 +348,6 @@ async function createHostedDraftSession(
       firstName: participant.first_name,
       lastName: participant.last_name,
       skill: "intermediate",
-      isGuest: true,
     })),
   };
   return {

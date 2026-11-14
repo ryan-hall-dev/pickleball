@@ -8,7 +8,6 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   approveCheckin,
-  closeCheckinAlreadyCheckedIn,
   listPendingCheckins,
   rejectCheckin,
 } from "@/server/checkin/hostCheckinActions";
@@ -27,46 +26,36 @@ vi.mock("@/server/checkin/hostCheckinActions", () => ({
   listPendingCheckins: vi.fn(),
   approveCheckin: vi.fn(),
   rejectCheckin: vi.fn(),
-  closeCheckinAlreadyCheckedIn: vi.fn(),
 }));
 
 const listMock = vi.mocked(listPendingCheckins);
 const approveMock = vi.mocked(approveCheckin);
 const rejectMock = vi.mocked(rejectCheckin);
-const closeMock = vi.mocked(closeCheckinAlreadyCheckedIn);
 
 const NOW = Date.parse("2026-11-07T18:10:00.000Z");
 
 const kai: PendingCheckinRequest = {
   checkinRequestId: "a0000000-0000-4000-8000-000000000001",
   createdAt: "2026-11-07T18:09:00.000Z",
-  memberId: null,
-  firstName: "Kai",
-  lastName: "Moreno",
-  requestedSkillLevel: "beginner",
-  savedSkillLevel: null,
-  isAlreadyAttending: false,
-  isPossibleDuplicate: false,
-};
-const grace: PendingCheckinRequest = {
-  checkinRequestId: "a0000000-0000-4000-8000-000000000002",
-  createdAt: "2026-11-07T18:06:00.000Z",
-  memberId: "b0000000-0000-4000-8000-000000000002",
-  firstName: "Grace",
-  lastName: "Kim",
-  requestedSkillLevel: null,
-  savedSkillLevel: "beginner",
-  isAlreadyAttending: true,
-  isPossibleDuplicate: false,
-};
-const kaiParticipant: DraftParticipant = {
-  participantId: "e0000000-0000-4000-8000-000000000001",
-  memberId: "b0000000-0000-4000-8000-000000000001",
-  isGuest: false,
   firstName: "Kai",
   lastName: "Moreno",
   skillLevel: "beginner",
-  isMemberActive: true,
+  isNameAlreadyInSession: false,
+};
+/** Someone named Grace Kim is already in the session. */
+const grace: PendingCheckinRequest = {
+  checkinRequestId: "a0000000-0000-4000-8000-000000000002",
+  createdAt: "2026-11-07T18:06:00.000Z",
+  firstName: "Grace",
+  lastName: "Kim",
+  skillLevel: "advanced",
+  isNameAlreadyInSession: true,
+};
+const kaiParticipant: DraftParticipant = {
+  participantId: "e0000000-0000-4000-8000-000000000001",
+  firstName: "Kai",
+  lastName: "Moreno",
+  skillLevel: "beginner",
 };
 
 function listing(...requests: PendingCheckinRequest[]) {
@@ -111,7 +100,6 @@ beforeEach(() => {
   listMock.mockReset();
   approveMock.mockReset();
   rejectMock.mockReset();
-  closeMock.mockReset();
 });
 
 afterEach(() => {
@@ -142,7 +130,7 @@ describe("PendingCheckinTray", () => {
     );
   });
 
-  it("lists rows oldest first with their chips, and no Approve for a member already attending", async () => {
+  it("lists rows oldest first with their level, and only Reject for a name already in the session", async () => {
     listMock.mockResolvedValue(listing(grace, kai));
     renderTray();
     await settle();
@@ -158,21 +146,21 @@ describe("PendingCheckinTray", () => {
       expect.stringContaining("Grace Kim"),
       expect.stringContaining("Kai Moreno"),
     ]);
-    expect(rows[0]).toHaveTextContent("Member");
+    expect(rows[0]).toHaveTextContent("Advanced");
     expect(rows[0]).toHaveTextContent("4 min ago");
     expect(rows[0]).toHaveTextContent(
-      "Already checked in to this session. They can't be added twice.",
+      "This name is already checked in to this session. They can't be added twice.",
     );
-    expect(rows[1]).toHaveTextContent("New player");
+    expect(rows[1]).toHaveTextContent("Beginner");
     expect(rows[1]).toHaveTextContent("1 min ago");
+    // No member-era chips.
+    expect(rows[1]).not.toHaveTextContent("New player");
     expect(
       screen.queryByRole("button", { name: "Approve Grace Kim" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", {
-        name: "Close Grace Kim's request: already checked in",
-      }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /^Close/ }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Reject Grace Kim" }),
     ).toBeInTheDocument();
@@ -250,10 +238,10 @@ describe("PendingCheckinTray", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Couldn't approve.");
   });
 
-  it("switches a refused Approve to the already-checked-in row and asks Who's playing to re-read", async () => {
-    const graceNotYetAttending = { ...grace, isAlreadyAttending: false };
-    listMock.mockResolvedValue(listing(graceNotYetAttending));
-    approveMock.mockResolvedValue({ kind: "already_in_session" });
+  it("switches an Approve refused for a name clash to Reject only and asks Who's playing to re-read", async () => {
+    const graceNotYetTaken = { ...grace, isNameAlreadyInSession: false };
+    listMock.mockResolvedValue(listing(graceNotYetTaken));
+    approveMock.mockResolvedValue({ kind: "name_already_in_session" });
     const { onAttendanceChangedElsewhere } = renderTray();
     await settle();
 
@@ -263,32 +251,28 @@ describe("PendingCheckinTray", () => {
       screen.getByText("Added by another host a moment ago."),
     ).toBeInTheDocument();
     expect(
+      screen.getByText("This name is already checked in to this session.", {
+        exact: false,
+      }),
+    ).toBeInTheDocument();
+    expect(
       screen.queryByRole("button", { name: "Approve Grace Kim" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reject Grace Kim" }),
+    ).toBeEnabled();
     expect(onAttendanceChangedElsewhere).toHaveBeenCalledTimes(1);
   });
 
-  it("closes an already-attending request and rejects another, each with its message", async () => {
+  it("rejects a clashing request with the neutral message", async () => {
     listMock.mockResolvedValue(listing(grace, kai));
-    closeMock.mockResolvedValue({ kind: "closed" });
     rejectMock.mockResolvedValue({ kind: "rejected" });
     renderTray();
     await settle();
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Close Grace Kim's request: already checked in",
-      }),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Reject Kai Moreno" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reject Grace Kim" }));
     await settle();
-    expect(closeMock).toHaveBeenCalledWith(grace.checkinRequestId);
-    expect(rejectMock).toHaveBeenCalledWith(kai.checkinRequestId);
-    expect(
-      screen.getByText(
-        "Request closed. Their phone shows they're already checked in.",
-      ),
-    ).toBeInTheDocument();
+    expect(rejectMock).toHaveBeenCalledWith(grace.checkinRequestId);
     expect(
       screen.getByText(
         'Check-in rejected. The player sees "Please speak to the host".',
@@ -306,23 +290,6 @@ describe("PendingCheckinTray", () => {
     expect(
       screen.getByText("Already decided by another host"),
     ).toBeInTheDocument();
-  });
-
-  it("warns about a possible duplicate and keeps Approve", async () => {
-    listMock.mockResolvedValue(listing({ ...kai, isPossibleDuplicate: true }));
-    renderTray();
-    await settle();
-    expect(
-      screen.getByText(
-        "Possible duplicate: same name as someone already checked in.",
-        { exact: false },
-      ),
-    ).toHaveTextContent(
-      "A matching name doesn't mean it's the same person. Check with them before approving.",
-    );
-    expect(
-      screen.getByRole("button", { name: "Approve Kai Moreno" }),
-    ).toBeEnabled();
   });
 
   it("polls every 5 s, picks up new requests, and re-reads attendance when one leaves without a decision here", async () => {

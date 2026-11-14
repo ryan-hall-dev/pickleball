@@ -1,9 +1,9 @@
 -- The session log write path: host check, idempotent event_id (checked before
 -- the sequence), stale expected_last_seq, atomic start / end / mid-session
--- guest, and the matches row side effects.
+-- participant add, and the matches row side effects.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(47);
+select plan(49);
 
 insert into auth.users (id, email) values
   ('a0000000-0000-4000-8000-000000000002', 'pgtap-host@example.test'),
@@ -12,16 +12,11 @@ insert into public.socials (id, name) values ('50000000-0000-4000-8000-000000000
 insert into public.hosts (user_id, display_name, social_id) values ('a0000000-0000-4000-8000-000000000002', 'Hal Host', '50000000-0000-4000-8000-000000000002');
 insert into public.sessions (id, social_id, host_id, name, host_name, planned_start, planned_end) values
   ('d0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', 'Hal Host', now(), now() + interval '2 hours');
-insert into public.members (social_id, id, first_name, last_name) values
-  ('50000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim'),
-  ('50000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000002', 'Kofi', 'Mensah'),
-  ('50000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000003', 'Zoe', 'Park'),
-  ('50000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000004', 'Ravi', 'Patel');
-insert into public.session_participants (id, session_id, social_id, member_id, first_name, last_name) values
-  ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim'),
-  ('e0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000002', 'Kofi', 'Mensah'),
-  ('e0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000003', 'Zoe', 'Park'),
-  ('e0000000-0000-4000-8000-000000000004', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000004', 'Ravi', 'Patel');
+insert into public.session_participants (id, session_id, social_id, first_name, last_name, skill_level) values
+  ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002', 'Grace', 'Kim', 'advanced'),
+  ('e0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002', 'Kofi', 'Mensah', 'intermediate'),
+  ('e0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002', 'Zoe', 'Park', 'beginner'),
+  ('e0000000-0000-4000-8000-000000000004', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002', 'Ravi', 'Patel', 'intermediate');
 
 -- Test-only shorthands for the payloads used below.
 create function pg_temp.started_payload(p_attendee_ids text[]) returns jsonb language sql as $$
@@ -225,42 +220,52 @@ select is(
   'the row is completed again'
 );
 
--- Mid-session guest ------------------------------------------------------------------------
+-- Mid-session participant ------------------------------------------------------------------
 select throws_ok(
-  $$select public.add_guest_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
+  $$select public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
       'Gus', 'Guest', 'beginner', gen_random_uuid(), 4, now())$$,
-  'P0001', 'STALE_EXPECTED_SEQ', 'a mid-session guest with a stale seq is refused'
+  'P0001', 'STALE_EXPECTED_SEQ', 'a mid-session add with a stale seq is refused'
 );
 select is_empty(
   $$select 1 from public.session_participants where id = 'e1000000-0000-4000-8000-000000000001'$$,
-  'the refused guest left no participant row (atomic)'
+  'the refused add left no participant row (atomic)'
 );
 select throws_ok(
-  $$select public.add_guest_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(),
+  $$select public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(),
       '   ', 'Guest', 'beginner', gen_random_uuid(), 5, now())$$,
-  '22023', 'INVALID_NAME', 'a blank guest name is refused'
+  '22023', 'INVALID_NAME', 'a blank name is refused'
+);
+select throws_ok(
+  $$select public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(),
+      'Nina', 'New', null, gen_random_uuid(), 5, now())$$,
+  '22023', 'INVALID_INPUT', 'a mid-session add needs a level'
 );
 select is(
-  public.add_guest_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
+  public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
     '  Gus ', 'Guest', 'beginner', 'f0000000-0000-4000-8000-000000000006', 5, now()),
   jsonb_build_object('status', 'appended', 'seq', 6, 'occurred_at', now(), 'session_participant_id', 'e1000000-0000-4000-8000-000000000001'),
-  'a host adds a guest mid-session'
+  'a host adds a participant mid-session'
 );
 select results_eq(
   $$select type::text, payload from public.session_events where event_id = 'f0000000-0000-4000-8000-000000000006'$$,
-  $$values ('PlayerJoined', '{"participant":{"participantId":"e1000000-0000-4000-8000-000000000001","firstName":"Gus","lastName":"Guest","skill":"beginner","isGuest":true}}'::jsonb)$$,
-  'the guest''s PlayerJoined carries the engine participant snapshot'
+  $$values ('PlayerJoined', '{"participant":{"participantId":"e1000000-0000-4000-8000-000000000001","firstName":"Gus","lastName":"Guest","skill":"beginner"}}'::jsonb)$$,
+  'the PlayerJoined carries the engine participant snapshot (no isGuest)'
+);
+select throws_ok(
+  $$select public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(),
+      'grace', ' KIM ', 'beginner', gen_random_uuid(), 6, now())$$,
+  'P0001', 'NAME_ALREADY_IN_SESSION', 'a name already in the session is refused mid-session (case and spacing ignored)'
 );
 select is(
-  (select is_guest from public.session_participants where id = 'e1000000-0000-4000-8000-000000000001'),
-  true,
-  'the guest participant row is marked as a guest'
+  (select last_seq from public.sessions where id = 'd0000000-0000-4000-8000-000000000001'),
+  6,
+  'the refused add appended nothing'
 );
 select is(
-  public.add_guest_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
+  public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
     'Gus', 'Guest', 'beginner', 'f0000000-0000-4000-8000-000000000006', 5, now()) ->> 'status',
   'duplicate',
-  'retrying the guest add is idempotent'
+  'retrying the add is idempotent'
 );
 
 -- End ---------------------------------------------------------------------------------------

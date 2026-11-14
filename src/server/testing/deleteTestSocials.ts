@@ -1,5 +1,5 @@
 // Test-only cleanup (integration and e2e), run with the secret key. The app
-// itself never deletes socials, members, courts or sessions.
+// itself never deletes socials, courts or sessions.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../lib/database.types";
 
@@ -65,11 +65,10 @@ async function deleteTestSessions(
 
 /**
  * Deletes each social one at a time, after its saved setups, the sessions it
- * can delete, courts and members (which keep a social from being deleted;
- * their phones go with the members), so one leftover can't block the others.
- * A social that still has sessions (append-only logs) is kept on purpose,
- * with its members and courts, which those sessions reference. Warns about
- * every other failure and returns them, e.g. a social that still has hosts.
+ * can delete and its courts (which keep a social from being deleted), so one
+ * leftover can't block the others. A social that still has sessions
+ * (append-only logs) is kept on purpose, with its courts. Warns about every
+ * other failure and returns them, e.g. a social that still has hosts.
  */
 export async function deleteTestSocials(
   adminClient: AdminClient,
@@ -87,13 +86,12 @@ export async function deleteTestSocials(
       );
     }
     if (await deleteTestSessions(adminClient, socialId, failures)) continue;
-    for (const table of ["courts", "members"] as const) {
-      const { error } = await adminClient
-        .from(table)
-        .delete()
-        .eq("social_id", socialId);
-      if (error)
-        failures.push(`${table} of social ${socialId}: ${error.message}`);
+    const { error: courtsError } = await adminClient
+      .from("courts")
+      .delete()
+      .eq("social_id", socialId);
+    if (courtsError) {
+      failures.push(`courts of social ${socialId}: ${courtsError.message}`);
     }
     const { error } = await adminClient
       .from("socials")

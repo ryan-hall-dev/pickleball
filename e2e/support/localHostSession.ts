@@ -54,15 +54,16 @@ export function trackCreatedLogin(userId: string) {
 
 /**
  * Deletes the tracked logins (and so their hosts rows), then their socials one
- * at a time with their courts and members. Delete sessions that reference a
- * social's members first.
+ * at a time with their courts and session participants.
  */
 export async function deleteCreatedLogins() {
   for (const userId of createdUserIds.splice(0)) {
     const { error } = await adminClient.auth.admin.deleteUser(userId);
-    // e.g. the database refuses to leave a social with hosts but no manager.
-    if (error)
-      console.warn(`Couldn't delete e2e user ${userId}: ${error.message}`);
+    // The host-removal flow deliberately deletes its tracked invitee first.
+    // Only that exact already-absent result is an idempotent success.
+    if (error && !(error.status === 404 && error.code === "user_not_found")) {
+      throw new Error(`Couldn't delete e2e user ${userId}: ${error.message}`);
+    }
   }
   await deleteTestSocials(adminClient, createdSocialIds.splice(0));
 }
@@ -192,8 +193,8 @@ export function uniqueSocialName(label: string): string {
 
 /**
  * Creates a social of its own with a new manager login and signs it in.
- * `prepareSocial` runs before signing in, e.g. to add the social's courts or
- * members so the first page already shows them.
+ * `prepareSocial` runs before signing in, e.g. to add the social's
+ * courts so the first page already shows them.
  * Returns the manager's email and the social's id and name.
  */
 export async function signInAsNewManager(

@@ -4,7 +4,7 @@ import type { CourtFormat, RotationObjective } from "@/engine/session";
 import type { Database } from "@/lib/database.types";
 import { readAllRows } from "@/lib/supabase/readAllRows";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { SkillLevel } from "@/server/members/memberSearch";
+import type { SkillLevel } from "@/server/skillLevels";
 import {
   parseSessionDraftConfig,
   safeParseSavedSetupConfig,
@@ -12,7 +12,7 @@ import {
 } from "./setupRules";
 
 // Reads for the Setup screen use the signed-in host's session, so RLS decides
-// what is visible: only the host's own social's courts, members, sessions and
+// what is visible: only the host's own social's courts, sessions, participants and
 // saved setups, so nothing of another social is ever listed. Queries still
 // filter by social where the service-role client (which bypasses RLS) reuses
 // them. Writes live in setupActions.ts.
@@ -34,21 +34,17 @@ export interface SessionDraft {
   config: SessionDraftConfig;
   /** Settings revision: every settings write names it and bumps it. */
   draftRevision: number;
-  /** Everyone on the draft's attendee list (members and guests). */
+  /** Everyone on the draft's attendee list. */
   participants: DraftParticipant[];
 }
 
-/** One row of a draft's attendee list (`session_participants`), names snapshotted. */
+/** One row of a draft's attendee list (`session_participants`): this session only. */
 export interface DraftParticipant {
   participantId: string;
-  /** Null for a guest who isn't a club member. */
-  memberId: string | null;
-  isGuest: boolean;
   firstName: string;
   lastName: string;
+  /** Null only for rows recorded before a level was required. */
   skillLevel: SkillLevel | null;
-  /** Whether the linked member is still active; null without a member. */
-  isMemberActive: boolean | null;
 }
 
 /** The social's one open session (the sessions_one_open_per_social_idx index). */
@@ -124,25 +120,19 @@ export async function listDraftParticipants(
 
 /** The `session_participants` columns a DraftParticipant is read from. */
 export const DRAFT_PARTICIPANT_COLUMNS =
-  "id, member_id, is_guest, first_name, last_name, skill_level, members(is_active)";
+  "id, first_name, last_name, skill_level";
 
 export function draftParticipantFromRow(row: {
   id: string;
-  member_id: string | null;
-  is_guest: boolean;
   first_name: string;
   last_name: string;
   skill_level: SkillLevel | null;
-  members: { is_active: boolean } | null;
 }): DraftParticipant {
   return {
     participantId: row.id,
-    memberId: row.member_id,
-    isGuest: row.is_guest,
     firstName: row.first_name,
     lastName: row.last_name,
     skillLevel: row.skill_level,
-    isMemberActive: row.members?.is_active ?? null,
   };
 }
 

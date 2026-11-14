@@ -131,7 +131,6 @@ function makeParticipant(number: number, random: () => number): Participant {
     firstName: `Player`,
     lastName: `${number}`,
     skill: SKILLS[Math.floor(random() * SKILLS.length)],
-    isGuest: false,
   };
 }
 

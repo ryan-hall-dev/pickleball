@@ -75,7 +75,6 @@ function startSession(playerCount: number, courtCount: number): Session {
     firstName: "Player",
     lastName: `${index + 1}`,
     skill: null,
-    isGuest: false,
   }));
   session.apply("SessionStarted", {
     config: {

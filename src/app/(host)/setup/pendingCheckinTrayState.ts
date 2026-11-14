@@ -2,28 +2,23 @@
 // docs/designs/m5/host-tray.html H00-H04). No React here, so it's unit tested
 // directly. The tray polls the open session's pending requests every 5 s;
 // each row also has this tab's own activity (approving, failed, decided...).
-import {
-  SKILL_LEVEL_LABELS,
-  type SkillLevel,
-} from "@/server/members/memberSearch";
 import type {
   HostCheckinDecisionResult,
   ListPendingCheckinsResult,
   PendingCheckinRequest,
 } from "@/server/checkin/hostCheckinResults";
 
-export type TrayDecisionAction = "approve" | "reject" | "close";
+export type TrayDecisionAction = "approve" | "reject";
 
 /** How a row was decided, for the one-line message shown before it leaves. */
-export type TrayDecidedOutcome =
-  "approved" | "rejected" | "closed" | "decidedElsewhere";
+export type TrayDecidedOutcome = "approved" | "rejected" | "decidedElsewhere";
 
 /** This tab's own activity on a row. */
 export type TrayRowActivity =
   | { kind: "idle" }
   | { kind: "working"; action: TrayDecisionAction }
   | { kind: "failed"; action: TrayDecisionAction }
-  /** Approve was refused: the member became attending meanwhile (H03). */
+  /** Approve was refused: someone with this name was added meanwhile (H03). */
   | { kind: "approveStopped" }
   | { kind: "decided"; outcome: TrayDecidedOutcome };
 
@@ -45,8 +40,8 @@ export interface TrayState {
   locallyDecidedRequestIds: ReadonlySet<string>;
   /**
    * Counts the times the attendee list looked changed by someone else (a
-   * request left without a decision here, a member became attending, or an
-   * Approve/Close was refused), so Who's playing re-reads it.
+   * request left without a decision here, a request's name became taken, or
+   * an Approve was refused), so Who's playing re-reads it.
    */
   attendanceChangesSeenElsewhere: number;
 }
@@ -127,18 +122,18 @@ function mergePolledRequests(
       !polledIds.has(row.request.checkinRequestId) &&
       !isKeptWithoutPoll(row.activity),
   );
-  const memberBecameAttending = polledRows.some(
+  const nameBecameTaken = polledRows.some(
     (row) =>
-      row.request.isAlreadyAttending &&
+      row.request.isNameAlreadyInSession &&
       previousRowsById.get(row.request.checkinRequestId)?.request
-        .isAlreadyAttending === false,
+        .isNameAlreadyInSession === false,
   );
   return {
     ...state,
     rows: [...polledRows, ...rowsKeptWithoutPoll].sort(byOldestFirst),
     attendanceChangesSeenElsewhere:
       state.attendanceChangesSeenElsewhere +
-      (leftWithoutDecisionHere || memberBecameAttending ? 1 : 0),
+      (leftWithoutDecisionHere || nameBecameTaken ? 1 : 0),
   };
 }
 
@@ -183,8 +178,6 @@ function finishDecision(
       return decideRow(state, checkinRequestId, "approved");
     case "rejected":
       return decideRow(state, checkinRequestId, "rejected");
-    case "closed":
-      return decideRow(state, checkinRequestId, "closed");
     case "already_decided":
       // Another host's decision (or this tab's own that timed out) may have
       // added an attendee, and the row is filtered from later polls now.
@@ -193,21 +186,11 @@ function finishDecision(
         attendanceChangesSeenElsewhere:
           state.attendanceChangesSeenElsewhere + 1,
       };
-    case "already_in_session":
+    case "name_already_in_session":
       return {
         ...updateRow(state, checkinRequestId, (row) => ({
-          request: { ...row.request, isAlreadyAttending: true },
+          request: { ...row.request, isNameAlreadyInSession: true },
           activity: { kind: "approveStopped" },
-        })),
-        attendanceChangesSeenElsewhere:
-          state.attendanceChangesSeenElsewhere + 1,
-      };
-    case "not_already_in_session":
-      // The member left the session meanwhile: back to Approve / Reject.
-      return {
-        ...updateRow(state, checkinRequestId, (row) => ({
-          request: { ...row.request, isAlreadyAttending: false },
-          activity: { kind: "idle" },
         })),
         attendanceChangesSeenElsewhere:
           state.attendanceChangesSeenElsewhere + 1,
@@ -262,7 +245,7 @@ export function waitingRequestCount(rows: readonly TrayRow[]): number {
   return rows.filter((row) => row.activity.kind !== "decided").length;
 }
 
-export type TrayRowButtonKind = "approve" | "close" | "reject" | "retry";
+export type TrayRowButtonKind = "approve" | "reject" | "retry";
 
 export interface TrayRowButton {
   kind: TrayRowButtonKind;
@@ -274,9 +257,7 @@ export interface TrayRowButton {
 }
 
 export type TrayRowAttention =
-  | "alreadyAttending"
-  | "possibleDuplicate"
-  | { failedAction: TrayDecisionAction };
+  "nameAlreadyInSession" | { failedAction: TrayDecisionAction };
 
 export interface TrayRowView {
   surface: "neutral" | "attention" | "lime";
@@ -315,33 +296,28 @@ export function trayRowView(row: TrayRow): TrayRowView {
       buttons: [],
     };
   }
-  const isAlreadyAttending =
-    request.isAlreadyAttending || activity.kind === "approveStopped";
-  // An attending member is never approved again: Close replaces Approve.
-  const primaryAction: TrayDecisionAction = isAlreadyAttending
-    ? "close"
-    : "approve";
+  // Names are unique per session: a clashing request can only be rejected
+  // (the player re-submits with a distinguishing name).
+  const isNameAlreadyInSession =
+    request.isNameAlreadyInSession || activity.kind === "approveStopped";
   const attentions: TrayRowAttention[] = [];
-  if (isAlreadyAttending) attentions.push("alreadyAttending");
-  else if (request.isPossibleDuplicate) attentions.push("possibleDuplicate");
+  if (isNameAlreadyInSession) attentions.push("nameAlreadyInSession");
   if (activity.kind === "failed") {
     attentions.push({ failedAction: activity.action });
   }
-  const buttons =
-    activity.kind === "failed"
-      ? activity.action === "reject"
-        ? [
-            button(primaryAction, primaryAction, activity),
-            button("retry", "reject", activity),
-          ]
-        : [
-            button("retry", activity.action, activity),
-            button("reject", "reject", activity),
-          ]
+  const failedAction = activity.kind === "failed" ? activity.action : null;
+  const buttons = [
+    ...(isNameAlreadyInSession
+      ? []
       : [
-          button(primaryAction, primaryAction, activity),
-          button("reject", "reject", activity),
-        ];
+          button(
+            failedAction === "approve" ? "retry" : "approve",
+            "approve",
+            activity,
+          ),
+        ]),
+    button(failedAction === "reject" ? "retry" : "reject", "reject", activity),
+  ];
   return {
     surface: attentions.length > 0 ? "attention" : "neutral",
     attentions,
@@ -349,32 +325,6 @@ export function trayRowView(row: TrayRow): TrayRowView {
     decidedOutcome: null,
     buttons,
   };
-}
-
-/** The level chip: the level the player chose, else the member's saved one. */
-export function displayedSkillLevel(
-  request: PendingCheckinRequest,
-): SkillLevel | null {
-  return request.requestedSkillLevel ?? request.savedSkillLevel;
-}
-
-/**
- * "level changed from Advanced" when a member chose a level other than their
- * saved one (README #4); null otherwise (new players have no saved level).
- */
-export function levelChangeLabel(
-  request: PendingCheckinRequest,
-): string | null {
-  const { memberId, requestedSkillLevel, savedSkillLevel } = request;
-  if (
-    memberId === null ||
-    requestedSkillLevel === null ||
-    savedSkillLevel === null ||
-    requestedSkillLevel === savedSkillLevel
-  ) {
-    return null;
-  }
-  return `level changed from ${SKILL_LEVEL_LABELS[savedSkillLevel]}`;
 }
 
 const MS_PER_MINUTE = 60_000;

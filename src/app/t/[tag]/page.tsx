@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
-import { readDeviceTokenHash } from "@/server/checkin/checkinDevice";
+import { connection } from "next/server";
 import { loadCheckinPage } from "@/server/checkin/checkinPage";
 import { CheckinApp } from "./CheckinApp";
 
@@ -39,18 +39,9 @@ async function CheckinPageContent({
 }: {
   params: PageProps<"/t/[tag]">["params"];
 }) {
+  // Resolve the current session at request time, before the first database read.
+  await connection();
   const { tag } = await params;
-  const deviceTokenHash = await readDeviceTokenHash();
-  const initialPageRead = await loadCheckinPage(tag, deviceTokenHash);
-  return (
-    <CheckinApp
-      checkinTag={tag}
-      initialPageRead={initialPageRead}
-      needsDeviceCookie={
-        deviceTokenHash === null &&
-        initialPageRead.ok &&
-        initialPageRead.page.status === "open"
-      }
-    />
-  );
+  const initialPageRead = await loadCheckinPage(tag);
+  return <CheckinApp checkinTag={tag} initialPageRead={initialPageRead} />;
 }

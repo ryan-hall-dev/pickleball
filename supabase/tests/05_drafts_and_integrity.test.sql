@@ -17,14 +17,11 @@ insert into public.hosts (user_id, display_name, role, social_id) values
 -- One open session per social: the manager's session (d...02) comes once the host's draft is cancelled.
 insert into public.sessions (id, social_id, host_id, name, host_name, planned_start, planned_end) values
   ('d0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000005', 'a0000000-0000-4000-8000-000000000002', 'Tuesday social', 'Hal Host', now(), now() + interval '2 hours');
-insert into public.members (social_id, id, first_name, last_name) values
-  ('50000000-0000-4000-8000-000000000005', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim'),
-  ('50000000-0000-4000-8000-000000000005', 'b0000000-0000-4000-8000-000000000002', 'Kofi', 'Mensah');
-insert into public.session_participants (id, session_id, social_id, member_id, first_name, last_name) values
-  ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000005', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim');
+insert into public.session_participants (id, session_id, social_id, first_name, last_name, skill_level) values
+  ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000005', 'Grace', 'Kim', 'advanced');
 -- Grace was approved from a check-in.
-insert into public.checkin_requests (id, session_id, social_id, member_id, first_name, last_name, status, device_token_hash, ip_hash, decided_by, decided_at, session_participant_id) values
-  ('c1000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000005', 'b0000000-0000-4000-8000-000000000001', 'Grace', 'Kim', 'approved',
+insert into public.checkin_requests (id, session_id, social_id, first_name, last_name, skill_level, status, device_token_hash, ip_hash, decided_by, decided_at, session_participant_id) values
+  ('c1000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000005', 'Grace', 'Kim', 'advanced', 'approved',
    repeat('a', 64), repeat('b', 64), 'a0000000-0000-4000-8000-000000000002', now(), 'e0000000-0000-4000-8000-000000000001');
 
 set local role service_role;
@@ -85,8 +82,8 @@ select lives_ok(
   'cancelling frees the social''s one open-session slot'
 );
 reset role;
-insert into public.session_participants (id, session_id, social_id, member_id, first_name, last_name) values
-  ('e0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000005', 'b0000000-0000-4000-8000-000000000002', 'Kofi', 'Mensah');
+insert into public.session_participants (id, session_id, social_id, first_name, last_name, skill_level) values
+  ('e0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000005', 'Kofi', 'Mensah', 'intermediate');
 set local role service_role;
 select throws_ok(
   $$update public.sessions set config_snapshot = '{"edited":true}' where id = 'd0000000-0000-4000-8000-000000000001'$$,

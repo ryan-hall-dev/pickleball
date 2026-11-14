@@ -1,14 +1,15 @@
 // Deterministic demo data for the LOCAL Supabase stack only.
 //
-//   pnpm seed --members 30 --courts 4 --attending 16
+//   pnpm seed --courts 4 --attending 16
 //
 // Creates (or updates in place, so it is safe to re-run) two independent socials:
 //   1. "Riverside Pickleball Club", managed by host@example.test (an existing
-//      host keeps their social), with courts, members and a draft session with
-//      attendees. If that social already has another open session, it is reused
-//      (a draft gets the attendees, a live one is left alone).
+//      host keeps their social), with courts and a draft session with players
+//      (session participants: name and level, this session only). If that
+//      social already has another open session, it is reused (a draft gets the
+//      players, a live one is left alone).
 //   2. "Riverside Morning Social", managed by manager2@example.test, with 2
-//      courts and 10 members and no session, for checking isolation by hand.
+//      courts and no session, for checking isolation by hand.
 // Sign in with the email code from Mailpit. Every read and write is scoped by
 // social_id, and the second social's seed ids are namespaced so they never
 // collide with the first's. The demo draft is re-saved directly (dev only), so it
@@ -28,12 +29,10 @@ const SEED_RANDOM_SEED = 20261107;
 const FIRST_MANAGER_EMAIL = "host@example.test";
 const SECOND_MANAGER_EMAIL = "manager2@example.test";
 const SECOND_SOCIAL_COURTS = 2;
-const SECOND_SOCIAL_MEMBERS = 10;
 const DEMO_SESSION_NAME = "Evening social";
 const LIMITS = {
-  members: { min: 0, max: 5000, default: 30 },
   courts: { min: 0, max: 50, default: 4 },
-  attending: { min: 0, max: 5000, default: 16 },
+  attending: { min: 0, max: 500, default: 16 },
 } as const;
 
 const FIRST_NAMES = [
@@ -120,19 +119,14 @@ function readCount(
 function readOptions() {
   const { values } = parseArgs({
     options: {
-      members: { type: "string" },
       courts: { type: "string" },
       attending: { type: "string" },
     },
     strict: true,
   });
-  const members = readCount(values, "members");
   const courts = readCount(values, "courts");
   const attending = readCount(values, "attending");
-  if (attending > members) {
-    fail(`--attending (${attending}) can't exceed --members (${members}).`);
-  }
-  return { members, courts, attending };
+  return { courts, attending };
 }
 
 function readLocalConnection() {
@@ -244,6 +238,8 @@ function explainDatabaseFailure(message: string): string {
     return `${message} (a seed row with that id already belongs to another social: remove the old seed rows or use a fresh database)`;
   if (message.includes("courts_social_name_lower_unique_idx"))
     return `${message} (the social already has a court with that name that isn't a seed court: rename or remove it)`;
+  if (message.includes("session_participants_unique_name_per_session_idx"))
+    return `${message} (the draft already has a player with a seed player's name who isn't a seed player: remove them in the app)`;
   return message;
 }
 
@@ -261,7 +257,6 @@ interface SocialSeedPlan {
   managerEmail: string;
   managerDisplayName: string;
   courts: number;
-  members: number;
   /** Null: no demo session for this social. */
   demoSession: { attending: number } | null;
   randomSeed: number;
@@ -273,8 +268,34 @@ interface SocialSeedSummary {
   managerEmail: string;
   checkinTag: string;
   courts: number;
-  members: number;
   sessionLine: string;
+}
+
+interface SeedPlayer {
+  /** Stable per player number; the participant id is derived from it. */
+  playerKey: string;
+  first_name: string;
+  last_name: string;
+  skill_level: SkillLevel;
+}
+
+/**
+ * Seed player `n` (1-based): deterministic names and levels. The key is the
+ * id the member-era seed gave player `n` ("member-n"), so re-running on a
+ * database seeded before session-only participants updates the same
+ * participant rows instead of adding clashing names.
+ */
+function seedPlayers(plan: SocialSeedPlan, count: number): SeedPlayer[] {
+  const random = createSeededRandom(plan.randomSeed);
+  const pick = <T,>(values: readonly T[]): T =>
+    values[Math.floor(random() * values.length)];
+  return Array.from({ length: count }, (_, index) => ({
+    playerKey: seedUuid(`member-${index + 1}`, plan.namespace),
+    first_name: pick(FIRST_NAMES),
+    // The number keeps names unique (one name per session).
+    last_name: `${pick(LAST_NAMES)} ${index + 1}`,
+    skill_level: pick(SKILL_LEVELS),
+  }));
 }
 
 async function findOrCreateSocial(
@@ -318,19 +339,13 @@ async function seedDemoSession(
   plan: SocialSeedPlan,
   socialId: string,
   managerUserId: string,
-  members: {
-    id: string;
-    first_name: string;
-    last_name: string;
-    skill_level: SkillLevel;
-  }[],
   attending: number,
 ): Promise<string> {
   const demoSessionId = seedUuid("draft-session", plan.namespace);
-  const participantKeyFor = (sessionIdForKey: string, memberId: string) =>
+  const participantKeyFor = (sessionIdForKey: string, playerKey: string) =>
     sessionIdForKey === demoSessionId
-      ? `participant-${memberId}`
-      : `participant-${sessionIdForKey}-${memberId}`;
+      ? `participant-${playerKey}`
+      : `participant-${sessionIdForKey}-${playerKey}`;
   // One open session per social: reuse whichever one exists.
   const openSession = check(
     await client
@@ -380,55 +395,49 @@ async function seedDemoSession(
     );
   }
 
-  const attendees = members.slice(0, attending).map((member) => ({
-    id: seedUuid(participantKeyFor(sessionId, member.id), plan.namespace),
+  // Every player the seed could have added (up to the --attending limit), so
+  // a re-run with a smaller --attending removes the extra ones.
+  const allSeedPlayers = seedPlayers(plan, LIMITS.attending.max);
+  const participantIdFor = (player: SeedPlayer) =>
+    seedUuid(participantKeyFor(sessionId, player.playerKey), plan.namespace);
+  const attendees = allSeedPlayers.slice(0, attending).map((player) => ({
+    id: participantIdFor(player),
     session_id: sessionId,
     social_id: socialId,
-    member_id: member.id,
-    is_guest: false,
-    first_name: member.first_name,
-    last_name: member.last_name,
-    skill_level: member.skill_level,
+    first_name: player.first_name,
+    last_name: player.last_name,
+    skill_level: player.skill_level,
   }));
-  // Drop attendees from an earlier run with a larger --attending. The function
-  // also withdraws a check-in approval that added one (a plain delete can't).
-  const keptMemberIds = new Set(
-    attendees.map((attendee) => attendee.member_id),
-  );
-  const seededParticipantIds = new Set(
-    members.map((member) =>
-      seedUuid(participantKeyFor(sessionId, member.id), plan.namespace),
-    ),
-  );
+  // Drop seeded players from an earlier run with a larger --attending. The
+  // function also withdraws a check-in approval that added one (a plain
+  // delete can't).
+  const keptParticipantIds = new Set(attendees.map((attendee) => attendee.id));
+  const seededParticipantIds = new Set(allSeedPlayers.map(participantIdFor));
   const existingParticipants = check(
     await client
       .from("session_participants")
-      .select("id, member_id")
+      .select("id")
       .eq("session_id", sessionId)
       .eq("social_id", socialId),
-    "reading earlier attendees",
+    "reading earlier players",
   );
   for (const participant of existingParticipants ?? []) {
-    // Only seeded attendees are touched: a reused draft may hold real ones.
+    // Only seeded players are touched: a reused draft may hold real ones.
     if (!seededParticipantIds.has(participant.id)) continue;
-    if (participant.member_id && keptMemberIds.has(participant.member_id))
-      continue;
+    if (keptParticipantIds.has(participant.id)) continue;
     check(
       await client.rpc("remove_draft_participant", {
         p_actor_user_id: managerUserId,
         p_session_participant_id: participant.id,
       }),
-      "removing an earlier attendee",
+      "removing an earlier player",
     );
   }
   if (attendees.length > 0) {
-    // ON CONFLICT DO NOTHING: attendees already in the draft (added in the app) keep their rows and ids.
+    // By participant id: a re-run updates the same rows in place.
     check(
-      await client.from("session_participants").upsert(attendees, {
-        onConflict: "session_id,member_id",
-        ignoreDuplicates: true,
-      }),
-      "saving attendees",
+      await client.from("session_participants").upsert(attendees),
+      "saving players",
     );
   }
   return `"${sessionName}" (draft) with ${attendees.length} seeded attending${openSession && openSession.id !== demoSessionId ? " (reused the social's existing draft)" : ""}`;
@@ -450,28 +459,12 @@ async function seedSocial(
   if (courts.length > 0)
     check(await client.from("courts").upsert(courts), "saving courts");
 
-  const random = createSeededRandom(plan.randomSeed);
-  const pick = <T,>(values: readonly T[]): T =>
-    values[Math.floor(random() * values.length)];
-  const members = Array.from({ length: plan.members }, (_, index) => ({
-    id: seedUuid(`member-${index + 1}`, plan.namespace),
-    social_id: socialId,
-    first_name: pick(FIRST_NAMES),
-    // The number keeps names unique so hosts can tell members apart in demos.
-    last_name: `${pick(LAST_NAMES)} ${index + 1}`,
-    skill_level: pick(SKILL_LEVELS),
-    is_active: true,
-  }));
-  if (members.length > 0)
-    check(await client.from("members").upsert(members), "saving members");
-
   const sessionLine = plan.demoSession
     ? await seedDemoSession(
         client,
         plan,
         socialId,
         managerUserId,
-        members,
         plan.demoSession.attending,
       )
     : "none";
@@ -491,7 +484,6 @@ async function seedSocial(
     managerEmail: plan.managerEmail,
     checkinTag: social.checkin_tag,
     courts: plan.courts,
-    members: plan.members,
     sessionLine,
   };
 }
@@ -532,7 +524,6 @@ async function seed() {
     managerEmail: FIRST_MANAGER_EMAIL,
     managerDisplayName: "Local Manager",
     courts: options.courts,
-    members: options.members,
     demoSession: { attending: options.attending },
     randomSeed: SEED_RANDOM_SEED,
   });
@@ -542,7 +533,6 @@ async function seed() {
     managerEmail: SECOND_MANAGER_EMAIL,
     managerDisplayName: "Morning Manager",
     courts: SECOND_SOCIAL_COURTS,
-    members: SECOND_SOCIAL_MEMBERS,
     demoSession: null,
     randomSeed: SEED_RANDOM_SEED + 1,
   });
@@ -552,7 +542,6 @@ async function seed() {
       `  manager     ${summary.managerEmail} (sign in with the email code from Mailpit)`,
       `  check-in    /t/${summary.checkinTag}`,
       `  courts      ${summary.courts}`,
-      `  members     ${summary.members}`,
       `  session     ${summary.sessionLine}`,
     ].join("\n");
   console.log(

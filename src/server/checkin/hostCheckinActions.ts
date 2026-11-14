@@ -17,7 +17,6 @@ import {
   pendingCheckinRequestsFromRpc,
   type HostCheckinDecisionResult,
   type ListPendingCheckinsResult,
-  wasClosedBeforeFromRpc,
   wasRejectedBeforeFromRpc,
 } from "./hostCheckinResults";
 
@@ -46,8 +45,8 @@ function logHostCheckinFailure(
 }
 
 /**
- * The pending requests of the social's open session, oldest first, with the
- * already-attending and possible-duplicate flags. Polled every 5 s.
+ * The pending requests of the social's open session, oldest first, each
+ * flagged when its name is already in the session. Polled every 5 s.
  */
 export async function listPendingCheckins(): Promise<ListPendingCheckinsResult> {
   const authorization = await authorizeCurrentHost("host");
@@ -113,11 +112,12 @@ function refusalOrThrow(
 }
 
 /**
- * Approves a request into the social's draft: a member for a first-timer,
- * the phone linked, a new attendee (one transaction, approve_checkin). The
- * attendee id is made here. Approving again after a lost answer returns the
- * same attendee; a request another host approved first is already_decided.
- * A member already attending is refused (already_in_session).
+ * Approves a request into the social's draft: a new attendee with the
+ * request's name and level (one transaction, approve_checkin). The attendee
+ * id is made here. Approving again after a lost answer returns the same
+ * attendee; a request another host approved first is already_decided. A
+ * name already in the session is refused (name_already_in_session) and the
+ * request stays pending.
  */
 export async function approveCheckin(
   checkinRequestId: unknown,
@@ -220,37 +220,6 @@ export async function rejectCheckin(
         (await isDecidedByAnotherHost(adminClient, host, requestId))
         ? { kind: "already_decided" }
         : { kind: "rejected" };
-    },
-  );
-}
-
-/**
- * Closes a request for a member who is already attending (D-A to D-C): no
- * member, phone or attendance change; the phone shows P09b. This host's
- * own retry counts as done; one another host closed first is
- * already_decided. A member who isn't attending is refused
- * (not_already_in_session): the tray re-reads the row.
- */
-export async function closeCheckinAlreadyCheckedIn(
-  checkinRequestId: unknown,
-): Promise<HostCheckinDecisionResult> {
-  return decideCheckin(
-    checkinRequestId,
-    "Closing a check-in failed",
-    async (adminClient, host, requestId) => {
-      const { data, error } = await adminClient
-        .rpc("close_checkin_already_checked_in", {
-          p_actor_user_id: host.userId,
-          p_checkin_request_id: requestId,
-        })
-        .abortSignal(checkinDatabaseTimeoutSignal());
-      if (error) {
-        return refusalOrThrow("close_checkin_already_checked_in", error);
-      }
-      return wasClosedBeforeFromRpc(data) &&
-        (await isDecidedByAnotherHost(adminClient, host, requestId))
-        ? { kind: "already_decided" }
-        : { kind: "closed" };
     },
   );
 }

@@ -2,17 +2,17 @@
 import { describe, expect, it } from "vitest";
 import {
   setupReadiness,
-  unfinishedGuestFormMessage,
+  unfinishedParticipantFormMessage,
   type SetupReadinessInput,
 } from "./setupReadiness";
-import { EMPTY_GUEST_FORM } from "./whosPlaying";
+import { EMPTY_PARTICIPANT_FORM } from "./whosPlaying";
 
 const readyInput: SetupReadinessInput = {
   fieldErrors: {},
   selectedCourtCount: 2,
   matchFormat: "doubles",
   attendingPlayerCount: 10,
-  guestForm: EMPTY_GUEST_FORM,
+  participantForm: EMPTY_PARTICIPANT_FORM,
   isDraftSaved: true,
 };
 
@@ -110,9 +110,9 @@ describe("setupReadiness", () => {
     });
   });
 
-  it("blocks on an unfinished guest entry and names what's missing", () => {
-    const guestForm = { firstName: "Kai", lastName: "", skillLevel: "" };
-    const readiness = setupReadiness({ ...readyInput, guestForm });
+  it("blocks on an unfinished participant entry and names what's missing", () => {
+    const participantForm = { firstName: "Kai", lastName: "", skillLevel: "" };
+    const readiness = setupReadiness({ ...readyInput, participantForm });
     expect(readiness.isReadyToStart).toBe(false);
     expect(readiness.steps[2]).toMatchObject({
       state: "attention",
@@ -120,34 +120,41 @@ describe("setupReadiness", () => {
     });
     expect(readiness.checklist).toContainEqual({
       isDone: false,
-      text: "Guest form has an unfinished entry: add Kai's last name or clear it",
+      text: "Participant form has an unfinished entry: add Kai's last name or clear it",
     });
     // With too few players too, both count.
     expect(
-      setupReadiness({ ...readyInput, guestForm, attendingPlayerCount: 0 })
-        .steps[2],
+      setupReadiness({
+        ...readyInput,
+        participantForm,
+        attendingPlayerCount: 0,
+      }).steps[2],
     ).toMatchObject({ state: "attention", issueCount: 2 });
   });
 
-  it("words other unfinished guest entries generically", () => {
+  it("words other unfinished participant entries generically", () => {
     expect(
-      unfinishedGuestFormMessage({
+      unfinishedParticipantFormMessage({
         firstName: "",
         lastName: "Lee",
         skillLevel: "",
       }),
-    ).toBe("Guest form has an unfinished entry: add the guest or clear it");
+    ).toBe(
+      "Participant form has an unfinished entry: add the participant or clear it",
+    );
     expect(
-      unfinishedGuestFormMessage({
+      unfinishedParticipantFormMessage({
         firstName: "",
         lastName: "",
         skillLevel: "beginner",
       }),
-    ).toBe("Guest form has an unfinished entry: add the guest or clear it");
+    ).toBe(
+      "Participant form has an unfinished entry: add the participant or clear it",
+    );
     expect(
       setupReadiness({
         ...readyInput,
-        guestForm: { firstName: "  ", lastName: "", skillLevel: "" },
+        participantForm: { firstName: "  ", lastName: "", skillLevel: "" },
       }).isReadyToStart,
     ).toBe(true);
   });

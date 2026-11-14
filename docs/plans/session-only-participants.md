@@ -74,23 +74,24 @@ The smallest change that removes the dependency rather than hiding it. Participa
 - New **unique index** on `(session_id, private.normalise_name_for_search(first_name || ' ' || last_name))`: the database guarantee that no session has two participants with the same name (case, accents and spacing ignored). This reuses the M5 normaliser, which is immutable, as Postgres requires for an index.
 - `checkin_requests`: drop `member_id`; `skill_level` becomes required; status values `pending | approved | rejected | withdrawn` (the type is recreated without `already_checked_in`; no row uses it).
 - Drop `members` and `member_devices` with their policies, triggers and grants.
-- The device cookie stays, but only as "this phone, this session": same phone resubmitting gets its existing request, and the per-phone rate limits keep working. It never carries details between sessions.
+- Each session uses its own independent 32-byte random HttpOnly cookie (`checkin_session_<session UUID>`, one-day lifetime, path `/t/<tag>`); SQL stores only its SHA-256. No long-lived universal device token or deterministic cross-session derivation. The legacy `checkin_device` cookie is ignored. Existing request rows and history are preserved; legacy-cookie requests are not automatically resumed.
+- The page header includes the session UUID. Submit carries that rendered UUID, validates it server-side, and passes it to SQL. SQL locks and revalidates that session and its tag/social before any write. Turnover returns `session_changed`; the client clears entered details and reloads a fresh form. A cookie from one session cannot create a request in another.
 
 **Functions**
 
-| Function                                                | After                                                                                                                                                                                                                                                               |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_checkin_names`                                  | Dropped.                                                                                                                                                                                                                                                            |
-| `submit_checkin(tag, device, ip, first, last, skill)`   | Level required. Rate limits unchanged. Same phone, same session → the existing pending request; if this phone's request in this session is already approved → `already_checked_in` (the phone's own request, never a name lookup). Otherwise a new pending request. |
-| `get_checkin_page`                                      | Header (social name, session name, times, courts, checked-in count) and this phone's current request. No `recognised_member`.                                                                                                                                       |
-| `approve_checkin`                                       | Inserts the participant from the request's name and level and marks the request approved. If the name is already in the session: raise `NAME_ALREADY_IN_SESSION` (the unique index is the backstop). No member, no device link.                                     |
-| `close_checkin_already_checked_in`                      | Dropped (the member case no longer exists).                                                                                                                                                                                                                         |
-| `list_checkin_requests_for_open_session`                | `id, created_at, first_name, last_name, skill_level, is_name_already_in_session`.                                                                                                                                                                                   |
-| `set_draft_member_attendance`                           | Dropped.                                                                                                                                                                                                                                                            |
-| `add_draft_guest` → `add_draft_participant`             | Name + level; refuses a duplicate name with `NAME_ALREADY_IN_SESSION`. `remove_draft_participant` (exists) replaces `remove_draft_guest`.                                                                                                                           |
-| `add_guest_mid_session` → `add_participant_mid_session` | Same, for live sessions (M7).                                                                                                                                                                                                                                       |
-| `private.player_joined_payload`                         | Drops `isGuest`.                                                                                                                                                                                                                                                    |
-| Unchanged                                               | `start_session`, `append_session_event`, `end_session`, `reject_checkin`, `reissue_checkin_tag`, rate limiting, `require_host_social`, every RLS policy on the remaining tables.                                                                                    |
+| Function                                                                   | After                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_checkin_names`                                                     | Dropped.                                                                                                                                                                                                                                                            |
+| `submit_checkin(tag, expected_session_id, device, ip, first, last, skill)` | Level required. Rate limits unchanged. Same phone, same session → the existing pending request; if this phone's request in this session is already approved → `already_checked_in` (the phone's own request, never a name lookup). Otherwise a new pending request. |
+| `get_checkin_page`                                                         | Header (social name, session name, times, courts, checked-in count) and this phone's current request. No `recognised_member`.                                                                                                                                       |
+| `approve_checkin`                                                          | Inserts the participant from the request's name and level and marks the request approved. If the name is already in the session: raise `NAME_ALREADY_IN_SESSION` (the unique index is the backstop). No member, no device link.                                     |
+| `close_checkin_already_checked_in`                                         | Dropped (the member case no longer exists).                                                                                                                                                                                                                         |
+| `list_checkin_requests_for_open_session`                                   | `id, created_at, first_name, last_name, skill_level, is_name_already_in_session`.                                                                                                                                                                                   |
+| `set_draft_member_attendance`                                              | Dropped.                                                                                                                                                                                                                                                            |
+| `add_draft_guest` → `add_draft_participant`                                | Name + level; refuses a duplicate name with `NAME_ALREADY_IN_SESSION`. `remove_draft_participant` (exists) replaces `remove_draft_guest`.                                                                                                                           |
+| `add_guest_mid_session` → `add_participant_mid_session`                    | Same, for live sessions (M7).                                                                                                                                                                                                                                       |
+| `private.player_joined_payload`                                            | Drops `isGuest`.                                                                                                                                                                                                                                                    |
+| Unchanged                                                                  | `start_session`, `append_session_event`, `end_session`, `reject_checkin`, `reissue_checkin_tag`, rate limiting, `require_host_social`, every RLS policy on the remaining tables.                                                                                    |
 
 **Duplicate names (Ryan: none within a session)**
 
@@ -135,7 +136,7 @@ Preserved: socials, hosts, courts, sessions, every `session_participants` row (n
 
 Removed: recognised-phone card, name search, confirm sheet, "Update your level", "Not a member? Check in as a guest", "No one matches… check the spelling", P09b. Tomorrow's session on the same phone starts with an empty form.
 
-## 5. Work plan (after approval; each increment tested and committed)
+## 5. Work plan (approved; coordinator owns commits)
 
 1. Database migration, engine `isGuest` removal, pgTAP, regenerated types, seed script.
 2. Public page: single form, states, server actions, unit/integration/e2e.
@@ -148,3 +149,33 @@ Removed: recognised-phone card, name search, confirm sheet, "Update your level",
 2. **Duplicate name at check-in handled by the host only** (recommended; telling the player at submit would let anyone test whether a name is attending).
 3. **Level required for host-added players too** (recommended, one rule for everyone; today the host form treats it as optional).
 4. **Keep the session card under the welcome line** (recommended) or show the welcome line only.
+
+## Resumed foundation (2026-11-15)
+
+Implemented the public fresh-name/required-level form and session card, request polling/reload, neutral rejection with a fresh retry, and retry recovery. Removed public member search/confirmation adapters and directory helpers; name validation and skill labels now live in shared participant modules. Host setup lists only this session's participants; required-level add/remove and pending approvals retain server-only writes and social isolation. Old `isGuest` event payload fields remain accepted and ignored by replay.
+
+Migrations:
+
+- `20261112090000`: session-only schema and per-session normalised-name uniqueness.
+- `20261112100000`: session UUID in the page header and null participant-ID guard. Independent random cookies replace the proposed persistent-cookie/HMAC design; no hash rewrites or private-schema USAGE grant.
+- `20261112110000`: seven-argument submit bound to the rendered session; removes the unbound six-argument overload, locks/revalidates the session and tag-social before writes, service-role execution only.
+
+The coordinator reports all three applied locally after backup/scratch rehearsal; history and participant checksums preserved. The coordinator replayed all 243 logs / 1,415 events with zero errors. No seed, reset, hosted migration or production action was run by this implementation agent. Parent-owned broader documentation remains outside this task.
+
+Verification is recorded in the implementation handback. Database suites require `REQUIRE_LOCAL_SUPABASE=1`; browser tests use the local stack and real session-only public/host flows. Independent review and schema diff belong to the coordinator before committing or starting the simpler-app feature.
+
+### Verification record (implementation agent)
+
+Commands use Node 24 and the Docker CLI PATH prefixes from the project instructions.
+
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm bench`: 2 files / 8 benchmark tests passed (26.81 s); existing performance targets passed.
+- `pnpm test --exclude '**/*.integration.test.ts'`: 51 files / 663 tests passed after the closed-state regression fix.
+- `REQUIRE_LOCAL_SUPABASE=1 pnpm test --maxWorkers=1`: 57 files / 768 tests passed before the final two closed-state unit assertions (those assertions passed in the subsequent 663-test unit run and focused review). Serial workers avoid concurrent Supabase CLI status/telemetry contention.
+- `pnpm exec supabase test db`: 12 files / 449 assertions passed, including null participant-ID rejection and removal of the unbound submit overload.
+- Touched source, browser tests, seed source and this plan/ADR: Prettier check passed. Generated database types are excluded by the project's formatter config and regenerated from the applied local schema.
+- Full `CI=1 REQUIRE_LOCAL_SUPABASE=1 pnpm e2e --workers=2`: initial production-build run passed 51 tests, with five existing desktop-only project exclusions. Final production-build run also passed 51 tests with the same five project duplicates excluded. Request-time `connection()` removed prerender warnings; fixture cleanup accepts only the exact already-absent invitee result.
+- Coordinator: clean all-migrations schema diff; 243 historical logs / 1,415 events replay with zero errors; audit policy passed with zero high/critical and one moderate dev-only minimatch advisory (GHSA-g3hv-75wg-m249). No dependency changes.
+
+Kepler's independent review signed off the rendered-session binding and fresh-form regressions. The final full browser run completed successfully. Foundation implementation is ready for the coordinator’s commit; no simpler-app features were started.

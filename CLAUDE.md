@@ -1,6 +1,6 @@
 # Pickleball Social Session Manager
 
-Web app for pickleball clubs. Hosts run social sessions (setup, live court rotation, final report); players only use a public phone check-in page (`/t/<tag>`, opened by the social's NFC sticker or QR code). A pure TypeScript engine recommends who plays next using continuous weighted fairness scoring. The live session is an append-only action log. Plan: `docs/plans/session-manager-mvp.md`. Roadmap: `docs/ROADMAP.md`. Decisions: `docs/decisions/`. UI rules: `DESIGN.md`.
+Web app for pickleball clubs. Hosts run social sessions (setup, live court rotation, final report); players only use a public phone check-in page (`/t/<tag>`, opened by the social's NFC sticker or QR code). A pure TypeScript engine recommends who plays next using continuous weighted fairness scoring. The live session is an append-only action log. Original plan: `docs/plans/session-manager-mvp.md`; its membership model is superseded by `docs/plans/session-only-participants.md` and ADR 0004. Roadmap: `docs/ROADMAP.md`. Decisions: `docs/decisions/`. UI rules: `DESIGN.md`.
 
 @DESIGN.md
 
@@ -36,7 +36,9 @@ Web app for pickleball clubs. Hosts run social sessions (setup, live court rotat
 ## Data and architecture rules
 
 - Socials (`docs/decisions/0003-socials-and-data-isolation.md`): an installation holds independent socials; one login = one social (`hosts.social_id`, immutable), as `manager` or `host`. Managers also invite/remove hosts, add courts and rename the social. No venue concept; nothing is shared between socials
-- RLS on every table. A host reads only their own social's rows (`social_id = private.current_social_id()`; `authenticated` has SELECT only). The only public surface is the `/t/<tag>` check-in page (one tag per social, `socials.checkin_tag`), whose server code calls `get_checkin_page` / `search_checkin_names` / `submit_checkin`
+- RLS on every table. A host reads only their own social's rows (`social_id = private.current_social_id()`; `authenticated` has SELECT only). The only public surface is the `/t/<tag>` check-in page (one tag per social, `socials.checkin_tag`), whose server code calls `get_checkin_page` / `submit_checkin`
+- Players are session-only snapshots: no membership directory, member-device links or cross-session identity. First name, last name and Beginner/Intermediate/Advanced level are required for public check-in and host adds; normalised full names are unique per session. Public name clashes stay private to the host
+- Check-in cookies are independent random session-specific tokens; only their SHA-256 reaches SQL. Ignore the legacy universal cookie. Submit binds the rendered session UUID and SQL locks/revalidates it and the tag-social before any write; turnover clears the form and reloads. Historical `isGuest` payload fields are accepted and ignored by replay
 - All writes are server-only (`docs/decisions/0002-server-only-writes.md`): verify the user with `auth.getUser()` and their role, then write with the service-role client (`src/lib/supabase/admin.ts`), passing `p_actor_user_id`. Write functions are executable by `service_role` only; `anon` can execute nothing. They derive the actor's social from `p_actor_user_id` (never from the caller) and only touch its rows
 - Review checklist: every admin-client query filters `.eq("social_id", host.socialId)` and every insert sets `social_id`; `session_events` and `matches` are scoped by a join to `sessions`
 - Session flow: server action → validate with the engine (`applyEvent`) → one Postgres function (single transaction), via `src/server/submitSessionAction.ts`

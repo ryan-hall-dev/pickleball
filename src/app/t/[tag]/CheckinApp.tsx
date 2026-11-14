@@ -1,28 +1,24 @@
 "use client";
 
 import {
+  type Dispatch,
   useCallback,
   useEffect,
   useReducer,
   useRef,
+  useState,
   useSyncExternalStore,
-  type Dispatch,
 } from "react";
 import {
   ensureCheckinDevice,
   readCheckinPage,
-  searchCheckinNames,
   submitCheckin,
 } from "@/server/checkin/checkinActions";
 import type {
   ReadCheckinPageResult,
-  SearchCheckinNamesResult,
   SubmitCheckinResult,
 } from "@/server/checkin/checkinResults";
-import {
-  isSearchableQuery,
-  type CheckinSubmitInput,
-} from "@/server/checkin/checkinRules";
+import { type CheckinSubmitInput } from "@/server/checkin/checkinRules";
 import { APP_NAME } from "./CheckinParts";
 import {
   AlreadyCheckedInScreen,
@@ -40,13 +36,9 @@ import {
   type CheckinAction,
   type CheckinState,
 } from "./checkinViewState";
-import { ConfirmSheet } from "./ConfirmSheet";
-import { GuestCheckinForm } from "./GuestCheckinForm";
+import { ParticipantCheckinForm } from "./ParticipantCheckinForm";
 import { settleWithin } from "@/lib/settleWithin";
-import { WelcomeScreen } from "./WelcomeScreen";
 
-/** Typing settles for this long before a search is sent. */
-const SEARCH_DEBOUNCE_MS = 300;
 /** How often the waiting screen asks whether a host has decided (plan: 5 s polling). */
 const WAITING_POLL_INTERVAL_MS = 5_000;
 /** How often the welcome screen freshens "min left" and "to first game". */
@@ -62,11 +54,6 @@ const UNAVAILABLE_SUBMIT: SubmitCheckinResult = {
   ok: false,
   failure: "unavailable",
 };
-const UNAVAILABLE_SEARCH: SearchCheckinNamesResult = {
-  ok: false,
-  failure: "unavailable",
-};
-
 function readCheckinPageWithin(checkinTag: string) {
   return settleWithin(
     readCheckinPage(checkinTag),
@@ -87,12 +74,9 @@ function subscribeToNothing() {
 export function CheckinApp({
   checkinTag,
   initialPageRead,
-  needsDeviceCookie,
 }: {
   checkinTag: string;
   initialPageRead: ReadCheckinPageResult;
-  /** A new phone on an open check-in: give it its device cookie straight away. */
-  needsDeviceCookie: boolean;
 }) {
   const isInBrowser = useSyncExternalStore(
     subscribeToNothing,
@@ -107,22 +91,16 @@ export function CheckinApp({
     );
   }
   return (
-    <CheckinFlow
-      checkinTag={checkinTag}
-      initialPageRead={initialPageRead}
-      needsDeviceCookie={needsDeviceCookie}
-    />
+    <CheckinFlow checkinTag={checkinTag} initialPageRead={initialPageRead} />
   );
 }
 
 function CheckinFlow({
   checkinTag,
   initialPageRead,
-  needsDeviceCookie,
 }: {
   checkinTag: string;
   initialPageRead: ReadCheckinPageResult;
-  needsDeviceCookie: boolean;
 }) {
   const [state, dispatch] = useReducer(
     checkinReducer,
@@ -130,8 +108,11 @@ function CheckinFlow({
     initialCheckinState,
   );
 
-  useDeviceCookieBeforeSubmit(needsDeviceCookie);
-  useDebouncedSearch(checkinTag, state.search.query, dispatch);
+  const isDeviceReady = useDeviceCookieBeforeSubmit(
+    checkinTag,
+    state.openPage?.session.sessionId,
+    dispatch,
+  );
   usePeriodicPageRead(
     checkinTag,
     state.screen === "waiting" ? WAITING_POLL_INTERVAL_MS : null,
@@ -154,10 +135,20 @@ function CheckinFlow({
     (input: CheckinSubmitInput) => {
       dispatch({ type: "submit_started" });
       void settleWithin(
-        submitCheckin(checkinTag, input),
+        submitCheckin(checkinTag, {
+          ...input,
+          sessionId: state.openPage?.session.sessionId,
+        }),
         SERVER_CALL_TIMEOUT_MS,
         UNAVAILABLE_SUBMIT,
-      ).then((result) =>
+      ).then((result) => {
+        if (!result.ok && result.failure === "session_changed") {
+          dispatch({ type: "session_changed" });
+          void readCheckinPageWithin(checkinTag).then((freshPage) =>
+            dispatch({ type: "page_read", result: freshPage }),
+          );
+          return;
+        }
         dispatch({
           type: "submit_finished",
           submittedName: {
@@ -165,15 +156,15 @@ function CheckinFlow({
             lastName: input.lastName,
           },
           result,
-        }),
-      );
+        });
+      });
     },
-    [checkinTag],
+    [checkinTag, state.openPage?.session.sessionId],
   );
 
   return (
     <CheckinScreenView
-      state={state}
+      state={{ ...state, isBusy: state.isBusy || !isDeviceReady }}
       dispatch={dispatch}
       onRefresh={refreshPage}
       onSubmit={submit}
@@ -181,39 +172,48 @@ function CheckinFlow({
   );
 }
 
-/** Searches 300 ms after typing stops; nothing is sent for fewer than 2 letters. */
-function useDebouncedSearch(
-  checkinTag: string,
-  nameQuery: string,
-  dispatch: Dispatch<CheckinAction>,
-) {
-  useEffect(() => {
-    if (!isSearchableQuery(nameQuery)) return;
-    const timeout = setTimeout(() => {
-      void settleWithin(
-        searchCheckinNames(checkinTag, nameQuery),
-        SERVER_CALL_TIMEOUT_MS,
-        UNAVAILABLE_SEARCH,
-      ).then((result) =>
-        dispatch({ type: "search_finished", query: nameQuery, result }),
-      );
-    }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timeout);
-  }, [checkinTag, nameQuery, dispatch]);
-}
-
 /**
  * A new phone gets its device cookie once, as soon as the page opens, so a
  * retried submit (after a lost answer) is the same phone and returns the same
  * request. If this fails, the first search or submit creates it instead.
  */
-function useDeviceCookieBeforeSubmit(needsDeviceCookie: boolean) {
+function useDeviceCookieBeforeSubmit(
+  checkinTag: string,
+  sessionId: string | undefined,
+  dispatch: Dispatch<CheckinAction>,
+) {
+  const [preparedSessionId, setPreparedSessionId] = useState<string | null>(
+    null,
+  );
   useEffect(() => {
-    if (!needsDeviceCookie) return;
-    void ensureCheckinDevice().catch(() => {
-      // Offline: the first search or submit sets the cookie.
-    });
-  }, [needsDeviceCookie]);
+    if (!sessionId) return;
+    let isStopped = false;
+    let retryTimeout: ReturnType<typeof setTimeout>;
+    async function prepareDevice() {
+      const result = await settleWithin(
+        ensureCheckinDevice(checkinTag),
+        SERVER_CALL_TIMEOUT_MS,
+        { ok: false, failure: "unavailable" } as const,
+      );
+      if (isStopped) return;
+      if (result.ok) setPreparedSessionId(sessionId!);
+      else {
+        dispatch({
+          type: "page_read",
+          result: { ok: false, failure: "unavailable" },
+        });
+        retryTimeout = setTimeout(() => {
+          void prepareDevice();
+        }, WAITING_POLL_INTERVAL_MS);
+      }
+    }
+    void prepareDevice();
+    return () => {
+      isStopped = true;
+      clearTimeout(retryTimeout);
+    };
+  }, [checkinTag, sessionId, dispatch]);
+  return !sessionId || preparedSessionId === sessionId;
 }
 
 /**
@@ -308,54 +308,14 @@ function CheckinScreenView({
   switch (screen) {
     case "welcome":
       return (
-        <>
-          <WelcomeScreen
-            page={openPage}
-            search={state.search}
-            onSearchQueryChange={(query) =>
-              dispatch({ type: "search_query_changed", query })
-            }
-            onCandidatePicked={(candidate) =>
-              dispatch({ type: "confirm_opened", candidate })
-            }
-            onGuestFormOpened={() => dispatch({ type: "guest_form_opened" })}
-          />
-          <ConfirmSheet
-            page={openPage}
-            confirm={state.confirm}
-            isBusy={state.isBusy}
-            onClose={() => dispatch({ type: "confirm_closed" })}
-            onLevelPickerToggled={() =>
-              dispatch({ type: "level_picker_toggled" })
-            }
-            onLevelPressed={(skillLevel) =>
-              dispatch({ type: "level_pressed", skillLevel })
-            }
-            onCheckIn={() => {
-              if (!state.confirm) return;
-              const { candidate, updatedSkillLevel } = state.confirm;
-              onSubmit({
-                kind: "member",
-                memberId: candidate.memberId,
-                firstName: candidate.firstName,
-                lastName: candidate.lastName,
-                updatedSkillLevel,
-              });
-            }}
-          />
-        </>
-      );
-    case "guest_form":
-      return (
-        <GuestCheckinForm
+        <ParticipantCheckinForm
           page={openPage}
-          values={state.guestFormValues}
+          values={state.formValues}
           onValuesChange={(values) =>
-            dispatch({ type: "guest_form_changed", values })
+            dispatch({ type: "form_changed", values })
           }
-          serverFieldErrors={state.guestFieldErrors}
+          serverFieldErrors={state.fieldErrors}
           isBusy={state.isBusy}
-          onBack={() => dispatch({ type: "guest_form_closed" })}
           onCheckIn={onSubmit}
         />
       );
@@ -375,10 +335,6 @@ function CheckinScreenView({
     case "approved":
       return <ApprovedScreen {...screenProps} />;
     case "already_checked_in_own_phone":
-      return (
-        <AlreadyCheckedInScreen {...screenProps} confirmedBy="own_phone" />
-      );
-    case "already_checked_in_host_confirmed":
-      return <AlreadyCheckedInScreen {...screenProps} confirmedBy="host" />;
+      return <AlreadyCheckedInScreen {...screenProps} />;
   }
 }
