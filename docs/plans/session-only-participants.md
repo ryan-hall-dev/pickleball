@@ -1,6 +1,6 @@
 # Session-only participants: removing the membership system
 
-Status: **Approved (Ryan, 2026-11-11)**, all four decisions as recommended. Supersedes the member-based parts of `m5-player-checkin.md`.
+Status: **Complete — `3610972` (2026-11-15)**. Approved by Ryan, 2026-11-11, and completed before the simpler social workflow. Supersedes the member-based parts of `m5-player-checkin.md`.
 
 ## Requirements (Ryan, 2026-11-11)
 

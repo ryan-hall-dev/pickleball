@@ -48,7 +48,7 @@ One live screen with three areas:
 
 The host taps Game finished, then Start these four when the prepared group actually goes on. These are separate moments because a court can sit empty during a changeover. Do not start the next game or reset its players' waiting clocks merely because the previous game ended.
 
-**Agreed stability rule:** before the host calls a group a suggestion may update; once the host confirms/calls a group, keep it stable and visible to co-hosts. A player cannot be confirmed for two courts. Selection does not stop their wait. If a confirmed player rests or leaves, flag the vacancy and require a replacement rather than silently changing a group the host has already announced. The phone mockup shows the interaction for review; the precise layout is not yet approved. A replacement for a called group is explicitly confirmed by the host.
+**Agreed stability rule:** before the host calls a group a suggestion may update; once the host confirms/calls a group, keep it stable and visible to co-hosts. A player cannot be confirmed for two courts. Selection does not stop their wait. If a confirmed player rests or leaves, flag the vacancy and require a replacement rather than silently changing a group the host has already announced. Ryan approved the phone mockup on 2026-11-14. A replacement for a called group is explicitly confirmed by the host.
 
 ### After play
 
@@ -69,6 +69,8 @@ Do not carry the old weighted score forward merely behind a simpler screen: its 
 Ryan agreed a 2-minute starting limit for the first trial: someone waiting 15 minutes may yield to someone waiting 14 minutes for variety, but not someone waiting 10 minutes. The implementation must also enforce the actual extra-wait bound across repeated decisions: it cannot repeatedly reset the allowance and keep skipping the same player. When that limit would be exceeded, waiting wins over variety. Revisit the limit using the pilot evidence rather than introducing adjustable weights.
 
 **Feasibility detail to resolve before coding:** a 2-minute difference between two players' current waits does not guarantee that the bypassed player can start a game within another 2 minutes. Games finish at unpredictable times. Preserve Ryan's limit as the requirement, but work through that example before choosing an algorithm; do not silently reinterpret it as only a comparison of waiting times, or add finish-time predictions to claim the guarantee. When variety cannot safely fit the agreed allowance, the conservative outcome is to prioritise waiting.
+
+**Conservative implementation for the first trial (2026-11-15):** the app does not bypass an older eligible player solely for variety when it cannot establish that extra delay is within the allowance. When several courts are available together, select the oldest feasible player set first, then improve mixed/same-sex variety by partitioning that same set into valid games. This uses none of the two-minute allowance and preserves the selected players. With one court, variety may have to yield entirely; do not pretend a younger waiter's age difference predicts when the older player next plays. Report this practical limitation for the pilot. No court-finish predictions or adjustable weighting controls are introduced.
 
 Work through edge-case examples before coding: the oldest four being an invalid 3:1 group, equal waits, two courts competing for the same people, and repeated third-game avoidance that could cumulatively delay one player. **Do not use court-number order or predicted finish order as a player priority**: Ryan rejected that approach. The host chooses which game to prepare; uncalled suggestions and same-time choices still need a deterministic, non-starving implementation. Proposed streak accounting is per player, based on completed games in this session; define whether an abandoned game counts before implementation. Women's/men's games are the same-sex category for that player's variety; mixing partners is a separate deferred objective.
 
@@ -129,7 +131,7 @@ Ryan approved the phone mockup on 2026-11-14 and authorised implementation on 20
 
 ## Remaining review details
 
-- **Phone layout:** review `docs/designs/simple-social/phone-review.html` for the short Setup, Courts/Up next, Waiting/rest, Check-ins and replacement flow. It uses the existing design tokens with a phone-first layout. Keep `DESIGN.md` unchanged until the new screens are approved.
+- **Phone layout:** `docs/designs/simple-social/phone-review.html` is the approved reference for the short Setup, Courts/Up next, Waiting/rest, Check-ins and replacement flow. It uses the existing design tokens with a phone-first layout.
 - **Edge-case examples:** confirm the scheduling interpretation with valid/invalid first-four groups, equal waits and competition for players across courts. No court-number priority or automatic finish-time forecast. The exact suggested allocation interaction remains a proposal in the mockup.
 - **Recovery:** Ryan approved replacement and basic Undo, but did not explicitly decide the rare case when nobody can replace an injured player. Do not silently introduce short-handed play; flag the exceptional end-game behaviour before implementing it. Define the small number of safe abandon/undo clock cases with examples.
 - **Measurement and retention:** agree the pilot measurements before claiming a successful trial. Data stays for now; no extra personal-data collection, global identities, automated deletion or new operator analytics dashboard is authorised.
@@ -166,6 +168,8 @@ Each increment is implemented, reviewed, tested, committed on the existing branc
 - Rollback pairs the pre-change code commit with its verified backup if a schema change prevents running the old code. Any restore needs Ryan's approval because it discards later local writes. Post-change checks include replaying existing logs, comparing preserved record counts, and verifying social isolation.
 
 ## Log
+
+- 2026-11-15: session-only foundation committed as `3610972`. Independent security/data review passed; 449 database assertions, 768 unit/integration tests (plus the final 663-unit rerun), 51 browser tests, eight benchmarks, production build, typecheck, lint, full formatting and clean migration/schema comparison passed. Five duplicate browser-project cases were excluded, not deferred product journeys. Historical replay checked 243 logs / 1,415 events with zero failures. Audit: zero high/critical, one moderate development-only minimatch advisory. Next increment implements pure simple-session rules before database/UI wiring.
 
 - 2026-11-14: recorded the conversation decisions above and added a separate phone-screen design draft. Read-only review completed; static browser layout/interaction checks passed at 320/390/1440 px (details in the mockup README). No application code, migrations or existing uncommitted work changed. Awaiting Ryan’s screen review and implementation approval.
 
