@@ -6,6 +6,10 @@ Source: HTML exports in `Reference Designs/` (`Setup.dc.html`, `SetupConfirm.dc.
 
 Tokens live in `src/app/globals.css` under `@theme`. Never hard-code hex values in components.
 
+## Simpler phone workflow (approved 2026-11-14; implementation authorised 2026-11-15)
+
+The new host workflow follows `docs/designs/simple-social/phone-review.html` and `docs/plans/simple-social-mvp.md`. These supersede the older desktop-first Setup/live layouts for the simpler version. Keep the existing colour/typography tokens and 44 px touch targets. The host enters a court count; live views show Courts/Up next, Waiting/rest and Check-ins. No Rotation settings, saved-setup/reuse controls, game-count estimates, capacity diagram, Pause control, Singles selector or host History/report screen. Ten-minute rests preserve earned waiting; called groups stay fixed. Normal game turnover is Game finished, then Start these four, without repeated confirmation dialogs. Static mockup scenes illustrate layout, not a functioning scheduler.
+
 ## Principles
 
 - Dark, high-contrast, glanceable from a distance: hosts use this standing at the courts, often on a tablet.
