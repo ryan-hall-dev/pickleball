@@ -1,5 +1,9 @@
 "use server";
 
+import { genderSchema } from "@/server/participantRules";
+import { applyEvent, replay } from "@/engine/session";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { loadSessionLog } from "@/server/sessionLog";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -25,8 +29,8 @@ import {
 // getUser() first, then calls a service_role check-in function with
 // p_actor_user_id (decision 0002). The functions derive the social from the
 // actor, so no social id is ever passed: a request of another social is
-// "not found". Approving into a draft needs no log event; a live session
-// (M7) does, and is refused here as a failure.
+// "not found". Draft approval needs no event; live approval needs client
+// event metadata and engine prevalidation before the atomic database write.
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -121,20 +125,102 @@ function refusalOrThrow(
  */
 export async function approveCheckin(
   checkinRequestId: unknown,
+  missingGender?: unknown,
+  liveMetadata?: { eventId: string; expectedLastSeq: number },
 ): Promise<HostCheckinDecisionResult> {
+  const parsedGender = genderSchema.optional().safeParse(missingGender);
+  if (!parsedGender.success) return { kind: "failed" };
+  const parsedLive = z
+    .object({
+      eventId: z.uuid(),
+      expectedLastSeq: z.number().int().nonnegative(),
+    })
+    .optional()
+    .safeParse(liveMetadata);
+  if (!parsedLive.success) return { kind: "failed" };
   return decideCheckin(
     checkinRequestId,
     "Approving a check-in failed",
     async (adminClient, host, requestId) => {
+      const { data: request, error: requestError } = await adminClient
+        .from("checkin_requests")
+        .select(
+          "session_id, first_name, last_name, skill_level, gender, status",
+        )
+        .eq("social_id", host.socialId)
+        .eq("id", requestId)
+        .abortSignal(checkinDatabaseTimeoutSignal())
+        .maybeSingle();
+      if (requestError)
+        throw new Error(`Reading check-in failed: ${requestError.message}`);
+      if (!request) return { kind: "already_decided" };
+      const participantId = randomUUID();
+      const { data: session, error: sessionError } = await adminClient
+        .from("sessions")
+        .select("status")
+        .eq("social_id", host.socialId)
+        .eq("id", request.session_id)
+        .abortSignal(checkinDatabaseTimeoutSignal())
+        .single();
+      if (sessionError)
+        throw new Error(
+          `Reading check-in session failed: ${sessionError.message}`,
+        );
+      let occurredAt: string | undefined;
+      if (session.status === "live" && request.status === "pending") {
+        if (!parsedLive.data) return { kind: "failed" };
+        const log = await loadSessionLog(
+          await createSupabaseServerClient(),
+          request.session_id,
+        );
+        if (!log) return { kind: "failed" };
+        const replayed = replay(log.events);
+        if (
+          !replayed.ok ||
+          replayed.state.lastSeq !== parsedLive.data.expectedLastSeq
+        )
+          return { kind: "failed" };
+        const gender = request.gender ?? parsedGender.data;
+        const checkedGender = genderSchema.safeParse(gender);
+        if (!checkedGender.success) return { kind: "failed" };
+        const at = Math.max(Date.now(), replayed.state.lastAt ?? 0);
+        const result = applyEvent(replayed.state, {
+          type: "PlayerJoined",
+          seq: replayed.state.lastSeq + 1,
+          eventId: parsedLive.data.eventId,
+          at,
+          actorId: host.userId,
+          payload: {
+            participant: {
+              participantId,
+              firstName: request.first_name,
+              lastName: request.last_name,
+              skill: request.skill_level,
+              gender: checkedGender.data,
+            },
+          },
+        });
+        if (!result.ok) return { kind: "failed" };
+        occurredAt = new Date(at).toISOString();
+      }
       const { data, error } = await adminClient
         .rpc("approve_checkin", {
           p_actor_user_id: host.userId,
           p_checkin_request_id: requestId,
-          p_session_participant_id: randomUUID(),
+          p_session_participant_id: participantId,
+          ...(parsedGender.data ? { p_gender: parsedGender.data } : {}),
+          ...(parsedLive.data
+            ? {
+                p_event_id: parsedLive.data.eventId,
+                p_expected_last_seq: parsedLive.data.expectedLastSeq,
+                p_occurred_at: occurredAt,
+              }
+            : {}),
         })
         .abortSignal(checkinDatabaseTimeoutSignal());
       if (error) return refusalOrThrow("approve_checkin", error);
-      const { participantId, wasApprovedBefore } = approvedCheckinFromRpc(data);
+      const { participantId: approvedParticipantId, wasApprovedBefore } =
+        approvedCheckinFromRpc(data);
       if (
         wasApprovedBefore &&
         (await isDecidedByAnotherHost(adminClient, host, requestId))
@@ -144,7 +230,11 @@ export async function approveCheckin(
       try {
         return {
           kind: "approved",
-          participant: await readParticipant(adminClient, host, participantId),
+          participant: await readParticipant(
+            adminClient,
+            host,
+            approvedParticipantId,
+          ),
         };
       } catch (readError) {
         // Approved all the same: the tray says so and Who's playing re-reads.

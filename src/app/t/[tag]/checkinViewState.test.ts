@@ -36,13 +36,19 @@ const values = {
   firstName: "Kai",
   lastName: "Moreno",
   skillLevel: "advanced" as const,
+  gender: "male" as const,
 };
 
 describe("session-only check-in state", () => {
   it("starts with an empty required form", () => {
     expect(initialCheckinState(read())).toMatchObject({
       screen: "welcome",
-      formValues: { firstName: "", lastName: "", skillLevel: null },
+      formValues: {
+        firstName: "",
+        lastName: "",
+        skillLevel: null,
+        gender: null,
+      },
       requester: null,
     });
   });
@@ -102,7 +108,12 @@ describe("session-only check-in state", () => {
     expect(state).toMatchObject({
       screen: "approved",
       requester: { displayName: "Kai Moreno" },
-      formValues: { firstName: "", lastName: "", skillLevel: null },
+      formValues: {
+        firstName: "",
+        lastName: "",
+        skillLevel: null,
+        gender: null,
+      },
     });
   });
   it("rejection retry clears all details for a fresh request", () => {
@@ -113,7 +124,12 @@ describe("session-only check-in state", () => {
     expect(state).toMatchObject({
       screen: "welcome",
       requester: null,
-      formValues: { firstName: "", lastName: "", skillLevel: null },
+      formValues: {
+        firstName: "",
+        lastName: "",
+        skillLevel: null,
+        gender: null,
+      },
     });
   });
   it("shows already checked in only for the own-phone outcome", () => {
@@ -206,7 +222,7 @@ it("a new session on the same page clears entered details", () => {
   });
   expect(next).toMatchObject({
     screen: "welcome",
-    formValues: { firstName: "", lastName: "", skillLevel: null },
+    formValues: { firstName: "", lastName: "", skillLevel: null, gender: null },
   });
 });
 
@@ -215,14 +231,14 @@ it("a session-changed submit clears details before a fresh page read", () => {
   const clearing = checkinReducer(state, { type: "session_changed" });
   expect(clearing).toMatchObject({
     isBusy: true,
-    formValues: { firstName: "", lastName: "", skillLevel: null },
+    formValues: { firstName: "", lastName: "", skillLevel: null, gender: null },
     requester: null,
   });
   const next = checkinReducer(clearing, { type: "page_read", result: read() });
   expect(next).toMatchObject({
     screen: "welcome",
     isBusy: false,
-    formValues: { firstName: "", lastName: "", skillLevel: null },
+    formValues: { firstName: "", lastName: "", skillLevel: null, gender: null },
   });
 });
 
@@ -251,7 +267,12 @@ it.each(["no_open_session", "inactive"] as const)(
     });
     expect(closed).toMatchObject({
       openPage: null,
-      formValues: { firstName: "", lastName: "", skillLevel: null },
+      formValues: {
+        firstName: "",
+        lastName: "",
+        skillLevel: null,
+        gender: null,
+      },
       fieldErrors: {},
       requester: null,
     });
@@ -270,9 +291,30 @@ it.each(["no_open_session", "inactive"] as const)(
     });
     expect(reopened).toMatchObject({
       screen: "welcome",
-      formValues: { firstName: "", lastName: "", skillLevel: null },
+      formValues: {
+        firstName: "",
+        lastName: "",
+        skillLevel: null,
+        gender: null,
+      },
       fieldErrors: {},
       requester: null,
     });
   },
 );
+
+it("SESSION_CHANGED clears all four submitted fields before any refreshed session", () => {
+  const state = { ...initialCheckinState(read()), formValues: values };
+  const next = checkinReducer(state, {
+    type: "submit_finished",
+    submittedName: values,
+    result: { ok: false, failure: "session_changed" },
+  });
+  expect(next.formValues).toEqual({
+    firstName: "",
+    lastName: "",
+    skillLevel: null,
+    gender: null,
+  });
+  expect(next.requester).toBeNull();
+});

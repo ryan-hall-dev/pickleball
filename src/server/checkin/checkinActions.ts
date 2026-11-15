@@ -76,7 +76,7 @@ async function failureForClosedCheckin(
 
 /**
  * Sends a check-in request for the host to approve (nobody is added without
- * one, criterion 19): first name, last name and level. A second submit from
+ * one, criterion 19): first name, last name, gender and level. A second submit from
  * the same phone returns its pending request (criterion 8); a phone whose
  * request in this session was approved is told it's already checked in.
  */
@@ -100,6 +100,7 @@ export async function submitCheckin(
         firstName: fieldErrors.firstName?.[0],
         lastName: fieldErrors.lastName?.[0],
         skillLevel: fieldErrors.skillLevel?.[0],
+        gender: fieldErrors.gender?.[0],
       },
     };
   }
@@ -123,6 +124,7 @@ export async function submitCheckin(
         p_first_name: input.firstName,
         p_last_name: input.lastName,
         p_skill_level: input.skillLevel,
+        p_gender: input.gender,
       })
       .abortSignal(checkinDatabaseTimeoutSignal());
     if (error) {

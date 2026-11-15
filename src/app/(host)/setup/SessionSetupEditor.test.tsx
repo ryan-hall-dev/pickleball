@@ -15,6 +15,7 @@ import {
   discardSessionDraft,
   readSessionDraft,
   saveSessionDraft,
+  setDraftParticipantDetails,
   saveSetup,
   type SaveSessionDraftResult,
 } from "@/server/setup/setupActions";
@@ -40,6 +41,7 @@ vi.mock("@/server/checkin/hostCheckinActions", () => ({
 
 vi.mock("@/server/setup/setupActions", () => ({
   saveSessionDraft: vi.fn(),
+  setDraftParticipantDetails: vi.fn(),
   discardSessionDraft: vi.fn(),
   addClubCourt: vi.fn(),
   startSessionDraft: vi.fn(),
@@ -85,6 +87,7 @@ function participantsFor(count: number): DraftParticipant[] {
     firstName: "Player",
     lastName: String(index),
     skillLevel: "intermediate",
+    gender: "male" as const,
   }));
 }
 
@@ -139,7 +142,86 @@ function renderEditor(
 const SAVE_WAIT = { timeout: 3000 };
 
 describe("SessionSetupEditor", () => {
+  it("blocks overlapping setup changes while completing participant details", async () => {
+    const participant = { ...participantsFor(1)[0], gender: null };
+    let finish!: (result: SaveSessionDraftResult) => void;
+    vi.mocked(setDraftParticipantDetails).mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    renderEditor(draftWith({ participants: [participant], draftRevision: 4 }));
+    fireEvent.change(
+      screen.getByRole("combobox", {
+        name: `Gender for ${participant.firstName} ${participant.lastName}`,
+      }),
+      { target: { value: "female" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save details" }));
+    await waitFor(() =>
+      expect(vi.mocked(setDraftParticipantDetails)).toHaveBeenCalledTimes(1),
+    );
+    expect(screen.getByLabelText("Session name")).toBeDisabled();
+    await act(async () => finish({ ok: true, draftRevision: 5 }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Session name")).toBeEnabled(),
+    );
+  });
+
+  it("completes legacy details with the current revision and autosaves the next edit without a false conflict", async () => {
+    const participant = {
+      ...participantsFor(1)[0],
+      gender: null,
+      skillLevel: null,
+    };
+    vi.mocked(setDraftParticipantDetails).mockResolvedValue({
+      ok: true,
+      draftRevision: 5,
+    });
+    renderEditor(draftWith({ draftRevision: 4, participants: [participant] }));
+    const name = `${participant.firstName} ${participant.lastName}`;
+    fireEvent.change(
+      screen.getByRole("combobox", { name: `Gender for ${name}` }),
+      { target: { value: "female" } },
+    );
+    fireEvent.change(
+      screen.getByRole("combobox", { name: `Level for ${name}` }),
+      { target: { value: "beginner" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save details" }));
+    await waitFor(() =>
+      expect(vi.mocked(setDraftParticipantDetails)).toHaveBeenCalledWith({
+        sessionId: SESSION_ID,
+        participantId: participant.participantId,
+        gender: "female",
+        skillLevel: "beginner",
+        expectedDraftRevision: 4,
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Saving…" }),
+      ).not.toBeInTheDocument(),
+    );
+    saveSessionDraftMock.mockResolvedValue({ ok: true, draftRevision: 6 });
+    fireEvent.change(screen.getByLabelText("Location (optional)"), {
+      target: { value: "Courts" },
+    });
+    await waitFor(
+      () =>
+        expect(saveSessionDraftMock).toHaveBeenLastCalledWith(
+          expect.objectContaining({ location: "Courts" }),
+          5,
+        ),
+      SAVE_WAIT,
+    );
+    expect(
+      screen.queryByRole("region", { name: "Setup changed elsewhere" }),
+    ).not.toBeInTheDocument();
+  });
+
   beforeEach(() => {
+    vi.mocked(setDraftParticipantDetails).mockReset();
     saveSessionDraftMock.mockReset();
     // Leaving with unsaved edits saves once more on unmount (cleanup).
     saveSessionDraftMock.mockResolvedValue({ ok: true, draftRevision: 1 });

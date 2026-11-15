@@ -30,31 +30,31 @@ grant execute on all functions in schema pg_temp to service_role;
 -- Submit: validation and guards ---------------------------------------------------
 set local role service_role;
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), 'Nina', 'New', null)$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), 'Nina', 'New', null, 'male')$$,
   '22023', 'INVALID_INPUT', 'a player must give a level'
 );
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), '   ', 'New', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), '   ', 'New', 'beginner', 'male')$$,
   '22023', 'INVALID_NAME', 'a blank name is refused'
 );
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), repeat('x', 51), 'New', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), repeat('x', 51), 'New', 'beginner', 'male')$$,
   '22023', 'INVALID_NAME', 'an over-long name is refused'
 );
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000009', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), 'Nina', 'New', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000009', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), 'Nina', 'New', 'beginner', 'male')$$,
   'P0001', 'SESSION_CHANGED', 'submit needs a known tag'
 );
 select throws_ok(
-  $$select public.submit_checkin('not a tag!', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), 'Nina', 'New', 'beginner')$$,
+  $$select public.submit_checkin('not a tag!', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), 'Nina', 'New', 'beginner', 'male')$$,
   'P0001', 'SESSION_CHANGED', 'a malformed tag gives the same answer as an unknown one'
 );
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, 'raw-device-token', pg_temp.ip(10), 'Nina', 'New', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, 'raw-device-token', pg_temp.ip(10), 'Nina', 'New', 'beginner', 'male')$$,
   '22023', 'INVALID_INPUT', 'submit refuses anything but a device token hash'
 );
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), 'not-a-hash', 'Nina', 'New', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), 'not-a-hash', 'Nina', 'New', 'beginner', 'male')$$,
   '22023', 'INVALID_INPUT', 'submit refuses a malformed IP hash'
 );
 reset role;
@@ -63,7 +63,7 @@ reset role;
 update public.sessions set checkin_open = false where id = 'd0000000-0000-4000-8000-000000000001';
 set local role service_role;
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), 'Nina', 'New', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), 'Nina', 'New', 'beginner', 'male')$$,
   'P0001', 'SESSION_CHANGED', 'submit needs the session''s check-in to be open'
 );
 reset role;
@@ -72,11 +72,11 @@ update public.sessions set checkin_open = true where id = 'd0000000-0000-4000-80
 -- A stale page cannot bind its cookie to another session, including a null ID.
 set local role service_role;
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', null, pg_temp.device(40), pg_temp.ip(40), 'Stale', 'Form', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', null, pg_temp.device(40), pg_temp.ip(40), 'Stale', 'Form', 'beginner', 'male')$$,
   'P0001', 'SESSION_CHANGED', 'a session UUID is required'
 );
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000099', pg_temp.device(40), pg_temp.ip(40), 'Stale', 'Form', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000099', pg_temp.device(40), pg_temp.ip(40), 'Stale', 'Form', 'beginner', 'male')$$,
   'P0001', 'SESSION_CHANGED', 'a different rendered session is refused'
 );
 reset role;
@@ -87,12 +87,12 @@ select is((select count(*) from public.session_participants where first_name = '
 -- Submit ---------------------------------------------------------------------------
 set local role service_role;
 select is(
-  public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), '  Nina ', 'New', 'beginner') ->> 'was_already_pending',
+  public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), '  Nina ', 'New', 'beginner', 'male') ->> 'was_already_pending',
   'false',
   'a player submits a pending request'
 );
 select is(
-  public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), 'Nina', 'Again', 'beginner') ->> 'was_already_pending',
+  public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(10), pg_temp.ip(10), 'Nina', 'Again', 'beginner', 'male') ->> 'was_already_pending',
   'true',
   'a second submit from the same phone returns the existing pending request'
 );
@@ -122,25 +122,25 @@ select 'submit', 'd0000000-0000-4000-8000-000000000001', pg_temp.device(30), pg_
 from generate_series(1, 9) as n;
 set local role service_role;
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(20), pg_temp.ip(99), 'Sam', 'Spam', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(20), pg_temp.ip(99), 'Sam', 'Spam', 'beginner', 'male')$$,
   'P0001', 'RATE_LIMITED', 'submit is rate-limited per device'
 );
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(99), pg_temp.ip(21), 'Sam', 'Spam', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(99), pg_temp.ip(21), 'Sam', 'Spam', 'beginner', 'male')$$,
   'P0001', 'RATE_LIMITED', 'submit is rate-limited per IP'
 );
 select is(
-  public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(30), pg_temp.ip(30), 'Pat', 'Probe', 'beginner') ->> 'status',
+  public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(30), pg_temp.ip(30), 'Pat', 'Probe', 'beginner', 'male') ->> 'status',
   'pending',
   'the last allowed submit creates a request...'
 );
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(30), pg_temp.ip(30), 'Pat', 'Probe', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(30), pg_temp.ip(30), 'Pat', 'Probe', 'beginner', 'male')$$,
   'P0001', 'RATE_LIMITED', '...and a resubmit returning it still counts toward the device limit'
 );
 
 select is(
-  public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(11), pg_temp.ip(11), 'Grace', 'Kim', 'advanced') ->> 'status',
+  public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(11), pg_temp.ip(11), 'Grace', 'Kim', 'advanced', 'male') ->> 'status',
   'pending',
   'another player submits'
 );
@@ -149,13 +149,13 @@ reset role;
 -- Host decisions --------------------------------------------------------------------------
 set local role service_role;
 select throws_ok(
-  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000003', (select gen_random_uuid()), gen_random_uuid())$$,
+  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000003', (select gen_random_uuid()), gen_random_uuid(), p_gender => 'male')$$,
   '42501', 'NOT_A_HOST', 'a non-host cannot approve'
 );
 
 select throws_ok(
   $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002',
-    (select id from public.checkin_requests where first_name = 'Nina'), null)$$,
+    (select id from public.checkin_requests where first_name = 'Nina'), null, p_gender => 'male')$$,
   '22023', 'INVALID_PARTICIPANT_ID', 'approval rejects a null participant ID without consuming the pending request'
 );
 
@@ -164,7 +164,7 @@ select is(
   public.approve_checkin('a0000000-0000-4000-8000-000000000002',
     (select id from public.checkin_requests where first_name = 'Nina'),
     'e0000000-0000-4000-8000-000000000010'
-  ) ->> 'status',
+  , p_gender => 'male') ->> 'status',
   'approved',
   'a host approves a request into a draft'
 );
@@ -182,7 +182,7 @@ select is_empty($$select 1 from public.session_events where session_id = 'd00000
 
 set local role service_role;
 select is(
-  public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where first_name = 'Nina'), 'e0000000-0000-4000-8000-000000000010') ->> 'status',
+  public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where first_name = 'Nina'), 'e0000000-0000-4000-8000-000000000010', p_gender => 'male') ->> 'status',
   'already_approved',
   'approving twice is idempotent'
 );
@@ -195,7 +195,7 @@ set local role service_role;
 select is(public.reject_checkin('a0000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000001') ->> 'status', 'rejected', 'a host rejects a request');
 select is(public.reject_checkin('a0000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000001') ->> 'status', 'already_rejected', 'rejecting twice is idempotent');
 select throws_ok(
-  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000001', gen_random_uuid())$$,
+  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000001', gen_random_uuid(), p_gender => 'male')$$,
   'P0001', 'CHECKIN_REQUEST_NOT_PENDING', 'a rejected request cannot be approved'
 );
 select throws_ok(
@@ -209,12 +209,12 @@ select public.start_session('a0000000-0000-4000-8000-000000000002',
   '{"config":{"participants":[{"participantId":"e0000000-0000-4000-8000-000000000010"}]},"initialAttendeeIds":["e0000000-0000-4000-8000-000000000010"]}'
 );
 select throws_ok(
-  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where device_token_hash = pg_temp.device(11)), 'e0000000-0000-4000-8000-000000000011')$$,
+  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where device_token_hash = pg_temp.device(11)), 'e0000000-0000-4000-8000-000000000011', p_gender => 'male')$$,
   '22023', 'EVENT_REQUIRED', 'approving into a live session needs the event arguments'
 );
 select throws_ok(
   $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where device_token_hash = pg_temp.device(11)), 'e0000000-0000-4000-8000-000000000011',
-      gen_random_uuid(), 0, now())$$,
+      gen_random_uuid(), 0, now(), p_gender => 'male')$$,
   'P0001', 'STALE_EXPECTED_SEQ', 'a live approval with a stale seq is refused'
 );
 reset role;
@@ -229,14 +229,14 @@ select results_eq(
 set local role service_role;
 select is(
   public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where device_token_hash = pg_temp.device(11)), 'e0000000-0000-4000-8000-000000000011',
-    'f0000000-0000-4000-8000-000000000020', 1, now()) -> 'event' ->> 'seq',
+    'f0000000-0000-4000-8000-000000000020', 1, now(), p_gender => 'male') -> 'event' ->> 'seq',
   '2',
   'a live approval appends the PlayerJoined event'
 );
 reset role;
 select results_eq(
   $$select type::text, payload from public.session_events where event_id = 'f0000000-0000-4000-8000-000000000020'$$,
-  $$values ('PlayerJoined', '{"participant":{"participantId":"e0000000-0000-4000-8000-000000000011","firstName":"Grace","lastName":"Kim","skill":"advanced"}}'::jsonb)$$,
+  $$values ('PlayerJoined', '{"participant":{"participantId":"e0000000-0000-4000-8000-000000000011","firstName":"Grace","lastName":"Kim","skill":"advanced","gender":"male"}}'::jsonb)$$,
   'the PlayerJoined snapshot carries the request''s name and level (no isGuest)'
 );
 
@@ -244,17 +244,17 @@ select results_eq(
 -- other phone with the same name gets an ordinary pending request (no leak).
 set local role service_role;
 select is(
-  public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(11), pg_temp.ip(11), 'Someone', 'Else', 'beginner'),
+  public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(11), pg_temp.ip(11), 'Someone', 'Else', 'beginner', 'male'),
   '{"status":"already_checked_in"}'::jsonb,
   'the phone whose request was approved is told it is already checked in'
 );
 select is(
-  public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(12), pg_temp.ip(12), 'Grace', 'Kim', 'advanced') ->> 'status',
+  public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, pg_temp.device(12), pg_temp.ip(12), 'Grace', 'Kim', 'advanced', 'male') ->> 'status',
   'pending',
   'another phone naming an attending player gets a pending request (no attendance leak)'
 );
 select throws_ok(
-  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where device_token_hash = pg_temp.device(12)), gen_random_uuid(), gen_random_uuid(), 2, now())$$,
+  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', (select id from public.checkin_requests where device_token_hash = pg_temp.device(12)), gen_random_uuid(), gen_random_uuid(), 2, now(), p_gender => 'male')$$,
   'P0001', 'NAME_ALREADY_IN_SESSION', 'a name already in the session cannot be approved'
 );
 reset role;

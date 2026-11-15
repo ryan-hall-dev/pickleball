@@ -33,6 +33,7 @@ function Form({
     firstName: "",
     lastName: "",
     skillLevel: null,
+    gender: null,
   });
   return (
     <ParticipantCheckinForm
@@ -78,11 +79,13 @@ describe("fresh session participant form", () => {
       target: { value: "Moreno" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    fireEvent.click(screen.getByRole("button", { name: "Male" }));
     fireEvent.click(screen.getByRole("button", { name: "Check in" }));
     expect(submit).toHaveBeenCalledExactlyOnceWith({
       firstName: "Kai",
       lastName: "Moreno",
       skillLevel: "advanced",
+      gender: "male",
     });
   });
   it("disables fields and submit while a request or cookie initialization is pending", () => {
@@ -91,4 +94,22 @@ describe("fresh session participant form", () => {
     expect(screen.getByRole("button", { name: "Check in" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Beginner" })).toBeDisabled();
   });
+});
+
+it("starts with no gender selected and requires a choice", () => {
+  const submit = vi.fn();
+  render(<Form onCheckIn={submit} />);
+  expect(screen.getByRole("button", { name: "Male" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  expect(screen.getByRole("button", { name: "Female" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Check in" }));
+  expect(
+    screen.getByRole("group", { name: "Gender" }),
+  ).toHaveAccessibleDescription("Choose male or female.");
+  expect(submit).not.toHaveBeenCalled();
 });

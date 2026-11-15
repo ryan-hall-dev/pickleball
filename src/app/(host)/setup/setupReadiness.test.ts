@@ -111,7 +111,12 @@ describe("setupReadiness", () => {
   });
 
   it("blocks on an unfinished participant entry and names what's missing", () => {
-    const participantForm = { firstName: "Kai", lastName: "", skillLevel: "" };
+    const participantForm = {
+      firstName: "Kai",
+      lastName: "",
+      skillLevel: "",
+      gender: "",
+    };
     const readiness = setupReadiness({ ...readyInput, participantForm });
     expect(readiness.isReadyToStart).toBe(false);
     expect(readiness.steps[2]).toMatchObject({
@@ -138,6 +143,7 @@ describe("setupReadiness", () => {
         firstName: "",
         lastName: "Lee",
         skillLevel: "",
+        gender: "",
       }),
     ).toBe(
       "Participant form has an unfinished entry: add the participant or clear it",
@@ -147,6 +153,7 @@ describe("setupReadiness", () => {
         firstName: "",
         lastName: "",
         skillLevel: "beginner",
+        gender: "male" as const,
       }),
     ).toBe(
       "Participant form has an unfinished entry: add the participant or clear it",
@@ -154,7 +161,12 @@ describe("setupReadiness", () => {
     expect(
       setupReadiness({
         ...readyInput,
-        participantForm: { firstName: "  ", lastName: "", skillLevel: "" },
+        participantForm: {
+          firstName: "  ",
+          lastName: "",
+          skillLevel: "",
+          gender: "",
+        },
       }).isReadyToStart,
     ).toBe(true);
   });

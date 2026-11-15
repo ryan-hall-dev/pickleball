@@ -27,6 +27,7 @@ function attendee(index: number, firstName: string): DraftParticipant {
     firstName,
     lastName: "Player",
     skillLevel: "beginner",
+    gender: "male" as const,
   };
 }
 
@@ -67,6 +68,7 @@ describe("useDraftAttendance: writes", () => {
             firstName: "Kai",
             lastName: "Player",
             skillLevel: "beginner",
+            gender: "male" as const,
           },
         },
         description: "Adding Kai Player",
@@ -78,6 +80,7 @@ describe("useDraftAttendance: writes", () => {
       firstName: "Kai",
       lastName: "Player",
       skillLevel: "beginner",
+      gender: "male" as const,
     });
     expect(result.current.participants).toEqual([grace, kai]);
   });
@@ -97,6 +100,7 @@ describe("useDraftAttendance: writes", () => {
             firstName: "Grace",
             lastName: "Player",
             skillLevel: "beginner",
+            gender: "male" as const,
           },
         },
         description: "Adding Grace Player",

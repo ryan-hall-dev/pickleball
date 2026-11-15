@@ -42,6 +42,7 @@ export function applyAttendanceChange(
           firstName: change.participant.firstName,
           lastName: change.participant.lastName,
           skillLevel: change.participant.skillLevel,
+          gender: change.participant.gender,
         },
       ];
     case "removeParticipant":
@@ -70,12 +71,14 @@ export interface ParticipantForm {
   lastName: string;
   /** "" = not chosen yet (a level is required). */
   skillLevel: string;
+  gender: string;
 }
 
 export const EMPTY_PARTICIPANT_FORM: ParticipantForm = {
   firstName: "",
   lastName: "",
   skillLevel: "",
+  gender: "",
 };
 
 export type ParticipantFormErrors = Partial<

@@ -4,10 +4,17 @@ import Link from "next/link";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { AttentionMessage } from "@/components/AttentionMessage";
 import {
+  INNER_BOX_TEXT_INPUT_CLASS_NAME,
   OUTLINE_BUTTON_CLASS_NAME,
   SECONDARY_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
 import { InitialsAvatar } from "@/components/InitialsAvatar";
+import {
+  GENDERS,
+  GENDER_LABELS,
+  genderSchema,
+  type Gender,
+} from "@/server/participantRules";
 import { SkillChip } from "@/components/SkillChip";
 import { settleWithin } from "@/lib/settleWithin";
 import {
@@ -48,7 +55,10 @@ const FAILED_DECISION: HostCheckinDecisionResult = { kind: "failed" };
 
 const DECISION_FUNCTIONS: Record<
   TrayDecisionAction,
-  (checkinRequestId: string) => Promise<HostCheckinDecisionResult>
+  (
+    checkinRequestId: string,
+    missingGender?: Gender,
+  ) => Promise<HostCheckinDecisionResult>
 > = {
   approve: approveCheckin,
   reject: rejectCheckin,
@@ -88,10 +98,16 @@ export function PendingCheckinTray({
   }, [state.attendanceChangesSeenElsewhere]);
 
   const decide = useCallback(
-    async (checkinRequestId: string, action: TrayDecisionAction) => {
+    async (
+      checkinRequestId: string,
+      action: TrayDecisionAction,
+      missingGender?: Gender,
+    ) => {
       dispatch({ type: "decision_started", checkinRequestId, action });
       const result = await settleWithin(
-        DECISION_FUNCTIONS[action](checkinRequestId),
+        missingGender
+          ? DECISION_FUNCTIONS[action](checkinRequestId, missingGender)
+          : DECISION_FUNCTIONS[action](checkinRequestId),
         SERVER_CALL_TIMEOUT_MS,
         FAILED_DECISION,
       );
@@ -267,10 +283,15 @@ function PendingCheckinRow({
 }: {
   row: TrayRow;
   nowMs: number;
-  onDecide: (checkinRequestId: string, action: TrayDecisionAction) => void;
+  onDecide: (
+    checkinRequestId: string,
+    action: TrayDecisionAction,
+    missingGender?: Gender,
+  ) => void;
   onDecidedRowExpired: (checkinRequestId: string) => void;
 }) {
   const { request } = row;
+  const [missingGender, setMissingGender] = useState("");
   const view = trayRowView(row);
   const { checkinRequestId } = request;
   const isDecided = view.decidedOutcome !== null;
@@ -335,14 +356,46 @@ function PendingCheckinRow({
           )}
         </div>
       </div>
+      {!request.gender && !isDecided && (
+        <select
+          aria-label={`Gender for ${name}`}
+          disabled={isWorking}
+          value={missingGender}
+          onChange={(event) => setMissingGender(event.target.value)}
+          className={INNER_BOX_TEXT_INPUT_CLASS_NAME}
+        >
+          <option value="">Choose gender…</option>
+          {GENDERS.map((gender) => (
+            <option key={gender} value={gender}>
+              {GENDER_LABELS[gender]}
+            </option>
+          ))}
+        </select>
+      )}
       {view.buttons.length > 0 && (
         <div className="flex flex-[1_1_236px] flex-wrap justify-end gap-2">
           {view.buttons.map((rowButton) => (
             <RowButton
               key={rowButton.kind}
-              rowButton={rowButton}
+              rowButton={{
+                ...rowButton,
+                isDisabled:
+                  rowButton.isDisabled ||
+                  (rowButton.action === "approve" &&
+                    !request.gender &&
+                    !genderSchema.safeParse(missingGender).success),
+              }}
               name={name}
-              onPress={() => onDecide(checkinRequestId, rowButton.action)}
+              onPress={() =>
+                onDecide(
+                  checkinRequestId,
+                  rowButton.action,
+                  !request.gender &&
+                    genderSchema.safeParse(missingGender).success
+                    ? genderSchema.parse(missingGender)
+                    : undefined,
+                )
+              }
             />
           ))}
         </div>
@@ -361,6 +414,9 @@ function RequestDetails({
   return (
     <div className="mt-[3px] flex flex-wrap items-center gap-1.5 text-xs text-muted">
       <SkillChip skillLevel={request.skillLevel} />
+      <span>
+        {request.gender ? GENDER_LABELS[request.gender] : "Gender missing"}
+      </span>
       <span className="tabular-nums">
         {relativeTimeLabel(request.createdAt, nowMs)}
       </span>

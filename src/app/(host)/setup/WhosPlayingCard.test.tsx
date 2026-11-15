@@ -22,6 +22,8 @@ vi.mock("@/server/setup/setupActions", () => ({
   removeDraftParticipant: vi.fn(),
 }));
 
+afterEach(cleanup);
+
 const addParticipantMock = vi.mocked(addDraftParticipant);
 const removeParticipantMock = vi.mocked(removeDraftParticipant);
 
@@ -35,14 +37,20 @@ function player(
   lastName: string,
   skillLevel: DraftParticipant["skillLevel"] = "intermediate",
 ): DraftParticipant {
-  return { participantId, firstName, lastName, skillLevel };
+  return { participantId, firstName, lastName, skillLevel, gender: "male" };
 }
 
 const grace = player("p-grace", "Grace", "Kim", "advanced");
 
 /** The card with the real attendance hook, as the editor uses it. */
-function CardHarness({ participants }: { participants: DraftParticipant[] }) {
-  const attendance = useDraftAttendance(SESSION_ID, participants);
+function CardHarness({
+  participants,
+  saveDetails,
+}: {
+  participants: DraftParticipant[];
+  saveDetails?: Parameters<typeof useDraftAttendance>[2];
+}) {
+  const attendance = useDraftAttendance(SESSION_ID, participants, saveDetails);
   const [participantForm, setParticipantForm] = useState(
     EMPTY_PARTICIPANT_FORM,
   );
@@ -69,6 +77,9 @@ function fillPlayerForm(firstName: string, lastName: string, level: string) {
   fireEvent.change(screen.getByLabelText("Last name"), {
     target: { value: lastName },
   });
+  fireEvent.change(screen.getByLabelText("Gender"), {
+    target: { value: "male" },
+  });
   fireEvent.change(screen.getByLabelText("Skill"), {
     target: { value: level },
   });
@@ -83,8 +94,6 @@ describe("WhosPlayingCard", () => {
     addParticipantMock.mockReset();
     removeParticipantMock.mockReset();
   });
-
-  afterEach(cleanup);
 
   it("lists the draft's players with their level and counts them", () => {
     renderCard([grace, player("p-kai", "Kai", "Lee", null)]);
@@ -131,6 +140,7 @@ describe("WhosPlayingCard", () => {
       firstName: "Kai",
       lastName: "Lee",
       skillLevel: "intermediate",
+      gender: "male" as const,
     });
     // The form is ready for the next player.
     expect(screen.getByLabelText("First name")).toHaveValue("");
@@ -271,4 +281,66 @@ describe("WhosPlayingCard", () => {
       screen.queryByRole("button", { name: /Retry/ }),
     ).not.toBeInTheDocument();
   });
+});
+
+it("requires explicit missing legacy gender and level, preserves known details, and persists the selection", async () => {
+  const saveDetails = vi.fn().mockResolvedValue({ ok: true, draftRevision: 4 });
+  render(
+    <CardHarness
+      participants={[{ ...grace, gender: null, skillLevel: null }]}
+      saveDetails={saveDetails}
+    />,
+  );
+  const gender = screen.getByRole("combobox", { name: "Gender for Grace Kim" });
+  const level = screen.getByRole("combobox", { name: "Level for Grace Kim" });
+  expect(gender).toHaveValue("");
+  expect(level).toHaveValue("");
+  fireEvent.click(screen.getByRole("button", { name: "Save details" }));
+  expect(saveDetails).not.toHaveBeenCalled();
+  fireEvent.change(gender, { target: { value: "female" } });
+  fireEvent.change(level, { target: { value: "advanced" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save details" }));
+  await waitFor(() =>
+    expect(saveDetails).toHaveBeenCalledWith(
+      grace.participantId,
+      "female",
+      "advanced",
+    ),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("form", { name: "Complete details for Grace Kim" }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(screen.getByRole("list", { name: "Players" })).toHaveTextContent(
+    "Advanced · Female",
+  );
+});
+it("prefills a known legacy level and retains missing details after a conflict", async () => {
+  const saveDetails = vi.fn().mockResolvedValue({
+    ok: false,
+    message: "Changed elsewhere",
+    isConflict: true,
+  });
+  render(
+    <CardHarness
+      participants={[{ ...grace, gender: null }]}
+      saveDetails={saveDetails}
+    />,
+  );
+  expect(
+    screen.getByRole("combobox", { name: "Level for Grace Kim" }),
+  ).toHaveValue("advanced");
+  fireEvent.change(
+    screen.getByRole("combobox", { name: "Gender for Grace Kim" }),
+    { target: { value: "female" } },
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Save details" }));
+  await screen.findByText("Changed elsewhere");
+  expect(
+    screen.getByRole("combobox", { name: "Gender for Grace Kim" }),
+  ).toHaveValue("female");
+  expect(screen.getByRole("list", { name: "Players" })).toHaveTextContent(
+    "Gender missing",
+  );
 });

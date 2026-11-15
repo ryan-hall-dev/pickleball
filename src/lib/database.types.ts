@@ -45,14 +45,14 @@ isOneToOne: false
                   ]
                 },"checkin_requests": {
                   Row: {
-                    "created_at": string,"decided_at": string | null,"decided_by": string | null,"device_token_hash": string,"first_name": string,"id": string,"ip_hash": string,"last_name": string,"session_id": string,"session_participant_id": string | null,"skill_level": Database["public"]['Enums']["skill_level"],"social_id": string,"status": Database["public"]['Enums']["checkin_request_status"]
+                    "created_at": string,"decided_at": string | null,"decided_by": string | null,"device_token_hash": string,"first_name": string,"gender": string | null,"id": string,"ip_hash": string,"last_name": string,"session_id": string,"session_participant_id": string | null,"skill_level": Database["public"]['Enums']["skill_level"],"social_id": string,"status": Database["public"]['Enums']["checkin_request_status"]
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"device_token_hash": string,"first_name": string,"id"?: string,"ip_hash": string,"last_name": string,"session_id": string,"session_participant_id"?: string | null,"skill_level": Database["public"]['Enums']["skill_level"],"social_id": string,"status"?: Database["public"]['Enums']["checkin_request_status"]
+                    "created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"device_token_hash": string,"first_name": string,"gender"?: string | null,"id"?: string,"ip_hash": string,"last_name": string,"session_id": string,"session_participant_id"?: string | null,"skill_level": Database["public"]['Enums']["skill_level"],"social_id": string,"status"?: Database["public"]['Enums']["checkin_request_status"]
                   }
                   Update: {
-                    "created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"device_token_hash"?: string,"first_name"?: string,"id"?: string,"ip_hash"?: string,"last_name"?: string,"session_id"?: string,"session_participant_id"?: string | null,"skill_level"?: Database["public"]['Enums']["skill_level"],"social_id"?: string,"status"?: Database["public"]['Enums']["checkin_request_status"]
+                    "created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"device_token_hash"?: string,"first_name"?: string,"gender"?: string | null,"id"?: string,"ip_hash"?: string,"last_name"?: string,"session_id"?: string,"session_participant_id"?: string | null,"skill_level"?: Database["public"]['Enums']["skill_level"],"social_id"?: string,"status"?: Database["public"]['Enums']["checkin_request_status"]
                   }
                   Relationships: [
                     {
@@ -191,14 +191,14 @@ isOneToOne: false
                   ]
                 },"session_participants": {
                   Row: {
-                    "created_at": string,"first_name": string,"id": string,"last_name": string,"session_id": string,"skill_level": Database["public"]['Enums']["skill_level"] | null,"social_id": string
+                    "created_at": string,"first_name": string,"gender": string | null,"id": string,"last_name": string,"session_id": string,"skill_level": Database["public"]['Enums']["skill_level"] | null,"social_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"first_name": string,"id"?: string,"last_name": string,"session_id": string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id": string
+                    "created_at"?: string,"first_name": string,"gender"?: string | null,"id"?: string,"last_name": string,"session_id": string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id": string
                   }
                   Update: {
-                    "created_at"?: string,"first_name"?: string,"id"?: string,"last_name"?: string,"session_id"?: string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id"?: string
+                    "created_at"?: string,"first_name"?: string,"gender"?: string | null,"id"?: string,"last_name"?: string,"session_id"?: string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id"?: string
                   }
                   Relationships: [
                     {
@@ -256,10 +256,10 @@ isOneToOne: false
           }
           Functions: {
             "add_draft_participant":
-{ Args: { "p_actor_user_id": string,"p_first_name": string,"p_last_name": string,"p_session_id": string,"p_session_participant_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: string
+{ Args: { "p_actor_user_id": string,"p_first_name": string,"p_gender": string,"p_last_name": string,"p_session_id": string,"p_session_participant_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: string
                            },
 "add_participant_mid_session":
-{ Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_last_seq": number,"p_first_name": string,"p_last_name": string,"p_occurred_at": string,"p_session_id": string,"p_session_participant_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
+{ Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_last_seq": number,"p_first_name": string,"p_gender": string,"p_last_name": string,"p_occurred_at": string,"p_session_id": string,"p_session_participant_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
                            },
 "append_session_event":
 { Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_last_seq": number,"p_match_row"?: Json,"p_occurred_at": string,"p_payload": Json,"p_session_id": string,"p_type": Database["public"]['Enums']["session_event_type"] }; Returns: Json
@@ -268,7 +268,7 @@ isOneToOne: false
 { Args: { "p_actor_user_id": string,"p_config_patch": Json,"p_duration_minutes": number,"p_expected_draft_revision": number,"p_location": string,"p_session_id": string,"p_setup_id": string }; Returns: Json
                            },
 "approve_checkin":
-{ Args: { "p_actor_user_id": string,"p_checkin_request_id": string,"p_event_id"?: string,"p_expected_last_seq"?: number,"p_occurred_at"?: string,"p_session_participant_id": string }; Returns: Json
+{ Args: { "p_actor_user_id": string,"p_checkin_request_id": string,"p_event_id"?: string,"p_expected_last_seq"?: number,"p_gender"?: string,"p_occurred_at"?: string,"p_session_participant_id": string }; Returns: Json
                            },
 "cancel_draft_session":
 { Args: { "p_actor_user_id": string,"p_session_id": string }; Returns: Json
@@ -284,7 +284,7 @@ isOneToOne: false
                            },
 "list_checkin_requests_for_open_session":
 { Args: { "p_actor_user_id": string }; Returns: {
-              "created_at": string,"first_name": string,"id": string,"is_name_already_in_session": boolean,"last_name": string,"skill_level": Database["public"]['Enums']["skill_level"]
+              "created_at": string,"first_name": string,"gender": string,"id": string,"is_name_already_in_session": boolean,"last_name": string,"skill_level": Database["public"]['Enums']["skill_level"]
             }[]
                            },
 "record_login_attempt":
@@ -305,11 +305,14 @@ isOneToOne: false
 "save_setup":
 { Args: { "p_actor_user_id": string,"p_config": Json,"p_name": string }; Returns: string
                            },
+"set_draft_participant_details":
+{ Args: { "p_actor_user_id": string,"p_expected_draft_revision": number,"p_gender": string,"p_participant_id": string,"p_session_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
+                           },
 "start_session":
-{ Args: { "p_actor_user_id": string,"p_event_id": string,"p_occurred_at": string,"p_payload": Json,"p_session_id": string }; Returns: Json
+{ Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_draft_revision"?: number,"p_occurred_at": string,"p_payload": Json,"p_session_id": string }; Returns: Json
                            },
 "submit_checkin":
-{ Args: { "p_checkin_tag": string,"p_device_token_hash": string,"p_expected_session_id": string,"p_first_name": string,"p_ip_hash": string,"p_last_name": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
+{ Args: { "p_checkin_tag": string,"p_device_token_hash": string,"p_expected_session_id": string,"p_first_name": string,"p_gender": string,"p_ip_hash": string,"p_last_name": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
                            }
           }
           Enums: {

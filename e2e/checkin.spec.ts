@@ -108,6 +108,7 @@ async function expectNoHorizontalScroll(page: Page) {
 }
 
 async function fillCheckin(page: Page, firstName: string, lastName: string) {
+  await page.getByRole("button", { name: "Male", exact: true }).click();
   await page.getByRole("textbox", { name: "First name" }).fill(firstName);
   await page.getByRole("textbox", { name: "Last name" }).fill(lastName);
   await page
@@ -128,6 +129,12 @@ test("a player submits fresh details, reloads pending, and receives approval wit
     page.getByRole("heading", { name: `Welcome to ${social.socialName}` }),
   ).toBeVisible();
   await expect(page.getByRole("searchbox")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Male", exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await expect(
+    page.getByRole("button", { name: "Female", exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
   await fillCheckin(page, "Grace", "Kim");
   await expectNoHorizontalScroll(page);
   await page.getByRole("button", { name: "Check in", exact: true }).click();
@@ -234,6 +241,8 @@ test("the required form shows its errors after Check in, survives a lost submit,
     .getByRole("button", { name: "Advanced" })
     .click();
 
+  await page.getByRole("button", { name: "Male", exact: true }).click();
+
   // The connection drops on submit: P13, then Try again returns to the form
   // with what was typed.
   await page.route("**/t/**", (route) =>
@@ -265,7 +274,7 @@ test("the required form shows its errors after Check in, survives a lost submit,
 
   const { data, error } = await adminClient
     .from("checkin_requests")
-    .select("first_name, last_name, skill_level, status")
+    .select("first_name, last_name, skill_level, gender, status")
     .eq("session_id", social.sessionId)
     .single();
   if (error) throw error;
@@ -273,6 +282,7 @@ test("the required form shows its errors after Check in, survives a lost submit,
     first_name: "Kai",
     last_name: "Moreno",
     skill_level: "advanced",
+    gender: "male",
     status: "pending",
   });
 });

@@ -41,6 +41,7 @@ const input = {
   firstName: "Kai",
   lastName: "Moreno",
   skillLevel: "beginner",
+  gender: "male" as const,
 };
 beforeEach(() => {
   vi.clearAllMocks();
@@ -157,4 +158,17 @@ describe("session-specific check-in cookie", () => {
       failure: "unavailable",
     });
   });
+});
+
+it("rejects an outdated submission missing gender before creating a cookie or touching the database", async () => {
+  const { gender: ignoredGender, ...outdated } = input;
+  void ignoredGender;
+  expect(await submitCheckin(tag, outdated)).toMatchObject({
+    ok: false,
+    failure: "invalid_input",
+    fieldErrors: { gender: "Choose male or female." },
+  });
+  expect(mocks.fetchPage).not.toHaveBeenCalled();
+  expect(mocks.rpc).not.toHaveBeenCalled();
+  expect(mocks.setCookie).not.toHaveBeenCalled();
 });

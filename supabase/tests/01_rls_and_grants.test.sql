@@ -75,7 +75,7 @@ select set_eq(
   array[
     'append_session_event', 'start_session', 'end_session', 'add_participant_mid_session',
     'cancel_draft_session', 'remove_draft_participant', 'save_session_draft',
-    'add_draft_participant',
+    'add_draft_participant', 'set_draft_participant_details',
     'save_setup', 'apply_saved_setup',
     'approve_checkin', 'reject_checkin', 'submit_checkin',
     'get_checkin_page',
@@ -123,11 +123,11 @@ select throws_ok('select * from public.matches', '42501', null, 'anon cannot rea
 select throws_ok('select * from public.checkin_requests', '42501', null, 'anon cannot read checkin_requests');
 select throws_ok('select * from public.checkin_attempts', '42501', null, 'anon cannot read checkin_attempts');
 select throws_ok(
-  $$select public.add_draft_participant('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Nina', 'New', 'beginner')$$,
+  $$select public.add_draft_participant('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Nina', 'New', 'beginner', 'male')$$,
   '42501', null, 'anon cannot add a draft participant directly'
 );
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, repeat('a', 64), repeat('b', 64), 'Nina', 'New', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, repeat('a', 64), repeat('b', 64), 'Nina', 'New', 'beginner', 'male')$$,
   '42501', null, 'anon cannot submit a check-in directly'
 );
 reset role;
@@ -184,11 +184,11 @@ select throws_ok(
   '42501', null, 'host cannot execute the log functions with their session'
 );
 select throws_ok(
-  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', gen_random_uuid(), gen_random_uuid())$$,
+  $$select public.approve_checkin('a0000000-0000-4000-8000-000000000002', gen_random_uuid(), gen_random_uuid(), p_gender => 'male')$$,
   '42501', null, 'host cannot execute check-in decisions with their session'
 );
 select throws_ok(
-  $$select public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Nina', 'New', 'beginner', gen_random_uuid(), 0, now())$$,
+  $$select public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Nina', 'New', 'beginner', gen_random_uuid(), 0, now(), 'male')$$,
   '42501', null, 'host cannot add participants mid-session with their session'
 );
 reset role;

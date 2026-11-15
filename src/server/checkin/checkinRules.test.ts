@@ -9,13 +9,19 @@ import {
 describe("validateCheckinForm", () => {
   it("needs all three fields, with the copy deck's messages", () => {
     expect(
-      validateCheckinForm({ firstName: "", lastName: "  ", skillLevel: null }),
+      validateCheckinForm({
+        firstName: "",
+        lastName: "  ",
+        skillLevel: null,
+        gender: null,
+      }),
     ).toEqual({
       isValid: false,
       fieldErrors: {
         firstName: "Enter your first name",
         lastName: "Enter your last name",
         skillLevel: "Choose your level",
+        gender: "Choose male or female.",
       },
     });
   });
@@ -26,6 +32,7 @@ describe("validateCheckinForm", () => {
         firstName: "Kai",
         lastName: "",
         skillLevel: "beginner",
+        gender: "male" as const,
       }),
     ).toEqual({
       isValid: false,
@@ -43,6 +50,7 @@ describe("validateCheckinForm", () => {
         firstName: "  Kai ",
         lastName: "de  la Moreno",
         skillLevel: "intermediate",
+        gender: "male" as const,
       }),
     ).toEqual({
       isValid: true,
@@ -50,6 +58,7 @@ describe("validateCheckinForm", () => {
         firstName: "Kai",
         lastName: "de la Moreno",
         skillLevel: "intermediate",
+        gender: "male" as const,
       },
     });
   });
@@ -59,6 +68,7 @@ describe("validateCheckinForm", () => {
       firstName: "K".repeat(51),
       lastName: "Moreno",
       skillLevel: "advanced",
+      gender: "male" as const,
     });
     expect(validation).toMatchObject({
       isValid: false,

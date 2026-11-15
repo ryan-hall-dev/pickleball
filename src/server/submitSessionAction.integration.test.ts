@@ -328,6 +328,7 @@ async function createHostedDraftSession(
           first_name: firstName,
           last_name: "Tester",
           skill_level: "intermediate" as const,
+          gender: "male" as const,
         })),
       )
       .select("id, first_name, last_name"),

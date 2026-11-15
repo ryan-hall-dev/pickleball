@@ -15,7 +15,11 @@ import {
   SECONDARY_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
 import { InitialsAvatar } from "@/components/InitialsAvatar";
-import { PERSON_NAME_MAX_LENGTH } from "@/server/participantRules";
+import {
+  GENDERS,
+  GENDER_LABELS,
+  PERSON_NAME_MAX_LENGTH,
+} from "@/server/participantRules";
 import { SKILL_LEVEL_LABELS, SKILL_LEVELS } from "@/server/skillLevels";
 import type { DraftParticipant } from "@/server/setup/setupDraft";
 import type { DraftParticipantInput } from "@/server/setup/setupRules";
@@ -130,6 +134,36 @@ export function QuickAddParticipantBox({
             </AttentionMessage>
           )}
         </div>
+        <div className="flex flex-[1_1_150px] flex-col gap-1.5">
+          <label
+            htmlFor="participant-gender"
+            className={FIELD_LABEL_CLASS_NAME}
+          >
+            Gender
+          </label>
+          <select
+            id="participant-gender"
+            value={form.gender}
+            onChange={(event) => updateField("gender", event.target.value)}
+            aria-invalid={fieldErrors.gender ? true : undefined}
+            aria-describedby={
+              fieldErrors.gender ? "participant-gender-error" : undefined
+            }
+            className={INNER_BOX_TEXT_INPUT_CLASS_NAME}
+          >
+            <option value="">Choose…</option>
+            {GENDERS.map((gender) => (
+              <option key={gender} value={gender}>
+                {GENDER_LABELS[gender]}
+              </option>
+            ))}
+          </select>
+          {fieldErrors.gender && (
+            <AttentionMessage id="participant-gender-error">
+              {fieldErrors.gender}
+            </AttentionMessage>
+          )}
+        </div>
         {/* Lines up with the inputs under their labels. */}
         <button
           type="submit"
@@ -212,7 +246,9 @@ function ParticipantChip({
       <InitialsAvatar name={fullName} tone="next" size="chip" />
       <span className="min-w-0 truncate text-sm font-semibold">{fullName}</span>
       <span className="shrink-0 text-[11px] font-bold tracking-[0.08em] text-link uppercase">
-        {isPending ? "Adding…" : label}
+        {isPending
+          ? "Adding…"
+          : `${label} · ${participant.gender ? GENDER_LABELS[participant.gender] : "Gender missing"}`}
       </span>
       <button
         type="button"

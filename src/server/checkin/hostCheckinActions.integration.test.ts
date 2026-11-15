@@ -182,7 +182,12 @@ describe.skipIf(!localStack)(
     /** A pending request as a phone leaves it, each a minute newer than the last. */
     async function insertRequest(
       social: TestSocial,
-      request: { firstName: string; lastName: string; skillLevel: SkillLevel },
+      request: {
+        firstName: string;
+        lastName: string;
+        skillLevel: SkillLevel;
+        gender: "male" | "female";
+      },
     ): Promise<{ checkinRequestId: string }> {
       minutesAgo -= 1;
       const { data, error } = await admin
@@ -193,6 +198,7 @@ describe.skipIf(!localStack)(
           first_name: request.firstName,
           last_name: request.lastName,
           skill_level: request.skillLevel,
+          gender: request.gender,
           device_token_hash: randomSha256Hex(),
           ip_hash: randomSha256Hex(),
           created_at: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
@@ -215,6 +221,7 @@ describe.skipIf(!localStack)(
         p_first_name: firstName,
         p_last_name: lastName,
         p_skill_level: skillLevel,
+        p_gender: "male",
       });
       if (error) throw error;
     }
@@ -300,27 +307,32 @@ describe.skipIf(!localStack)(
         firstName: "Peter",
         lastName: "Lindqvist",
         skillLevel: "intermediate",
+        gender: "male" as const,
       });
       newPlayerRequest = await insertRequest(riverside, {
         firstName: "Zoe",
         lastName: "Park",
         skillLevel: "advanced",
+        gender: "male" as const,
       });
       likeAttendingRequest = await insertRequest(riverside, {
         firstName: "GRACE",
         lastName: "kim",
         skillLevel: "beginner",
+        gender: "male" as const,
       });
       likeHostAddedRequest = await insertRequest(riverside, {
         firstName: "Kái",
         lastName: "moreno",
         skillLevel: "intermediate",
+        gender: "male" as const,
       });
       rejectedRequestId = (
         await insertRequest(riverside, {
           firstName: "Old",
           lastName: "Rejected",
           skillLevel: "beginner",
+          gender: "male" as const,
         })
       ).checkinRequestId;
       const { error: rejectError } = await admin.rpc("reject_checkin", {
@@ -333,6 +345,7 @@ describe.skipIf(!localStack)(
           firstName: "Olga",
           lastName: "Other",
           skillLevel: "beginner",
+          gender: "male" as const,
         })
       ).checkinRequestId;
     });
@@ -362,6 +375,7 @@ describe.skipIf(!localStack)(
         firstName: "Peter",
         lastName: "Lindqvist",
         skillLevel: "intermediate",
+        gender: "male" as const,
         isNameAlreadyInSession: false,
       });
       expect(
@@ -425,6 +439,7 @@ describe.skipIf(!localStack)(
         firstName: "Peter",
         lastName: "Lindqvist",
         skillLevel: "intermediate",
+        gender: "male" as const,
       });
       expect(await requestRow(peterRequest.checkinRequestId)).toEqual({
         status: "approved",
@@ -475,11 +490,13 @@ describe.skipIf(!localStack)(
         firstName: "Pat",
         lastName: "Twin",
         skillLevel: "beginner",
+        gender: "male" as const,
       });
       const secondTwin = await insertRequest(riverside, {
         firstName: "PAT",
         lastName: "twin",
         skillLevel: "advanced",
+        gender: "male" as const,
       });
       // Two concurrent database transactions (the session lock serialises
       // them; the unique name index is the backstop).
@@ -512,6 +529,7 @@ describe.skipIf(!localStack)(
         firstName: "Renée",
         lastName: "Race Person",
         skillLevel: "beginner",
+        gender: "male" as const,
       });
       const participantIds = [randomUUID(), randomUUID()];
       const results = await Promise.all([
@@ -522,6 +540,7 @@ describe.skipIf(!localStack)(
           p_first_name: "RENEE",
           p_last_name: " race   person ",
           p_skill_level: "advanced",
+          p_gender: "male" as const,
         }),
         admin.rpc("approve_checkin", {
           p_actor_user_id: hostAna.userId,
@@ -580,6 +599,7 @@ describe.skipIf(!localStack)(
         firstName: "Twice",
         lastName: "Rejected",
         skillLevel: "beginner",
+        gender: "male" as const,
       });
       actingClient = managerAlice.client;
       expect(await rejectCheckin(twiceRejected.checkinRequestId)).toEqual({

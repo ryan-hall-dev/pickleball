@@ -236,6 +236,7 @@ test("a host sets up a draft's details and courts, sees the summary, reloads and
         social_id: socialId,
         first_name: `Guest${index}`,
         skill_level: "beginner" as const,
+        gender: "male",
         last_name: courtToken,
       })),
     );
@@ -695,6 +696,7 @@ test("the stepper and checklist flag a half-filled guest form", async ({
         social_id: socialId,
         first_name: `Guest${index}`,
         skill_level: "beginner" as const,
+        gender: "male",
         last_name: "Stepper",
       })),
     );
@@ -862,6 +864,126 @@ test("coming back while the save made on leaving is still on its way: it lands, 
     .toEqual({ name: "Saved on the way out", location: "After coming back" });
 });
 
+test("legacy missing player details require explicit choices and persist after an in-flight own autosave", async ({
+  page,
+}) => {
+  const { email, socialId } = await signInAsNewManager(page, "legacy-details");
+  const hostUserId = (await findUserIdByEmail(email))!;
+  testHostUserIds.push(hostUserId);
+  await startNewDraft(page);
+  const sessionId = await openDraftSessionId(hostUserId);
+  const participantId = randomUUID();
+  const firstName = `Legacy${randomUUID().slice(0, 8)}`;
+  const fullName = `${firstName} Player`;
+  const { error } = await adminClient.from("session_participants").insert({
+    id: participantId,
+    social_id: socialId,
+    session_id: sessionId,
+    first_name: firstName,
+    last_name: "Player",
+    gender: null,
+    skill_level: null,
+  });
+  if (error) throw error;
+
+  async function storedDetails() {
+    const { data, error: readError } = await adminClient
+      .from("session_participants")
+      .select("gender, skill_level")
+      .eq("social_id", socialId)
+      .eq("session_id", sessionId)
+      .eq("id", participantId)
+      .single();
+    if (readError) throw readError;
+    return data;
+  }
+
+  await page.reload();
+  await expectSaved(page);
+  const details = page.getByRole("form", {
+    name: `Complete details for ${fullName}`,
+  });
+  const gender = details.getByRole("combobox", {
+    name: `Gender for ${fullName}`,
+  });
+  const level = details.getByRole("combobox", {
+    name: `Level for ${fullName}`,
+  });
+  await expect(gender).toHaveValue("");
+  await expect(level).toHaveValue("");
+  await gender.selectOption("female");
+  await details.getByRole("button", { name: "Save details" }).click();
+  await expect(
+    details.getByText("Choose male or female and a level."),
+  ).toBeVisible();
+  expect(await storedDetails()).toEqual({ gender: null, skill_level: null });
+  await level.selectOption("advanced");
+
+  // Hold this specific autosave, never a tray poll, while details wait for it.
+  const pendingLocation = `Own save ${randomUUID().slice(0, 8)}`;
+  const heldSave: { release?: () => Promise<void> } = {};
+  let hasHeldSave = false;
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    if (
+      !hasHeldSave &&
+      request.method() === "POST" &&
+      request.headers()["next-action"] &&
+      request.postData()?.includes(pendingLocation)
+    ) {
+      hasHeldSave = true;
+      heldSave.release = () => route.continue();
+      return;
+    }
+    await route.fallback();
+  });
+
+  try {
+    await page.getByLabel("Location (optional)").fill(pendingLocation);
+    await expect.poll(() => hasHeldSave).toBe(true);
+    await details.getByRole("button", { name: "Save details" }).click();
+    await expect(page.getByLabel("Session name")).toBeDisabled();
+    expect(await storedDetails()).toEqual({ gender: null, skill_level: null });
+    await heldSave.release!();
+    delete heldSave.release;
+    await expect
+      .poll(storedDetails)
+      .toEqual({ gender: "female", skill_level: "advanced" });
+    await expect(details).toHaveCount(0);
+    await expectSaved(page);
+    await expect(
+      page.getByRole("region", { name: "Setup changed elsewhere" }),
+    ).toHaveCount(0);
+
+    // The next settings write must use the revision returned by details save.
+    const nextLocation = `${pendingLocation} done`;
+    await page.getByLabel("Location (optional)").fill(nextLocation);
+    await expectSaved(page);
+    await page.reload();
+    await expectSaved(page);
+    await expect(page.getByLabel("Location (optional)")).toHaveValue(
+      nextLocation,
+    );
+    await expect(details).toHaveCount(0);
+    await expect(page.getByRole("list", { name: "Players" })).toContainText(
+      fullName,
+    );
+    await expect(page.getByRole("list", { name: "Players" })).toContainText(
+      "Advanced · Female",
+    );
+    expect(await storedDetails()).toEqual({
+      gender: "female",
+      skill_level: "advanced",
+    });
+    await expect(
+      page.getByRole("region", { name: "Setup changed elsewhere" }),
+    ).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
+  } finally {
+    await heldSave.release?.();
+  }
+});
+
 test("session-only players require a level, persist, reject duplicate names and can be removed", async ({
   page,
 }) => {
@@ -873,6 +995,7 @@ test("session-only players require a level, persist, reject duplicate names and 
   await form.getByLabel("Last name").fill("Núñez");
   await form.getByRole("button", { name: "Add player", exact: true }).click();
   await expect(form.getByText("Choose a level.")).toBeVisible();
+  await form.getByLabel("Gender", { exact: true }).selectOption("male");
   await form.getByLabel("Skill", { exact: true }).selectOption("intermediate");
   await form.getByRole("button", { name: "Add player", exact: true }).click();
   await expect(
@@ -884,6 +1007,7 @@ test("session-only players require a level, persist, reject duplicate names and 
   );
   await form.getByLabel("First name").fill("ZOE");
   await form.getByLabel("Last name").fill("nunez");
+  await form.getByLabel("Gender", { exact: true }).selectOption("male");
   await form.getByLabel("Skill", { exact: true }).selectOption("advanced");
   await form.getByRole("button", { name: "Add player", exact: true }).click();
   await expect(players.getByText(/already in this session/)).toBeVisible();

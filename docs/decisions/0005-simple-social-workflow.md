@@ -16,6 +16,7 @@ The original plan exposed scheduling controls before proving they helped a host 
 - Calling a group fixes it for co-hosts; explicit replacement is allowed. Calling does not end waiting; actual game start does. A player cannot be called or playing on two courts.
 - After game start that court needs no input until Game finished. Completion returns the four players to waiting with new waits. Normal turnover is Finish, then Start these four.
 - Rare playing-player replacement and safe Undo for accidental starts/finishes remain available. Do not expose broad action-log controls.
+- If no valid replacement is available for a player who cannot continue, **End as interrupted** returns all four to waiting with fresh clocks and records no completed game. Rest is a separate host action (Ryan approved 2026-11-15).
 - No Pause. At the chosen end time stop new suggestions and starts, let active games finish, then confirm End session.
 - Keep ended-session records for operator evaluation and improving the app. Do not add host-facing history, reports, operator dashboards or new personal-data collection. New sessions start fresh.
 

@@ -188,6 +188,7 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
       firstName,
       lastName: `Tester${randomUUID().slice(0, 6)}`,
       skillLevel,
+      gender: "male" as const,
     };
   }
 
@@ -425,10 +426,11 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
         firstName: "  Kai ",
         lastName: "Moreno",
         skillLevel: "intermediate",
+        gender: "male" as const,
       });
       const { data, error } = await admin
         .from("checkin_requests")
-        .select("first_name, last_name, skill_level")
+        .select("first_name, last_name, skill_level, gender")
         .eq("id", requestId)
         .single();
       if (error) throw error;
@@ -436,6 +438,7 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
         first_name: "Kai",
         last_name: "Moreno",
         skill_level: "intermediate",
+        gender: "male" as const,
       });
     });
 
@@ -447,6 +450,7 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
           firstName: "",
           lastName: "Moreno",
           skillLevel: null,
+          gender: null,
         }),
       ).toEqual({
         ok: false,
@@ -455,6 +459,7 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
           firstName: "Enter your first name",
           lastName: undefined,
           skillLevel: "Choose your level",
+          gender: "Choose male or female.",
         },
       });
       expect(phone.cookieJar.size).toBe(0);
@@ -688,6 +693,7 @@ describe.skipIf(!localStack)("public check-in actions (local Supabase)", () => {
         p_first_name: "Anon",
         p_last_name: "Caller",
         p_skill_level: "beginner",
+        p_gender: "male" as const,
       });
       expect(submit.error).not.toBeNull();
     });

@@ -4,6 +4,7 @@ import type { CourtFormat, RotationObjective } from "@/engine/session";
 import type { Database } from "@/lib/database.types";
 import { readAllRows } from "@/lib/supabase/readAllRows";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { genderSchema, type Gender } from "@/server/participantRules";
 import type { SkillLevel } from "@/server/skillLevels";
 import {
   parseSessionDraftConfig,
@@ -45,6 +46,7 @@ export interface DraftParticipant {
   lastName: string;
   /** Null only for rows recorded before a level was required. */
   skillLevel: SkillLevel | null;
+  gender: Gender | null;
 }
 
 /** The social's one open session (the sessions_one_open_per_social_idx index). */
@@ -120,19 +122,21 @@ export async function listDraftParticipants(
 
 /** The `session_participants` columns a DraftParticipant is read from. */
 export const DRAFT_PARTICIPANT_COLUMNS =
-  "id, first_name, last_name, skill_level";
+  "id, first_name, last_name, skill_level, gender";
 
 export function draftParticipantFromRow(row: {
   id: string;
   first_name: string;
   last_name: string;
   skill_level: SkillLevel | null;
+  gender: string | null;
 }): DraftParticipant {
   return {
     participantId: row.id,
     firstName: row.first_name,
     lastName: row.last_name,
     skillLevel: row.skill_level,
+    gender: row.gender === null ? null : genderSchema.parse(row.gender),
   };
 }
 

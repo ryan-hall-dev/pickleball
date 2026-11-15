@@ -116,6 +116,7 @@ async function checkInAsPlayer(
   lastName: string,
   level: "Beginner" | "Intermediate" | "Advanced",
 ) {
+  await phone.getByRole("button", { name: "Male", exact: true }).click();
   await phone.getByRole("textbox", { name: "First name" }).fill(firstName);
   await phone.getByRole("textbox", { name: "Last name" }).fill(lastName);
   await phone

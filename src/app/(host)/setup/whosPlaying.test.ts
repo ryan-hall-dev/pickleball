@@ -13,12 +13,14 @@ const kai: DraftParticipant = {
   firstName: "Kai",
   lastName: "Lee",
   skillLevel: "intermediate",
+  gender: "male" as const,
 };
 const grace: DraftParticipant = {
   participantId: "p-grace",
   firstName: "Grace",
   lastName: "Kim",
   skillLevel: "advanced",
+  gender: "male" as const,
 };
 
 describe("applyAttendanceChange", () => {
@@ -30,6 +32,7 @@ describe("applyAttendanceChange", () => {
         firstName: "Ben",
         lastName: "Ode",
         skillLevel: "beginner",
+        gender: "male" as const,
       },
     });
     expect(after).toEqual([
@@ -39,6 +42,7 @@ describe("applyAttendanceChange", () => {
         firstName: "Ben",
         lastName: "Ode",
         skillLevel: "beginner",
+        gender: "male" as const,
       },
     ]);
   });
@@ -69,6 +73,7 @@ describe("validateParticipantForm", () => {
         firstName: "  Kai ",
         lastName: "Lee   Jr",
         skillLevel: "advanced",
+        gender: "male" as const,
       }),
     ).toEqual({
       ok: true,
@@ -76,19 +81,26 @@ describe("validateParticipantForm", () => {
         firstName: "Kai",
         lastName: "Lee Jr",
         skillLevel: "advanced",
+        gender: "male" as const,
       },
     });
   });
 
   it("requires both names and a level", () => {
     expect(
-      validateParticipantForm({ firstName: " ", lastName: "", skillLevel: "" }),
+      validateParticipantForm({
+        firstName: " ",
+        lastName: "",
+        skillLevel: "",
+        gender: "",
+      }),
     ).toEqual({
       ok: false,
       fieldErrors: {
         firstName: "Enter a first name.",
         lastName: "Enter a last name.",
         skillLevel: "Choose a level.",
+        gender: "Choose male or female.",
       },
     });
   });
@@ -99,6 +111,7 @@ describe("validateParticipantForm", () => {
         firstName: "K".repeat(51),
         lastName: "Lee",
         skillLevel: "pro",
+        gender: "male",
       }),
     ).toEqual({
       ok: false,
@@ -123,6 +136,7 @@ describe("pruneFailuresTouchedBy", () => {
         firstName: "Kai",
         lastName: "Lee",
         skillLevel: "beginner",
+        gender: "male" as const,
       },
     },
     "Adding Kai Lee",

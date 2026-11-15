@@ -36,6 +36,7 @@ export interface SubmitSessionActionInput {
   eventId: string;
   /** The session's last seq the host's screen was showing (0 before the start). */
   expectedLastSeq: number;
+  expectedDraftRevision?: number;
   request:
     | { kind: "action"; action: NewSessionAction }
     /**
@@ -74,6 +75,7 @@ const submitInputSchema = z.object({
   sessionId: z.uuid(),
   eventId: z.uuid(),
   expectedLastSeq: z.int().nonnegative(),
+  expectedDraftRevision: z.int().nonnegative().optional(),
   request: z.discriminatedUnion("kind", [
     z.object({
       kind: z.literal("action"),
@@ -169,6 +171,7 @@ async function persistEvent(
   expectedLastSeq: number,
   event: SessionEvent,
   matchRow: Json | null,
+  expectedDraftRevision?: number,
 ) {
   const occurredAt = new Date(event.at).toISOString();
   // Engine payloads are plain JSON objects; interfaces just lack Json's index signature.
@@ -181,6 +184,9 @@ async function persistEvent(
         p_event_id: event.eventId,
         p_occurred_at: occurredAt,
         p_payload: payload,
+        ...(event.payload.config.policyVersion === "simple-social-v1"
+          ? { p_expected_draft_revision: expectedDraftRevision }
+          : {}),
       });
     case "SessionEnded":
       return serviceRoleClient.rpc("end_session", {
@@ -341,9 +347,14 @@ export async function submitSessionAction(
     expectedLastSeq,
     outcome.event,
     matchRow,
+    input.expectedDraftRevision,
   );
   if (error) {
-    if (error.message === STALE_EXPECTED_SEQ) {
+    if (
+      error.message === STALE_EXPECTED_SEQ ||
+      error.message === "DRAFT_CHANGED_ELSEWHERE" ||
+      error.message === "STALE_DRAFT_ROSTER"
+    ) {
       return { ok: false, reason: "UPDATED_BY_ANOTHER_HOST" };
     }
     throw new Error(

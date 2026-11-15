@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { personNameSchema } from "@/server/participantRules";
+import {
+  genderSchema,
+  type Gender,
+  personNameSchema,
+} from "@/server/participantRules";
 import { SKILL_LEVELS, type SkillLevel } from "@/server/skillLevels";
 
 // Pure input rules for the public check-in page (/t/<tag>). Shared by the
@@ -11,11 +15,12 @@ export const checkinTagSchema = z.string().regex(/^[a-z0-9_-]{16,64}$/);
 
 const skillLevelSchema = z.enum(SKILL_LEVELS, { error: "Choose your level" });
 
-/** Every participant: all three fields required (acceptance criterion 6). */
+/** Every participant: all four fields required (acceptance criterion 6). */
 export const participantCheckinInputSchema = z.object({
   firstName: personNameSchema("Enter your first name"),
   lastName: personNameSchema("Enter your last name"),
   skillLevel: skillLevelSchema,
+  gender: genderSchema,
 });
 
 export const checkinSubmitInputSchema = participantCheckinInputSchema.extend({
@@ -31,6 +36,7 @@ export interface CheckinFormValues {
   firstName: string;
   lastName: string;
   skillLevel: SkillLevel | null;
+  gender: Gender | null;
 }
 
 export type CheckinFormField = keyof CheckinFormValues;
@@ -55,6 +61,7 @@ export function validateCheckinForm(
       firstName: fieldErrors.firstName?.[0],
       lastName: fieldErrors.lastName?.[0],
       skillLevel: fieldErrors.skillLevel?.[0],
+      gender: fieldErrors.gender?.[0],
     },
   };
 }

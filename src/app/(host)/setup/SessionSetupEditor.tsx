@@ -17,6 +17,7 @@ import {
   applySavedSetup,
   readSessionDraft,
   saveSessionDraft,
+  setDraftParticipantDetails,
   saveSetup,
   type ApplySavedSetupResult,
   type SaveSessionDraftResult,
@@ -592,6 +593,8 @@ function SessionSetupForm({
     useState<SavedSetupsPanel>("none");
   const [isReuseBannerDismissed, setIsReuseBannerDismissed] = useState(false);
   const [isApplyingSetup, setIsApplyingSetup] = useState(false);
+  const [isCompletingParticipantDetails, setIsCompletingParticipantDetails] =
+    useState(false);
   const [savedSetupMessage, setSavedSetupMessage] =
     useState<SavedSetupMessage | null>(null);
   const [isReloadRequired, setIsReloadRequired] = useState(false);
@@ -623,7 +626,34 @@ function SessionSetupForm({
       ? { kind: "reloadRequired" }
       : autosaveStatus;
   const { fieldErrors, durationMinutes } = validation;
-  const attendance = useDraftAttendance(draft.sessionId, draft.participants);
+  const attendance = useDraftAttendance(
+    draft.sessionId,
+    draft.participants,
+    async (participantId, gender, skillLevel) => {
+      setIsCompletingParticipantDetails(true);
+      const write = (async (): Promise<SaveSessionDraftResult> => {
+        const saved = await holdAndSaveLatest();
+        if (!saved.ok) {
+          if (!saved.isConflict) release(null);
+          return saved;
+        }
+        const result = await setDraftParticipantDetails({
+          sessionId: draft.sessionId,
+          participantId,
+          gender,
+          skillLevel,
+          expectedDraftRevision: draftRevisionRef.current,
+        }).catch(() => ({ ok: false as const, message: OFFLINE_MESSAGE }));
+        if (result.ok)
+          release({ savedInput: null, draftRevision: result.draftRevision });
+        else if ("isConflict" in result && result.isConflict) markConflict();
+        else release(null);
+        return result;
+      })();
+      trackOwnDraftWrite(draft.sessionId, write);
+      return write.finally(() => setIsCompletingParticipantDetails(false));
+    },
+  );
   const { addApprovedParticipant, rereadParticipants } = attendance;
   const showApprovedCheckin = useCallback(
     (approvedParticipant: DraftParticipant | null) => {
@@ -795,8 +825,8 @@ function SessionSetupForm({
   return (
     // Nothing is editable until this tab's earlier writes have landed.
     <fieldset
-      disabled={isWaitingForEarlierWrites}
-      aria-busy={isWaitingForEarlierWrites}
+      disabled={isWaitingForEarlierWrites || isCompletingParticipantDetails}
+      aria-busy={isWaitingForEarlierWrites || isCompletingParticipantDetails}
       className="contents"
     >
       <SetupPageHeader

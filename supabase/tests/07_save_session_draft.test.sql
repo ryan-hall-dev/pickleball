@@ -138,7 +138,7 @@ select results_eq(
 -- Attendance is reconciled separately: it never bumps the settings revision.
 select lives_ok(
   $$select public.add_draft_participant('a7000000-0000-4000-8000-000000000001', 'd7000000-0000-4000-8000-000000000001',
-    gen_random_uuid(), 'Grace', 'Kim', 'advanced')$$,
+    gen_random_uuid(), 'Grace', 'Kim', 'advanced', 'male')$$,
   'attendance changes on the same draft'
 );
 select is(

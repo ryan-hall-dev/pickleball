@@ -223,7 +223,7 @@ select is(
 -- Mid-session participant ------------------------------------------------------------------
 select throws_ok(
   $$select public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
-      'Gus', 'Guest', 'beginner', gen_random_uuid(), 4, now())$$,
+      'Gus', 'Guest', 'beginner', gen_random_uuid(), 4, now(), 'male')$$,
   'P0001', 'STALE_EXPECTED_SEQ', 'a mid-session add with a stale seq is refused'
 );
 select is_empty(
@@ -232,28 +232,28 @@ select is_empty(
 );
 select throws_ok(
   $$select public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(),
-      '   ', 'Guest', 'beginner', gen_random_uuid(), 5, now())$$,
+      '   ', 'Guest', 'beginner', gen_random_uuid(), 5, now(), 'male')$$,
   '22023', 'INVALID_NAME', 'a blank name is refused'
 );
 select throws_ok(
   $$select public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(),
-      'Nina', 'New', null, gen_random_uuid(), 5, now())$$,
+      'Nina', 'New', null, gen_random_uuid(), 5, now(), 'male')$$,
   '22023', 'INVALID_INPUT', 'a mid-session add needs a level'
 );
 select is(
   public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
-    '  Gus ', 'Guest', 'beginner', 'f0000000-0000-4000-8000-000000000006', 5, now()),
+    '  Gus ', 'Guest', 'beginner', 'f0000000-0000-4000-8000-000000000006', 5, now(), 'male'),
   jsonb_build_object('status', 'appended', 'seq', 6, 'occurred_at', now(), 'session_participant_id', 'e1000000-0000-4000-8000-000000000001'),
   'a host adds a participant mid-session'
 );
 select results_eq(
   $$select type::text, payload from public.session_events where event_id = 'f0000000-0000-4000-8000-000000000006'$$,
-  $$values ('PlayerJoined', '{"participant":{"participantId":"e1000000-0000-4000-8000-000000000001","firstName":"Gus","lastName":"Guest","skill":"beginner"}}'::jsonb)$$,
+  $$values ('PlayerJoined', '{"participant":{"participantId":"e1000000-0000-4000-8000-000000000001","firstName":"Gus","lastName":"Guest","skill":"beginner","gender":"male"}}'::jsonb)$$,
   'the PlayerJoined carries the engine participant snapshot (no isGuest)'
 );
 select throws_ok(
   $$select public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', gen_random_uuid(),
-      'grace', ' KIM ', 'beginner', gen_random_uuid(), 6, now())$$,
+      'grace', ' KIM ', 'beginner', gen_random_uuid(), 6, now(), 'male')$$,
   'P0001', 'NAME_ALREADY_IN_SESSION', 'a name already in the session is refused mid-session (case and spacing ignored)'
 );
 select is(
@@ -263,7 +263,7 @@ select is(
 );
 select is(
   public.add_participant_mid_session('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
-    'Gus', 'Guest', 'beginner', 'f0000000-0000-4000-8000-000000000006', 5, now()) ->> 'status',
+    'Gus', 'Guest', 'beginner', 'f0000000-0000-4000-8000-000000000006', 5, now(), 'male') ->> 'status',
   'duplicate',
   'retrying the add is idempotent'
 );

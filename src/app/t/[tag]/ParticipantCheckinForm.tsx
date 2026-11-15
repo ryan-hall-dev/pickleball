@@ -1,6 +1,11 @@
 "use client";
 
 import { useRef, useState, type FormEvent, type RefObject } from "react";
+import { GENDERS, GENDER_LABELS } from "@/server/participantRules";
+import {
+  SELECTED_LEVEL_OPTION_CLASS_NAME,
+  UNSELECTED_LEVEL_OPTION_CLASS_NAME,
+} from "./checkinStyles";
 import { AttentionMessage } from "@/components/AttentionMessage";
 import {
   FIELD_LABEL_CLASS_NAME,
@@ -29,6 +34,7 @@ const FIELD_IDS = {
   firstName: "checkin-participant-first-name",
   lastName: "checkin-participant-last-name",
   skillLevel: "checkin-participant-level",
+  gender: "checkin-participant-gender",
 } as const;
 const SKILL_LABEL_ID = "checkin-participant-level-label";
 
@@ -37,7 +43,7 @@ function errorIdFor(field: keyof typeof FIELD_IDS): string {
 }
 
 /**
- * P05: every player gives first name, last name and level, all
+ * P05: every player gives first name, last name, gender and level, all
  * required. Errors appear only after pressing Check in, then follow the edits
  * (orange border, "!" plus words, linked with aria-describedby).
  */
@@ -60,6 +66,7 @@ export function ParticipantCheckinForm({
   const [hasPressedCheckIn, setHasPressedCheckIn] = useState(false);
   const firstNameInputRef = useRef<HTMLInputElement>(null);
   const lastNameInputRef = useRef<HTMLInputElement>(null);
+  const genderGroupRef = useRef<HTMLDivElement>(null);
   const skillGroupRef = useRef<HTMLDivElement>(null);
 
   const validation = validateCheckinForm(values);
@@ -82,7 +89,9 @@ export function ParticipantCheckinForm({
     const { fieldErrors: errors } = validation;
     if (errors.firstName) firstNameInputRef.current?.focus();
     else if (errors.lastName) lastNameInputRef.current?.focus();
-    else skillGroupRef.current?.querySelector("button")?.focus();
+    else if (errors.skillLevel)
+      skillGroupRef.current?.querySelector("button")?.focus();
+    else genderGroupRef.current?.querySelector("button")?.focus();
   }
 
   return (
@@ -147,6 +156,41 @@ export function ParticipantCheckinForm({
                 {fieldErrors.skillLevel}
               </AttentionMessage>
             </div>
+          )}
+        </div>
+        <div ref={genderGroupRef} className="flex flex-col gap-1.5">
+          <span id="checkin-gender-label" className={FIELD_LABEL_CLASS_NAME}>
+            Gender
+          </span>
+          <div
+            role="group"
+            aria-labelledby="checkin-gender-label"
+            aria-describedby={
+              fieldErrors.gender ? errorIdFor("gender") : undefined
+            }
+            className="grid grid-cols-2 gap-2"
+          >
+            {GENDERS.map((gender) => (
+              <button
+                key={gender}
+                type="button"
+                aria-pressed={values.gender === gender}
+                disabled={isBusy}
+                onClick={() => onValuesChange({ ...values, gender })}
+                className={
+                  values.gender === gender
+                    ? SELECTED_LEVEL_OPTION_CLASS_NAME
+                    : UNSELECTED_LEVEL_OPTION_CLASS_NAME
+                }
+              >
+                {GENDER_LABELS[gender]}
+              </button>
+            ))}
+          </div>
+          {fieldErrors.gender && (
+            <AttentionMessage id={errorIdFor("gender")}>
+              {fieldErrors.gender}
+            </AttentionMessage>
           )}
         </div>
       </form>

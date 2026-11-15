@@ -15,7 +15,7 @@ The app succeeds if it reduces guessing and forgotten players without making the
 
 - Each session has its own players. Players enter their details again at the next session; no membership, accounts or cross-session player identity.
 - QR/NFC opens the social's current session. Name and playing level (Beginner / Intermediate / Advanced) are required; a host approves or rejects. Keep the session information card and the agreed privacy and duplicate-name rules.
-- Add the previously requested male/female field so the app can form the allowed doubles groups. This has been requested but is not implemented in the inspected participant type.
+- Male/female is required so the app can form the allowed doubles groups. Historical missing details stay unknown until a host explicitly supplies them; they are never inferred or backfilled.
 - The host sees a waiting list, longest wait first, with each player's name, level and waiting time.
 - Preselect the longest-waiting eligible players as the next group for each court, while that court is still occupied. The host can tell them early and replace a selected player.
 - A game finishing sends all four players back to waiting; their new wait starts at completion. They do not stay on the court automatically.
@@ -28,6 +28,7 @@ The app succeeds if it reduces guessing and forgotten players without making the
 - **Call these four** fixes the next group and shares it with co-hosts. The host can replace someone; the group does not silently change after being called. Their waiting clocks continue until Start game.
 - Once Start game is recorded, that court requires no input until it finishes; there is no scorekeeping, predicted finish or automatic completion.
 - A rare **Replace player** action sits in the court menu and accepts an available player only if the group and teams remain valid. A basic **Undo** corrects accidental starts and finishes only when later actions permit a safe reversal.
+- If a player cannot continue and no valid replacement is available, the host may choose **End as interrupted** from the court menu (Ryan, 2026-11-15). All four return to waiting with fresh waiting clocks; no completed game is counted. Rest remains a separate explicit host action. This ends one game, not the session.
 - **No Pause session control.** The chosen session duration runs continuously.
 - At the scheduled end, show **Session time is up**, stop new suggestions and starts, let active games finish, then the host confirms **End session**. Called-but-not-started groups cannot start after the time limit.
 - Keep ended-session data for operator evaluation and improving the app; no host History screen or reports. New sessions start fresh. Operator analysis should minimise personal data and never feed old attendance into new scheduling.
@@ -37,6 +38,8 @@ The app succeeds if it reduces guessing and forgotten players without making the
 ### Before play
 
 One short setup: session name, date/time or duration and the **number of courts**. The host does not enter a court catalogue or configure court priority; the app generates court labels from the count. Internal court IDs remain necessary to distinguish games reliably. Show the QR code and approve arrivals. A simple Start action begins the session; no separate generated-lineup/shuffle confirmation screen. Keep validation and a clear confirmation of the session being started.
+
+Implementation assessment (2026-11-15): `config_snapshot.courts` and match court IDs are snapshots, without a foreign key to the club court catalogue. Generate and persist session-local UUIDs with `Court 1`…`Court N`, retain existing IDs on subsequent draft saves, append IDs when the count grows and remove trailing draft entries when it shrinks. Start uses that persisted list unchanged. This needs no court schema change or club-court creation; existing catalogue records and manager-only catalogue permissions remain intact. See `snapshotCourts` in the current Setup server code for the dependency to replace in the simple-policy path.
 
 ### During play
 
@@ -68,7 +71,7 @@ Do not carry the old weighted score forward merely behind a simpler screen: its 
 
 Ryan agreed a 2-minute starting limit for the first trial: someone waiting 15 minutes may yield to someone waiting 14 minutes for variety, but not someone waiting 10 minutes. The implementation must also enforce the actual extra-wait bound across repeated decisions: it cannot repeatedly reset the allowance and keep skipping the same player. When that limit would be exceeded, waiting wins over variety. Revisit the limit using the pilot evidence rather than introducing adjustable weights.
 
-**Feasibility detail to resolve before coding:** a 2-minute difference between two players' current waits does not guarantee that the bypassed player can start a game within another 2 minutes. Games finish at unpredictable times. Preserve Ryan's limit as the requirement, but work through that example before choosing an algorithm; do not silently reinterpret it as only a comparison of waiting times, or add finish-time predictions to claim the guarantee. When variety cannot safely fit the agreed allowance, the conservative outcome is to prioritise waiting.
+**Feasibility constraint:** a 2-minute difference between two players' current waits does not guarantee that the bypassed player can start a game within another 2 minutes. Games finish at unpredictable times. Preserve Ryan's limit as the requirement, but work through that example before choosing an algorithm; do not silently reinterpret it as only a comparison of waiting times, or add finish-time predictions to claim the guarantee. When variety cannot safely fit the agreed allowance, the conservative outcome is to prioritise waiting.
 
 **Conservative implementation for the first trial (2026-11-15):** the app does not bypass an older eligible player solely for variety when it cannot establish that extra delay is within the allowance. When several courts are available together, select the oldest feasible player set first, then improve mixed/same-sex variety by partitioning that same set into valid games. This uses none of the two-minute allowance and preserves the selected players. With one court, variety may have to yield entirely; do not pretend a younger waiter's age difference predicts when the older player next plays. Report this practical limitation for the pilot. No court-finish predictions or adjustable weighting controls are introduced.
 
@@ -105,8 +108,8 @@ This is a reduction in visible product and future work, not a database purge or 
 
 ## Implementation boundary and current unfinished work
 
-- There are extensive existing uncommitted changes from the interrupted session-only increment. Preserve them; do not reset, stash or accidentally commit them with this plan.
-- That increment is not recorded here as complete. The earlier chat reported a failed scratch migration rehearsal, pending device-hash migration application and remaining follow-up tests. This planning audit has not re-verified those database facts; verify current status explicitly before any resumed build.
+- The interrupted session-only work was completed and committed as `3610972` before the simpler policy. Preserve unrelated working changes and the existing local database; do not reset or stash them.
+- The foundation and subsequent increments have explicit verification records in the Log below. Each migration still requires its own fresh backup, scratch rehearsal and data-preservation check.
 - The latest discussion replaces the previously planned M6–M8 user experience only after this plan is approved. Existing approved history/privacy protections remain requirements.
 - Planning and static mockup review changed no application code. Implementation is now authorised (2026-11-15); proceed from the interrupted foundation, keeping data safeguards below.
 
@@ -132,8 +135,8 @@ Ryan approved the phone mockup on 2026-11-14 and authorised implementation on 20
 ## Remaining review details
 
 - **Phone layout:** `docs/designs/simple-social/phone-review.html` is the approved reference for the short Setup, Courts/Up next, Waiting/rest, Check-ins and replacement flow. It uses the existing design tokens with a phone-first layout.
-- **Edge-case examples:** confirm the scheduling interpretation with valid/invalid first-four groups, equal waits and competition for players across courts. No court-number priority or automatic finish-time forecast. The exact suggested allocation interaction remains a proposal in the mockup.
-- **Recovery:** Ryan approved replacement and basic Undo, but did not explicitly decide the rare case when nobody can replace an injured player. Do not silently introduce short-handed play; flag the exceptional end-game behaviour before implementing it. Define the small number of safe abandon/undo clock cases with examples.
+- **Edge cases:** engine tests cover invalid first-four groups, equal waits, competing courts, hard team validity, rest expiry and fixed-call recovery. Allocation follows host-selected courts without a court-number priority or finish-time forecast. Real-world usability still needs a pilot.
+- **Recovery:** Ryan approved replacement, basic Undo and **End as interrupted** (2026-11-15): all four return to waiting with fresh clocks, no completed game, and rest is explicit. Reuse the existing abandoned-match event; do not introduce short-handed play or broader action-log menus.
 - **Measurement and retention:** agree the pilot measurements before claiming a successful trial. Data stays for now; no extra personal-data collection, global identities, automated deletion or new operator analytics dashboard is authorised.
 
 Do not add persistent “men's only/women's only next game” preferences yet: Ryan asked to reduce the need for those requests through variety, then approved the soft variety rule. If requests remain common in the pilot, assess them then.
@@ -168,6 +171,10 @@ Each increment is implemented, reviewed, tested, committed on the existing branc
 - Rollback pairs the pre-change code commit with its verified backup if a schema change prevents running the old code. Any restore needs Ryan's approval because it discards later local writes. Post-change checks include replaying existing logs, comparing preserved record counts, and verifying social isolation.
 
 ## Log
+
+- 2026-11-15: increment **2b complete**. New check-ins and host adds require male/female and level; old draft details require explicit host completion with revision protection. Simple-policy start checks the locked roster and persisted court snapshot; live approval has bounded metadata and engine prevalidation. Independent SQL and app/server review passed. Final verification: 828 unit/integration tests, 506 pgTAP assertions, 53 production-browser tests (five duplicate-project exclusions), build, typecheck, lint and full formatting. The new browser regression proves missing details are not preselected, survive reload after explicit entry, and do not cause a false conflict behind an in-flight own autosave. Clean all-migration schema diff passed; all 251 current logs / 1,467 events replayed without error. Scratch tests passed 57 assertions and a real two-host start race (second blocked 2.03 seconds; exactly one start). Before/after migration checksums matched for all six recorded historical tables, including all 1,564 existing participant rows. No backfill or history rewrite. Backup `backups/pre-simple-details-18c9f21-20261115.dump` was restore-verified; the scratch database was removed after verification. Reused unchanged engine benchmarks and dependency audit from 2a/foundation; no dependency or engine change in 2b. **Next: increment 3, simplified Setup and start.**
+
+- 2026-11-15: increment 2a committed as `18c9f21`. Increment 2b is underway: additive nullable historical participant/request details, required details for new writes, locked start snapshot validation and minimal existing form wiring. The broader Setup simplification and live phone screen have not started. Fresh restore-verified local backup: `backups/pre-simple-details-18c9f21-20261115.dump`; rehearsal database `simple_details_rehearsal`. No hosted operations or push.
 
 - 2026-11-15: increment **2a complete**, pure `simple-social-v1` policy plus three additive called-group event values. Required new-policy gender/level and doubles validity, injected-time ten-minute rest, frozen earned waiting, fixed calls/vacancies, safe consumed-call restoration on start Undo, manual replacement checks and deadline rules are implemented. `simpleRecommend` selects the oldest feasible set and limits variety regrouping to simultaneously free courts. Independent frozen-source review signed off. Checks: 800 unit/integration tests; 51 browser tests with five duplicate-project exclusions; 449 database assertions; production build, typecheck, lint and formatting; eight legacy benchmarks passed on the idle rerun (initial 500/50 p99 was 12.26 ms against its unchanged 5 ms threshold); clean all-migration schema diff; archived 243 logs / 1,415 events replay without errors. Backup `backups/pre-simple-rules-3610972-20261115.dump` was restored and the enum migration rehearsed before local application; existing record counts were unchanged. No gender backfill, participant-field migration or UI wiring has happened yet. **2b is next; the complete simpler workflow remains in progress.**
 

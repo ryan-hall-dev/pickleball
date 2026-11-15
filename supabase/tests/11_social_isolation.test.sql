@@ -254,7 +254,7 @@ select throws_ok(
 
 -- Check-in and attendance stay within the session's social -----------------------------
 select is(
-  public.submit_checkin('tagsociala00000001', 'd1100000-0000-4000-8000-000000000001'::uuid, repeat('3', 64), repeat('2', 64), 'Grace', 'Kimball', 'beginner') ->> 'status',
+  public.submit_checkin('tagsociala00000001', 'd1100000-0000-4000-8000-000000000001'::uuid, repeat('3', 64), repeat('2', 64), 'Grace', 'Kimball', 'beginner', 'male') ->> 'status',
   'pending',
   'A''s tag with the name of B''s participant gives an ordinary pending request'
 );
@@ -268,7 +268,7 @@ select results_eq(
 select is(
   public.approve_checkin('a1100000-0000-4000-8000-000000000002',
     (select id from public.checkin_requests where device_token_hash = repeat('3', 64)),
-    'e2100000-0000-4000-8000-000000000001') ->> 'status',
+    'e2100000-0000-4000-8000-000000000001', p_gender => 'male') ->> 'status',
   'approved',
   'host A approves a name B''s session also has'
 );
@@ -289,7 +289,7 @@ insert into public.checkin_requests (id, session_id, social_id, first_name, last
   ('c2100000-0000-4000-8000-000000000003', 'd1100000-0000-4000-8000-000000000001', '51100000-0000-4000-8000-00000000000a', 'Pia', 'Pending', 'beginner', repeat('8', 64), repeat('2', 64));
 select throws_ok(
   $$select public.approve_checkin('a1100000-0000-4000-8000-000000000004', 'c2100000-0000-4000-8000-000000000003',
-    'e2100000-0000-4000-8000-000000000003')$$,
+    'e2100000-0000-4000-8000-000000000003', p_gender => 'male')$$,
   'P0002', 'CHECKIN_REQUEST_NOT_FOUND', 'host B cannot approve A''s request (it looks missing)'
 );
 select throws_ok(
@@ -333,7 +333,7 @@ select throws_ok(
 );
 select throws_ok(
   $$select public.add_participant_mid_session('a1100000-0000-4000-8000-000000000002', 'd1100000-0000-4000-8000-000000000003',
-    gen_random_uuid(), 'Gus', 'Guest', 'beginner', gen_random_uuid(), 1, now())$$,
+    gen_random_uuid(), 'Gus', 'Guest', 'beginner', gen_random_uuid(), 1, now(), 'male')$$,
   'P0002', 'SESSION_NOT_FOUND', 'host A cannot add a participant to B''s live session'
 );
 select throws_ok(
@@ -351,7 +351,7 @@ select throws_ok(
 );
 select throws_ok(
   $$select public.add_draft_participant('a1100000-0000-4000-8000-000000000004', 'd1100000-0000-4000-8000-000000000001',
-    gen_random_uuid(), 'Gus', 'Guest', 'beginner')$$,
+    gen_random_uuid(), 'Gus', 'Guest', 'beginner', 'male')$$,
   'P0002', 'DRAFT_NOT_OPEN', 'host B cannot add a participant to A''s draft'
 );
 select throws_ok(

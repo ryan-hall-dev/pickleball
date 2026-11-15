@@ -31,11 +31,11 @@ insert into public.session_participants (id, session_id, social_id, first_name, 
   ('e8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000018', 'Omar', 'Other', 'beginner');
 
 -- Grants: only the server's secret key can call them.
-select ok(not has_function_privilege('anon', 'public.add_draft_participant(uuid, uuid, uuid, text, text, public.skill_level)', 'execute'),
+select ok(not has_function_privilege('anon', 'public.add_draft_participant(uuid, uuid, uuid, text, text, public.skill_level, text)', 'execute'),
   'anon cannot execute add_draft_participant');
-select ok(not has_function_privilege('authenticated', 'public.add_draft_participant(uuid, uuid, uuid, text, text, public.skill_level)', 'execute'),
+select ok(not has_function_privilege('authenticated', 'public.add_draft_participant(uuid, uuid, uuid, text, text, public.skill_level, text)', 'execute'),
   'authenticated cannot execute add_draft_participant');
-select ok(has_function_privilege('service_role', 'public.add_draft_participant(uuid, uuid, uuid, text, text, public.skill_level)', 'execute'),
+select ok(has_function_privilege('service_role', 'public.add_draft_participant(uuid, uuid, uuid, text, text, public.skill_level, text)', 'execute'),
   'service_role can execute add_draft_participant');
 select hasnt_function('public', 'set_draft_member_attendance', 'set_draft_member_attendance is gone');
 select hasnt_function('public', 'add_draft_guest', 'add_draft_guest is gone');
@@ -45,27 +45,27 @@ set local role service_role;
 
 -- Refusals -----------------------------------------------------------------------------
 select throws_ok(
-  $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000003', 'd8000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Kai', 'Lee', 'beginner')$$,
+  $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000003', 'd8000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Kai', 'Lee', 'beginner', 'male')$$,
   '42501', 'NOT_A_HOST', 'a non-host cannot add a participant'
 );
 select throws_ok(
-  $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000002', 'd8000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Kai', 'Lee', 'beginner')$$,
+  $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000002', 'd8000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Kai', 'Lee', 'beginner', 'male')$$,
   'P0002', 'DRAFT_NOT_OPEN', 'a host of another social cannot add to the draft'
 );
 select throws_ok(
-  $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000003', gen_random_uuid(), 'Kai', 'Lee', 'beginner')$$,
+  $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000003', gen_random_uuid(), 'Kai', 'Lee', 'beginner', 'male')$$,
   'P0002', 'DRAFT_NOT_OPEN', 'a session that is no longer a draft is refused'
 );
 select throws_ok(
-  $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000001', gen_random_uuid(), gen_random_uuid(), 'Kai', 'Lee', 'beginner')$$,
+  $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000001', gen_random_uuid(), gen_random_uuid(), 'Kai', 'Lee', 'beginner', 'male')$$,
   'P0002', 'DRAFT_NOT_OPEN', 'an unknown session fails clearly'
 );
 select throws_ok(
-  $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Kai', 'Lee', null)$$,
+  $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Kai', 'Lee', null, 'male')$$,
   '22023', 'INVALID_INPUT', 'a level is required'
 );
 select throws_ok(
-  $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Kai', '   ', 'beginner')$$,
+  $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000001', gen_random_uuid(), 'Kai', '   ', 'beginner', 'male')$$,
   '22023', 'INVALID_NAME', 'a last name is required'
 );
 select is(
@@ -78,13 +78,13 @@ select is(
 -- Adding ---------------------------------------------------------------------------------
 select is(
   public.add_draft_participant('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000001',
-    'f8000000-0000-4000-8000-000000000001', '  Kai ', ' Lee  Jr ', 'intermediate'),
+    'f8000000-0000-4000-8000-000000000001', '  Kai ', ' Lee  Jr ', 'intermediate', 'male'),
   'f8000000-0000-4000-8000-000000000001'::uuid,
   'adding a participant returns the participant id the server chose'
 );
 select is(
   public.add_draft_participant('a8000000-0000-4000-8000-000000000004', 'd8000000-0000-4000-8000-000000000001',
-    'f8000000-0000-4000-8000-000000000001', 'Kai', 'Lee Jr', 'intermediate'),
+    'f8000000-0000-4000-8000-000000000001', 'Kai', 'Lee Jr', 'intermediate', 'male'),
   'f8000000-0000-4000-8000-000000000001'::uuid,
   'repeating the same add (a retry, by a co-host) is accepted'
 );
@@ -96,22 +96,22 @@ select results_eq(
 );
 select throws_ok(
   $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000001',
-    gen_random_uuid(), 'KAI', 'lee jr', 'beginner')$$,
+    gen_random_uuid(), 'KAI', 'lee jr', 'beginner', 'male')$$,
   'P0001', 'NAME_ALREADY_IN_SESSION', 'a second player with the same name (any case) is refused'
 );
 select throws_ok(
   $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000001',
-    'e8000000-0000-4000-8000-000000000001', 'Kai', 'Lee', 'beginner')$$,
+    'e8000000-0000-4000-8000-000000000001', 'Kai', 'Lee', 'beginner', 'male')$$,
   '23505', 'PARTICIPANT_ID_TAKEN', 'another session''s participant id cannot be reused'
 );
 select lives_ok(
   $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000001',
-    'f8000000-0000-4000-8000-000000000002', 'Kai', 'Lee Jr B', 'beginner')$$,
+    'f8000000-0000-4000-8000-000000000002', 'Kai', 'Lee Jr B', 'beginner', 'male')$$,
   'a distinguishing initial makes the name addable'
 );
 select lives_ok(
   $$select public.add_draft_participant('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000001',
-    'f8000000-0000-4000-8000-000000000003', 'Omar', 'Other', 'advanced')$$,
+    'f8000000-0000-4000-8000-000000000003', 'Omar', 'Other', 'advanced', 'male')$$,
   'a name used in another social''s session is fine'
 );
 
@@ -141,7 +141,7 @@ select results_eq(
 );
 select is(
   public.add_draft_participant('a8000000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000001',
-    gen_random_uuid(), 'Kai', 'Lee Jr', 'intermediate') is not null,
+    gen_random_uuid(), 'Kai', 'Lee Jr', 'intermediate', 'male') is not null,
   true,
   'the name is free again once its participant is removed'
 );

@@ -20,6 +20,7 @@ describe("pendingCheckinRequestsFromRpc", () => {
           first_name: "Grace",
           last_name: "Kim",
           skill_level: "beginner",
+          gender: "male" as const,
           is_name_already_in_session: true,
         },
       ]),
@@ -30,6 +31,7 @@ describe("pendingCheckinRequestsFromRpc", () => {
         firstName: "Grace",
         lastName: "Kim",
         skillLevel: "beginner",
+        gender: "male" as const,
         isNameAlreadyInSession: true,
       },
     ]);
@@ -47,7 +49,8 @@ describe("pendingCheckinRequestsFromRpc", () => {
           first_name: "Grace",
           last_name: "Kim",
           // Every request has a level since 20261112090000.
-          skill_level: null,
+          skill_level: "invalid",
+          gender: null,
           is_name_already_in_session: false,
         },
       ]),

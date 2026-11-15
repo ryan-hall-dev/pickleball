@@ -25,3 +25,13 @@ export function personNameSchema(emptyMessage: string) {
       )
   );
 }
+
+export const GENDERS = ["male", "female"] as const;
+export type Gender = (typeof GENDERS)[number];
+export const GENDER_LABELS: Record<Gender, string> = {
+  male: "Male",
+  female: "Female",
+};
+export const genderSchema = z.enum(GENDERS, {
+  error: "Choose male or female.",
+});

@@ -277,6 +277,7 @@ interface SeedPlayer {
   first_name: string;
   last_name: string;
   skill_level: SkillLevel;
+  gender: "male" | "female";
 }
 
 /**
@@ -295,6 +296,7 @@ function seedPlayers(plan: SocialSeedPlan, count: number): SeedPlayer[] {
     // The number keeps names unique (one name per session).
     last_name: `${pick(LAST_NAMES)} ${index + 1}`,
     skill_level: pick(SKILL_LEVELS),
+    gender: index % 2 === 0 ? "male" : "female",
   }));
 }
 
@@ -407,6 +409,7 @@ async function seedDemoSession(
     first_name: player.first_name,
     last_name: player.last_name,
     skill_level: player.skill_level,
+    gender: player.gender,
   }));
   // Drop seeded players from an earlier run with a larger --attending. The
   // function also withdraws a check-in approval that added one (a plain

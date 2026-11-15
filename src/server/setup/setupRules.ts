@@ -7,7 +7,7 @@ import {
   type RotationPreferences,
   type RotationRules,
 } from "@/engine/session";
-import { personNameSchema } from "@/server/participantRules";
+import { genderSchema, personNameSchema } from "@/server/participantRules";
 import { SKILL_LEVELS } from "@/server/skillLevels";
 
 // Validation and the draft config shape for the Setup screen (plan §4, §7 M4).
@@ -207,13 +207,14 @@ export type AddClubCourtInput = z.input<typeof addClubCourtInputSchema>;
 
 /**
  * A player the host adds to the draft (session-only participants): first
- * name, last name and level, all required. The database also refuses a name
+ * name, last name, gender and level, all required. The database also refuses a name
  * already in the session (NAME_ALREADY_IN_SESSION).
  */
 export const draftParticipantInputSchema = z.object({
   firstName: personNameSchema("Enter a first name."),
   lastName: personNameSchema("Enter a last name."),
   skillLevel: z.enum(SKILL_LEVELS, { error: "Choose a level." }),
+  gender: genderSchema,
 });
 
 export type DraftParticipantInput = z.output<
@@ -386,3 +387,14 @@ export function courtsLeftOutNotice(
   const listed = `${courtNames.slice(0, -1).join(", ")} and ${courtNames.at(-1)}`;
   return `${listed} are no longer available and were left out.`;
 }
+
+export const setDraftParticipantDetailsInputSchema = z.object({
+  sessionId: z.uuid(),
+  participantId: z.uuid(),
+  gender: genderSchema,
+  skillLevel: z.enum(SKILL_LEVELS, { error: "Choose a level." }),
+  expectedDraftRevision: z.number().int().nonnegative(),
+});
+export type SetDraftParticipantDetailsInput = z.input<
+  typeof setDraftParticipantDetailsInputSchema
+>;

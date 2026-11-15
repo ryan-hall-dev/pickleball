@@ -40,6 +40,7 @@ const kai: PendingCheckinRequest = {
   firstName: "Kai",
   lastName: "Moreno",
   skillLevel: "beginner",
+  gender: "male" as const,
   isNameAlreadyInSession: false,
 };
 /** Someone named Grace Kim is already in the session. */
@@ -49,6 +50,7 @@ const grace: PendingCheckinRequest = {
   firstName: "Grace",
   lastName: "Kim",
   skillLevel: "advanced",
+  gender: "male" as const,
   isNameAlreadyInSession: true,
 };
 const kaiParticipant: DraftParticipant = {
@@ -56,6 +58,7 @@ const kaiParticipant: DraftParticipant = {
   firstName: "Kai",
   lastName: "Moreno",
   skillLevel: "beginner",
+  gender: "male" as const,
 };
 
 function listing(...requests: PendingCheckinRequest[]) {
@@ -367,4 +370,25 @@ describe("PendingCheckinTray", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Kai Moreno")).toBeInTheDocument();
   });
+});
+
+it("blocks approval of a legacy request until the host selects gender", async () => {
+  listMock.mockResolvedValue({
+    ok: true,
+    requests: [{ ...kai, gender: null }],
+  });
+  renderTray();
+  await settle();
+  const approve = screen.getByRole("button", { name: "Approve Kai Moreno" });
+  expect(approve).toBeDisabled();
+  const gender = screen.getByRole("combobox", {
+    name: "Gender for Kai Moreno",
+  });
+  expect(gender).toHaveValue("");
+  fireEvent.change(gender, { target: { value: "female" } });
+  expect(approve).toBeEnabled();
+  approveMock.mockResolvedValue({ kind: "approved", participant: null });
+  fireEvent.click(approve);
+  await settle();
+  expect(approveMock).toHaveBeenCalledWith(kai.checkinRequestId, "female");
 });

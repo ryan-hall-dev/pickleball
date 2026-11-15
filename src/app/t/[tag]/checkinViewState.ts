@@ -61,6 +61,7 @@ const EMPTY_CHECKIN_FORM: CheckinFormValues = {
   firstName: "",
   lastName: "",
   skillLevel: null,
+  gender: null,
 };
 
 const EMPTY_STATE: CheckinState = {

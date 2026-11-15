@@ -32,7 +32,7 @@ select is(
   'the check-in page on an empty database says the link is inactive'
 );
 select throws_ok(
-  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, repeat('a', 64), repeat('b', 64), 'Nina', 'New', 'beginner')$$,
+  $$select public.submit_checkin('tag0000000000000001', 'd0000000-0000-4000-8000-000000000001'::uuid, repeat('a', 64), repeat('b', 64), 'Nina', 'New', 'beginner', 'male')$$,
   'P0001', 'SESSION_CHANGED', 'submit on an empty database says no session is open'
 );
 select throws_ok(

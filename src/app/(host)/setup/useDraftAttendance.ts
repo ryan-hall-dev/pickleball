@@ -6,7 +6,10 @@ import {
   readSessionDraft,
   removeDraftParticipant,
   type DraftAttendanceResult,
+  type SaveSessionDraftResult,
 } from "@/server/setup/setupActions";
+import type { Gender } from "@/server/participantRules";
+import type { SkillLevel } from "@/server/skillLevels";
 import type { DraftParticipant } from "@/server/setup/setupDraft";
 import {
   applyAttendanceChange,
@@ -30,6 +33,7 @@ function submitAttendanceChange(
         firstName: change.participant.firstName,
         lastName: change.participant.lastName,
         skillLevel: change.participant.skillLevel,
+        gender: change.participant.gender,
       });
     case "removeParticipant":
       return removeDraftParticipant({
@@ -52,6 +56,11 @@ function submitAttendanceChange(
 export function useDraftAttendance(
   sessionId: string,
   initialParticipants: DraftParticipant[],
+  saveParticipantDetails?: (
+    participantId: string,
+    gender: Gender,
+    skillLevel: SkillLevel,
+  ) => Promise<SaveSessionDraftResult>,
 ) {
   const [savedParticipants, setSavedParticipants] =
     useState(initialParticipants);
@@ -174,6 +183,41 @@ export function useDraftAttendance(
 
   return {
     participants,
+    completeParticipantDetails: saveParticipantDetails
+      ? async (
+          participantId: string,
+          gender: Gender,
+          skillLevel: SkillLevel,
+        ) => {
+          if (isWritingRef.current)
+            return {
+              ok: false,
+              message: "Wait for attendance to finish saving, then try again.",
+            };
+          isWritingRef.current = true;
+          try {
+            const result = await saveParticipantDetails(
+              participantId,
+              gender,
+              skillLevel,
+            );
+            if (result.ok) {
+              savedListVersionRef.current += 1;
+              setSavedParticipants((current) =>
+                current.map((participant) =>
+                  participant.participantId === participantId
+                    ? { ...participant, gender, skillLevel }
+                    : participant,
+                ),
+              );
+            }
+            return result;
+          } finally {
+            isWritingRef.current = false;
+            void writeQueuedChanges();
+          }
+        }
+      : undefined,
     pendingChanges: queuedChanges,
     failures,
     refreshProblem,

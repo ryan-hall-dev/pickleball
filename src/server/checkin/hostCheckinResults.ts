@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { genderSchema, type Gender } from "@/server/participantRules";
 import { SKILL_LEVELS, type SkillLevel } from "@/server/skillLevels";
 import type { DraftParticipant } from "@/server/setup/setupDraft";
 
@@ -18,7 +19,8 @@ const pendingCheckinRowsSchema = z.array(
       .refine((value) => !Number.isNaN(Date.parse(value)), "Not a timestamp."),
     first_name: z.string(),
     last_name: z.string(),
-    skill_level: skillLevelSchema,
+    skill_level: skillLevelSchema.nullable(),
+    gender: genderSchema.nullable(),
     is_name_already_in_session: z.boolean(),
   }),
 );
@@ -30,7 +32,8 @@ export interface PendingCheckinRequest {
   createdAt: string;
   firstName: string;
   lastName: string;
-  skillLevel: SkillLevel;
+  skillLevel: SkillLevel | null;
+  gender: Gender | null;
   /**
    * Someone with this name is already in the session: the request can't be
    * approved (names are unique per session); the host rejects it.
@@ -48,6 +51,7 @@ export function pendingCheckinRequestsFromRpc(
     firstName: row.first_name,
     lastName: row.last_name,
     skillLevel: row.skill_level,
+    gender: row.gender,
     isNameAlreadyInSession: row.is_name_already_in_session,
   }));
 }

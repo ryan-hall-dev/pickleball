@@ -34,6 +34,7 @@ import {
   readSessionDraft,
   removeDraftParticipant,
   saveSessionDraft,
+  setDraftParticipantDetails,
   saveSetup,
   startSessionDraft,
 } from "./setupActions";
@@ -429,6 +430,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
             firstName: "Sneaky",
             lastName: "Guest",
             skillLevel: "beginner",
+            gender: "male" as const,
           }),
         ).toEqual(expected);
         expect(
@@ -851,6 +853,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           first_name: "Setup",
           last_name: RUN_TOKEN,
           skill_level: "advanced",
+          gender: "male" as const,
         },
         {
           session_id: draft.sessionId,
@@ -859,6 +862,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           last_name: RUN_TOKEN,
           // Sessions from before levels were required may have none.
           skill_level: null,
+          gender: null,
         },
       ]);
       if (error) throw error;
@@ -874,12 +878,14 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
               firstName: "Setup",
               lastName: RUN_TOKEN,
               skillLevel: "advanced",
+              gender: "male" as const,
             },
             {
               participantId: expect.any(String),
               firstName: "Legacy",
               lastName: RUN_TOKEN,
               skillLevel: null,
+              gender: null,
             },
           ]),
         );
@@ -1064,10 +1070,86 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     });
   });
   describe("attendance", () => {
+    it("completes legacy missing details, preserves names, and rejects stale and other-social edits", async () => {
+      const draft = await openDraftFor(hostAlice);
+      const participantId = randomUUID();
+      const { error: insertError } = await admin
+        .from("session_participants")
+        .insert({
+          id: participantId,
+          session_id: draft.sessionId,
+          social_id: hostAlice.socialId,
+          first_name: "Legacy",
+          last_name: RUN_TOKEN,
+          gender: null,
+          skill_level: null,
+        });
+      if (insertError) throw insertError;
+      const input = {
+        sessionId: draft.sessionId,
+        participantId,
+        gender: "female" as const,
+        skillLevel: "advanced" as const,
+        expectedDraftRevision: draft.draftRevision,
+      };
+      actingClient = hostAlice.client;
+      expect(await setDraftParticipantDetails(input)).toEqual({
+        ok: true,
+        draftRevision: draft.draftRevision + 1,
+      });
+      const { data, error } = await admin
+        .from("session_participants")
+        .select("first_name,last_name,gender,skill_level")
+        .eq("social_id", hostAlice.socialId)
+        .eq("id", participantId)
+        .single();
+      if (error) throw error;
+      expect(data).toEqual({
+        first_name: "Legacy",
+        last_name: RUN_TOKEN,
+        gender: "female",
+        skill_level: "advanced",
+      });
+      expect(
+        await setDraftParticipantDetails({ ...input, gender: "male" }),
+      ).toMatchObject({ ok: false, isConflict: true });
+      actingClient = otherSocialManager.client;
+      expect(
+        await setDraftParticipantDetails({
+          ...input,
+          expectedDraftRevision: draft.draftRevision + 1,
+        }),
+      ).toMatchObject({ ok: false });
+      actingClient = hostAlice.client;
+      const reread = await readSessionDraft(draft.sessionId);
+      expect(reread).toMatchObject({
+        ok: true,
+        draft: {
+          participants: expect.arrayContaining([
+            {
+              participantId,
+              firstName: "Legacy",
+              lastName: RUN_TOKEN,
+              gender: "female",
+              skillLevel: "advanced",
+            },
+          ]),
+        },
+      });
+      expect(
+        (
+          await removeDraftParticipant({
+            sessionId: draft.sessionId,
+            participantId,
+          })
+        ).ok,
+      ).toBe(true);
+    });
+
     async function attendeeRows(sessionId: string) {
       const { data, error } = await admin
         .from("session_participants")
-        .select("id, first_name, last_name, skill_level")
+        .select("id, first_name, last_name, skill_level, gender")
         .eq("session_id", sessionId)
         .order("created_at")
         .order("id");
@@ -1091,6 +1173,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         firstName: "  Kai ",
         lastName: RUN_TOKEN,
         skillLevel: "beginner" as const,
+        gender: "male" as const,
       };
       const afterKai = listFrom(await addDraftParticipant(kaiInput));
       expect(afterKai).toEqual([
@@ -1099,6 +1182,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           firstName: "Kai",
           lastName: RUN_TOKEN,
           skillLevel: "beginner",
+          gender: "male" as const,
         },
       ]);
       // A retry of the same add (same id) doesn't add the player twice.
@@ -1110,6 +1194,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           firstName: "Grace",
           lastName: RUN_TOKEN,
           skillLevel: "advanced",
+          gender: "male" as const,
         }),
       );
       expect(afterGrace.map((participant) => participant.firstName)).toEqual([
@@ -1148,6 +1233,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           firstName: "GRÂCE",
           lastName: ` ${RUN_TOKEN.toLowerCase()} `,
           skillLevel: "beginner",
+          gender: "male" as const,
         }),
       ).toEqual({
         ok: false,
@@ -1162,6 +1248,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           firstName: "Grace",
           lastName: `${RUN_TOKEN} B`,
           skillLevel: "beginner",
+          gender: "male" as const,
         }),
       );
     });
@@ -1178,6 +1265,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           firstName: "Bob's",
           lastName: "Friend",
           skillLevel: "beginner",
+          gender: "male" as const,
         }),
       ).toEqual(draftNotOpen);
       // Another social's participant looks like one that's already gone.
@@ -1197,6 +1285,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         firstName: "Ana's",
         lastName: RUN_TOKEN,
         skillLevel: "intermediate" as const,
+        gender: "male" as const,
       };
       expect(
         listFrom(await addDraftParticipant(coHostInput)).map(
@@ -1223,6 +1312,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           firstName: "Kai",
           lastName: "   ",
           skillLevel: "beginner",
+          gender: "male" as const,
         }),
       ).toEqual({ ok: false, message: "Enter a last name." });
       // A level is required for every player (Ryan, 2026-11-11).
@@ -1234,6 +1324,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           lastName: "Lee",
           // What a tampered or outdated page could send.
           skillLevel: "" as "beginner",
+          gender: "male",
         }),
       ).toEqual({ ok: false, message: "Choose a level." });
       expect(
@@ -1378,6 +1469,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
         firstName: "Kai",
         lastName: "Guest",
         skillLevel: "beginner",
+        gender: "male" as const,
       });
       expect(guestResult).toMatchObject({ ok: true });
       const beforeApply = await openDraftFor(hostDana);
@@ -1790,6 +1882,7 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
           firstName: "Tab",
           lastName: "Guest",
           skillLevel: "beginner",
+          gender: "male" as const,
         }),
       ).toMatchObject({ ok: true });
       expect((await openDraftFor(hostFrank)).draftRevision).toBe(

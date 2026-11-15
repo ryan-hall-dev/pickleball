@@ -20,6 +20,8 @@ import {
   type SessionDraft,
 } from "./setupDraft";
 import {
+  setDraftParticipantDetailsInputSchema,
+  type SetDraftParticipantDetailsInput,
   addClubCourtInputSchema,
   addDraftParticipantInputSchema,
   DEFAULT_SESSION_DRAFT_CONFIG,
@@ -571,7 +573,7 @@ export async function addDraftParticipant(
   if (!parsed.success) {
     return { ok: false, message: firstIssueMessage(parsed.error) };
   }
-  const { sessionId, participantId, firstName, lastName, skillLevel } =
+  const { sessionId, participantId, firstName, lastName, skillLevel, gender } =
     parsed.data;
   return writeDraftAttendance(
     host,
@@ -585,6 +587,7 @@ export async function addDraftParticipant(
         p_first_name: firstName,
         p_last_name: lastName,
         p_skill_level: skillLevel,
+        p_gender: gender,
       }),
     nameAlreadyInSessionMessage(firstName, lastName),
   );
@@ -854,6 +857,53 @@ export async function readSessionDraft(
     return { ok: true, draft: openSession.draft };
   } catch (error) {
     logActionFailure("Re-reading a session draft failed", host, error);
+    return { ok: false, message: SOMETHING_WENT_WRONG };
+  }
+}
+
+/** Complete historical missing details without editing the session's identity. */
+export async function setDraftParticipantDetails(
+  input: SetDraftParticipantDetailsInput,
+): Promise<SaveSessionDraftResult> {
+  const authorization = await authorizeCurrentHost("host");
+  if (!authorization.ok)
+    return {
+      ok: false,
+      message: HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
+    };
+  const parsed = setDraftParticipantDetailsInputSchema.safeParse(input);
+  if (!parsed.success)
+    return { ok: false, message: firstIssueMessage(parsed.error) };
+  const { host } = authorization;
+  try {
+    const value = parsed.data;
+    const { data, error } = await createSupabaseAdminClient()
+      .rpc("set_draft_participant_details", {
+        p_actor_user_id: host.userId,
+        p_session_id: value.sessionId,
+        p_participant_id: value.participantId,
+        p_gender: value.gender,
+        p_skill_level: value.skillLevel,
+        p_expected_draft_revision: value.expectedDraftRevision,
+      })
+      .abortSignal(AbortSignal.timeout(15000));
+    if (error?.message === DRAFT_CHANGED_ELSEWHERE_ERROR)
+      return { ok: false, message: DRAFT_CHANGED_ELSEWHERE, isConflict: true };
+    if (
+      error?.message === DRAFT_NOT_OPEN_ERROR ||
+      error?.message === SESSION_NOT_DRAFT_ERROR
+    )
+      return { ok: false, message: DRAFT_NOT_OPEN };
+    if (error)
+      throw new Error(`Saving participant details failed: ${error.message}`);
+    return {
+      ok: true,
+      draftRevision: z
+        .object({ draftRevision: z.number().int().nonnegative() })
+        .parse(data).draftRevision,
+    };
+  } catch (error) {
+    logActionFailure("Saving participant details failed", host, error);
     return { ok: false, message: SOMETHING_WENT_WRONG };
   }
 }

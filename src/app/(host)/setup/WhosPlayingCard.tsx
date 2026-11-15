@@ -1,6 +1,17 @@
 "use client";
 
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
+import {
+  GENDERS,
+  GENDER_LABELS,
+  genderSchema,
+} from "@/server/participantRules";
+import { SKILL_LEVELS, SKILL_LEVEL_LABELS } from "@/server/skillLevels";
+import type { DraftParticipant } from "@/server/setup/setupDraft";
+import {
+  INNER_BOX_TEXT_INPUT_CLASS_NAME,
+  SECONDARY_BUTTON_CLASS_NAME,
+} from "@/components/controlStyles";
 import { AttentionMessage } from "@/components/AttentionMessage";
 import { LINK_BUTTON_CLASS_NAME } from "@/components/controlStyles";
 import { QuickAddParticipantBox } from "./QuickAddParticipantBox";
@@ -71,6 +82,18 @@ export function WhosPlayingCard({
         )}
       </div>
 
+      {attendance.completeParticipantDetails &&
+        participants
+          .filter(
+            (participant) => !participant.gender || !participant.skillLevel,
+          )
+          .map((participant) => (
+            <MissingParticipantDetails
+              key={participant.participantId}
+              participant={participant}
+              onSave={attendance.completeParticipantDetails!}
+            />
+          ))}
       <QuickAddParticipantBox
         form={participantForm}
         onFormChange={onParticipantFormChange}
@@ -97,5 +120,87 @@ export function WhosPlayingCard({
         }
       />
     </SetupSection>
+  );
+}
+
+function MissingParticipantDetails({
+  participant,
+  onSave,
+}: {
+  participant: DraftParticipant;
+  onSave: NonNullable<DraftAttendance["completeParticipantDetails"]>;
+}) {
+  const [gender, setGender] = useState(participant.gender ?? "");
+  const [skillLevel, setSkillLevel] = useState(participant.skillLevel ?? "");
+  const [isBusy, setIsBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const name = `${participant.firstName} ${participant.lastName}`;
+  return (
+    <form
+      aria-label={`Complete details for ${name}`}
+      className="mt-3 flex flex-wrap items-center gap-2"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        const parsedGender = genderSchema.safeParse(gender);
+        const parsedSkill = SKILL_LEVELS.find((level) => level === skillLevel);
+        if (!parsedGender.success || !parsedSkill) {
+          setMessage("Choose male or female and a level.");
+          return;
+        }
+        setIsBusy(true);
+        try {
+          const result = await onSave(
+            participant.participantId,
+            parsedGender.data,
+            parsedSkill,
+          );
+          if (!result.ok) setMessage(result.message);
+        } catch {
+          setMessage("Couldn't save details. Check your connection.");
+        } finally {
+          setIsBusy(false);
+        }
+      }}
+    >
+      <p className="text-sm text-orange-soft">
+        Complete missing details for {name}
+      </p>
+      <select
+        aria-label={`Gender for ${name}`}
+        value={gender}
+        disabled={isBusy}
+        onChange={(event) => setGender(event.target.value)}
+        className={INNER_BOX_TEXT_INPUT_CLASS_NAME}
+      >
+        <option value="">Choose gender…</option>
+        {GENDERS.map((value) => (
+          <option key={value} value={value}>
+            {GENDER_LABELS[value]}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label={`Level for ${name}`}
+        value={skillLevel}
+        disabled={isBusy}
+        onChange={(event) => setSkillLevel(event.target.value)}
+        className={INNER_BOX_TEXT_INPUT_CLASS_NAME}
+      >
+        <option value="">Choose level…</option>
+        {SKILL_LEVELS.map((value) => (
+          <option key={value} value={value}>
+            {SKILL_LEVEL_LABELS[value]}
+          </option>
+        ))}
+      </select>
+      <button
+        type="submit"
+        disabled={isBusy}
+        className={SECONDARY_BUTTON_CLASS_NAME}
+      >
+        {isBusy ? "Saving…" : "Save details"}
+      </button>
+      {message && <AttentionMessage>{message}</AttentionMessage>}
+    </form>
   );
 }

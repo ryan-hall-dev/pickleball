@@ -22,6 +22,7 @@ function pendingRequest(
     firstName: "Kai",
     lastName: `Moreno${index}`,
     skillLevel: "beginner",
+    gender: "male" as const,
     isNameAlreadyInSession: false,
     ...overrides,
   };
@@ -33,6 +34,7 @@ const peter = pendingRequest(3, {
   firstName: "Peter",
   lastName: "Lindqvist",
   skillLevel: "intermediate",
+  gender: "male" as const,
 });
 
 let pollSequence = 0;
