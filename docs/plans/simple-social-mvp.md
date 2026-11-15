@@ -173,6 +173,8 @@ Each increment is implemented, reviewed, tested, committed on the existing branc
 
 ## Log
 
+- 2026-11-15: hidden `startSimpleSession` preparation complete: server-built roster/courts and duration, revision/roster race protection, actual server start time and duplicate-first retry recovery. No Start UI exposure or migration. Independent review passed; 867 unit/integration tests, lint/typecheck/format, production build and two production smoke checks passed. Next is the complete short Setup/basic live slice plus truthful public-card timing.
+
 - 2026-11-15: Setup preparation: reviewed court-count helper committed as `827afba`; added an unused `saveSimpleSessionDraft` action with server-generated stable court UUIDs, host/social checks and revision-protected saves. No catalogue writes, migration, Start control or live UI. Independent review passed; 863 unit/integration tests, lint, typecheck, formatting, production build, 22 Setup browser journeys and two smoke checks passed. Audit: one moderate, zero high/critical. The Setup/live vertical slice remains incomplete.
 
 - 2026-11-15: increment 2b committed as `81d9d70`. Next vertical slice combines short Setup/start with the basic live Courts/Up next/Waiting/rest/Check-ins destination, so Start does not lead to an unfinished route. Rare replacement/Interrupted/Undo controls remain a separate follow-on increment. Ryan approved the truthful pre-start duration card and actual live times; no scheduled first-game forecast is introduced.
