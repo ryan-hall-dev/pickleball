@@ -47,10 +47,10 @@ export interface PlayerMetrics {
   /**
    * When the current wait began: their last time off court, or their latest
    * `PlayerJoined` (session start for initial attendees), whichever is later.
-   * Null unless `status` is `waiting`.
+   * Also retained while resting in simple-social sessions; otherwise null unless waiting.
    */
   currentWaitStartAt: EpochMs | null;
-  /** Waiting time since `currentWaitStartAt`, excluding paused, skipped and away time. Null unless waiting. */
+  /** Waiting time since `currentWaitStartAt`, excluding paused, skipped and away time. Frozen during simple-social rest; otherwise null unless waiting. */
   currentWaitMs: number | null;
   /** Last time they came off court (completed, abandoned or replaced out); null if never. */
   lastMatchEndAt: EpochMs | null;
@@ -77,10 +77,13 @@ function measurementTime(state: SessionState, now: EpochMs): EpochMs {
   return Math.max(now, state.lastAt ?? now);
 }
 
-function playerStatus(participantState: ParticipantState): PlayerStatus {
+function playerStatus(
+  participantState: ParticipantState,
+  now: number,
+): PlayerStatus {
   if (!isPresent(participantState)) return "away";
   if (participantState.activeMatchId !== null) return "playing";
-  if (isSkipped(participantState)) return "skipped";
+  if (isSkipped(participantState, now)) return "skipped";
   return "waiting";
 }
 
@@ -96,7 +99,13 @@ function participantMetrics(
   const participantId = participantState.participant.participantId;
   const pausedOrSkipped: TimeInterval[] = [
     ...state.pauses,
-    ...participantState.skips,
+    ...participantState.skips.map((skip) => ({
+      from: skip.from,
+      to:
+        skip.returnsAt === undefined
+          ? skip.to
+          : Math.min(skip.to ?? Infinity, skip.returnsAt),
+    })),
   ];
   const presentMs = measureMs(
     participantState.presence,
@@ -144,10 +153,13 @@ function participantMetrics(
   const playMs = measureMs(playIntervals, until, state.pauses);
   completedGameEndTimes.sort((left, right) => left - right);
 
-  const status = playerStatus(participantState);
+  const status = playerStatus(participantState, until);
   let currentWaitStartAt: EpochMs | null = null;
   let currentWaitMs: number | null = null;
-  if (status === "waiting") {
+  if (
+    status === "waiting" ||
+    (status === "skipped" && state.config?.policyVersion === "simple-social-v1")
+  ) {
     const latestJoin = participantState.presence.findLast(
       (interval) => interval.startKind === "joined",
     );

@@ -24,6 +24,8 @@ export interface MatchAssignment {
   courtId: CourtId;
   teamA: ParticipantId[];
   teamB: ParticipantId[];
+  /** Required when consuming a called group; omitted in historical/direct starts. */
+  calledEventId?: EventId;
 }
 
 /** Payload of each event type, keyed by the event `type`. */
@@ -46,7 +48,7 @@ export interface SessionEventPayloads {
   PlayerLeft: { participantId: ParticipantId };
   PlayerLeaveReverted: CompensationPayload;
   /** Skip until un-skipped. Skipped time is not presence. Not allowed while playing. */
-  PlayerSkipped: { participantId: ParticipantId };
+  PlayerSkipped: { participantId: ParticipantId; returnsAt?: EpochMs };
   /** Ends a skip (the host's "un-skip" and the undo of a skip are the same action). */
   PlayerUnskipped: CompensationPayload;
   /** Pins a participant to the next match, optionally on one court. Consumed when they start a match. */
@@ -57,6 +59,17 @@ export interface SessionEventPayloads {
   /** Closing requires the court to be free. */
   CourtClosed: { courtId: CourtId };
   CourtReopened: CompensationPayload;
+  NextGroupCalled: {
+    courtId: CourtId;
+    teamA: ParticipantId[];
+    teamB: ParticipantId[];
+  };
+  NextGroupChanged: {
+    calledEventId: EventId;
+    teamA: ParticipantId[];
+    teamB: ParticipantId[];
+  };
+  NextGroupReleased: { calledEventId: EventId };
   MatchStarted: MatchAssignment;
   /**
    * Undoes a match start: `targetSeq` is the `MatchStarted`, or, for a match

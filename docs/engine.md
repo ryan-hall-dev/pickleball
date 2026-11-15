@@ -193,3 +193,17 @@ Choices made where the plan was open; change them if they're wrong.
 13. **Utilisation in simulations** is measured up to the planned end; the live report measures all open court time.
 14. **Simulated match flow:** the next match starts the moment a court frees (the host taps Done, then Accept), so the changeover is inside the next match's time. Matches are not started after the planned end, and the session ends when the last one finishes.
 15. **Reasons:** the §5.6 cross-court comparison ("Court 1 finishers picked over Court 3: fewer recent games") is not implemented. It would need a per-court comparison of the runner-up pool; deferred until the live screen shows whether hosts want it.
+
+### Simple-social called-group recovery and variety
+
+The new policy is explicit: `SessionConfig.policyVersion = "simple-social-v1"`. Missing versions retain the legacy behaviour documented above, so old logs are not upgraded or rewritten. Simple sessions require a known male/female value and playing level for every participant and allow doubles only. The same hard team rules apply to starts, called groups and playing-player replacements: four men, four women, or mixed teams with one man and one woman per team.
+
+`simpleRecommend(state, now, requestedCourtIds)` selects available players using current waiting time and deterministic ID ties. It never forecasts a court finish or uses weighted scoring or skill balancing. It selects the oldest feasible set and only improves variety among those selected for multiple currently free courts; busy-court preparation remains wait-first. Only completed games contribute to mixed/same-sex streaks. The conservative policy uses none of the two-minute additional-wait allowance.
+
+Simple rest uses `PlayerSkipped.returnsAt = event.at + 600000`. Measurements and action validation use injected time, with the effective rest end being the earlier of its deadline and a `PlayerUnskipped` early return. Earned waiting is preserved and frozen during rest; automatic expiry needs no job or browser. Resting or leaving vacates only that player's called seat. Returning never refills it silently.
+
+Calling, changing and releasing a group are append-only events. Calling reserves players for that court without stopping their waiting clocks. Starting requires the exact current call, a free court, available players and valid teams, and consumes the call atomically. The session's start time plus its chosen duration stops new calls and starts; active games may still finish. New-policy pause, shuffle, queue/lock controls and short-handed removal are rejected. These engine capabilities are delivered before their database participant-field and phone UI wiring; they do not mark the whole simpler workflow complete.
+
+Starting a called group snapshots the consumed commitment on the match. Safe Undo of that start restores the original call and its reservations. A newer call on the court, or a conflicting reservation, blocks Undo until the newer commitment is explicitly released. Historical matches without a consumed call retain their existing Undo behaviour.
+
+Simple-social suggestions first select the oldest feasible set and assign valid groups in host-requested court order. Variety may regroup the same selected players only across multiple courts that are free together. Groups prepared for busy courts retain their wait-first assignment; no finish-time forecast is used to move players between busy and free courts.

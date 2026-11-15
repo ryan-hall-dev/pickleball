@@ -4,6 +4,7 @@ import { sessionError, type SessionError } from "./errors";
 import { startMatch } from "./matchHandlers";
 import { requireManualAssignments } from "./playerHandlers";
 import { isCourtClosed, type HistoryEntry, type SessionState } from "./state";
+import { isSimpleSocial, validateSimpleParticipant } from "./simplePolicy";
 import {
   PLAYERS_PER_MATCH,
   type CourtConfig,
@@ -41,6 +42,11 @@ function validateConfig(
   for (const court of config.courts) {
     const courtError = validateCourt(court);
     if (courtError) return courtError;
+    if (isSimpleSocial(config) && court.format !== "doubles")
+      return sessionError(
+        "INVALID_CONFIG",
+        "Simple socials use doubles courts.",
+      );
   }
   const courtIds = config.courts.map((court) => court.courtId);
   if (new Set(courtIds).size !== courtIds.length) {
@@ -71,6 +77,17 @@ function validateConfig(
   }
   if (!Array.isArray(config.participants)) {
     return sessionError("INVALID_CONFIG", "The roster is missing.");
+  }
+  if (
+    config.policyVersion !== undefined &&
+    config.policyVersion !== "simple-social-v1"
+  )
+    return sessionError("INVALID_CONFIG", "Unknown session policy.");
+  if (isSimpleSocial(config)) {
+    for (const participant of config.participants) {
+      const error = validateSimpleParticipant(participant);
+      if (error) return error;
+    }
   }
   const rosterIds = new Set(
     config.participants.map((participant) => participant.participantId),
@@ -167,6 +184,10 @@ export const handleSessionEnded: EventHandler<"SessionEnded"> = (
   draft.next.pausedBySeq = null;
   draft.next.phase = "ended";
   draft.next.endedAt = event.at;
+  for (const court of Object.values(draft.next.courts)) {
+    if (court.nextGroup)
+      draft.set("courts", court.court.courtId, { ...court, nextGroup: null });
+  }
   return null;
 };
 
@@ -364,6 +385,8 @@ export const handleCourtAdded: EventHandler<"CourtAdded"> = (draft, event) => {
   const { court } = event.payload;
   const courtError = validateCourt(court);
   if (courtError) return courtError;
+  if (isSimpleSocial(draft.next.config) && court.format !== "doubles")
+    return sessionError("INVALID_CONFIG", "Simple socials use doubles courts.");
   if (draft.next.courts[court.courtId]) {
     return sessionError(
       "DUPLICATE_ID",
@@ -446,6 +469,7 @@ export const handleCourtClosed: EventHandler<"CourtClosed"> = (
   }
   draft.set("courts", courtId, {
     ...courtState,
+    ...(isSimpleSocial(draft.next.config) ? { nextGroup: null } : {}),
     closures: [
       ...courtState.closures,
       { from: event.at, to: null, closedBySeq: event.seq },

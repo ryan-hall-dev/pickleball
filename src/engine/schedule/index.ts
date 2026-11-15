@@ -9,3 +9,5 @@ export { createSeededRandom } from "./seededRandom";
 export { FAIR_ALTERNATIVE_TOLERANCE_POINTS } from "./groupSearch";
 export { DEFAULT_SCORING_WEIGHTS, resolveScoringWeights } from "./weights";
 export type { ScoringWeights } from "./weights";
+export { simpleRecommend } from "./simpleRecommend";
+export type { SimpleSuggestion } from "./simpleRecommend";

@@ -1,5 +1,10 @@
 /** Why an event (or an undo) was rejected. Stable codes for the UI; messages are host-readable. */
 export type SessionErrorCode =
+  | "POLICY_ACTION_NOT_ALLOWED"
+  | "SESSION_TIME_UP"
+  | "PLAYER_RESERVED"
+  | "CALLED_GROUP_EXISTS"
+  | "UNKNOWN_CALLED_GROUP"
   | "SEQ_NOT_INCREASING"
   | "TIME_WENT_BACKWARDS"
   | "MALFORMED_EVENT"

@@ -35,6 +35,8 @@ export interface CourtConfig {
   format: CourtFormat;
 }
 
+export type Gender = "male" | "female";
+
 export type SkillLevel = "beginner" | "intermediate" | "advanced";
 
 /**
@@ -49,6 +51,8 @@ export interface Participant {
   lastName: string;
   /** Null when unknown (sessions recorded before a level was required). */
   skill: SkillLevel | null;
+  /** Omitted in historical sessions; required by simple-social-v1. */
+  gender?: Gender;
 }
 
 /** The host's rotation objectives, ranked by importance (first = most important). */
@@ -103,6 +107,8 @@ export const RECOMMENDED_ROTATION_PREFERENCES: Readonly<RotationPreferences> =
 
 /** Everything about a session that is fixed when it starts (`sessions.config_snapshot`). */
 export interface SessionConfig {
+  /** Absent preserves the historical weighted policy and replay rules. */
+  policyVersion?: "simple-social-v1";
   /** Courts enabled at start. More can be added mid-session with `CourtAdded`. */
   courts: CourtConfig[];
   targetMatchMinutes: number;

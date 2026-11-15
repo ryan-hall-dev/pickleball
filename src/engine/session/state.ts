@@ -28,6 +28,8 @@ export interface PresenceInterval extends TimeInterval {
 /** A skip; `to: null` while still skipped. */
 export interface SkipInterval extends TimeInterval {
   skippedBySeq: number;
+  /** Real-time automatic return; missing means a legacy indefinite skip. */
+  returnsAt?: EpochMs;
 }
 
 export interface PlayerLock {
@@ -65,6 +67,8 @@ export interface PlaySegment extends TimeInterval {
 export type MatchStatus = "active" | "completed" | "abandoned";
 
 export interface MatchState {
+  /** Called commitment consumed at start; absent in historical matches. */
+  consumedCall?: CalledGroup;
   matchId: MatchId;
   courtId: CourtId;
   status: MatchStatus;
@@ -87,7 +91,16 @@ export interface ClosureInterval extends TimeInterval {
   closedBySeq: number;
 }
 
+export interface CalledGroup {
+  calledEventId: string;
+  /** Vacancies persist until the host explicitly changes or releases the call. */
+  teamA: Array<ParticipantId | null>;
+  teamB: Array<ParticipantId | null>;
+}
+
 export interface CourtState {
+  /** Present only in new-policy sessions; absent preserves old state shapes. */
+  nextGroup?: CalledGroup | null;
   court: CourtConfig;
   addedAt: EpochMs;
   addedBySeq: number;
@@ -204,9 +217,16 @@ export function isPresent(participantState: ParticipantState): boolean {
   return last !== undefined && last.to === null;
 }
 
-export function isSkipped(participantState: ParticipantState): boolean {
+export function isSkipped(
+  participantState: ParticipantState,
+  now = -Infinity,
+): boolean {
   const last = participantState.skips[participantState.skips.length - 1];
-  return last !== undefined && last.to === null;
+  return (
+    last !== undefined &&
+    last.to === null &&
+    (last.returnsAt === undefined || now < last.returnsAt)
+  );
 }
 
 export function isCourtClosed(courtState: CourtState): boolean {

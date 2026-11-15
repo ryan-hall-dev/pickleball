@@ -1,6 +1,12 @@
 // `applyEvent` validates one event against the current state and returns the
 // next state; `replay` folds a whole log. Neither throws on invalid input.
 import { StateDraft, type EventHandler } from "./draft";
+import {
+  handleNextGroupCalled,
+  handleNextGroupChanged,
+  handleNextGroupReleased,
+} from "./calledGroupHandlers";
+import { isSimpleSocial, simpleSessionTimeIsUp } from "./simplePolicy";
 import { sessionError, type SessionError } from "./errors";
 import {
   COMPENSATING_EVENT_TYPE,
@@ -55,6 +61,9 @@ export type ApplyEventResult =
   { ok: true; state: SessionState } | { ok: false; error: SessionError };
 
 const HANDLERS: { [TType in SessionEventType]: EventHandler<TType> } = {
+  NextGroupCalled: handleNextGroupCalled,
+  NextGroupChanged: handleNextGroupChanged,
+  NextGroupReleased: handleNextGroupReleased,
   SessionStarted: handleSessionStarted,
   PlayerJoined: handlePlayerJoined,
   PlayerJoinReverted: handlePlayerJoinReverted,
@@ -95,6 +104,17 @@ const BLOCKED_WHILE_PAUSED: ReadonlySet<SessionEventType> = new Set([
   "PlayerReplaced",
   "PlayerRemovedMidMatch",
   "MatchAbandoned",
+]);
+const LEGACY_ONLY_CONTROLS: ReadonlySet<SessionEventType> = new Set([
+  "Paused",
+  "Resumed",
+  "SuggestionsShuffled",
+  "QueueReordered",
+  "PlayerLocked",
+  "PlayerUnlocked",
+  "PlayerRemovedMidMatch",
+  "PlayerRemovalReverted",
+  "PlayerReplacementReverted",
 ]);
 
 function validateEnvelope(
@@ -140,6 +160,33 @@ function validateEnvelope(
   }
   if (state.phase === "ended") {
     return sessionError("SESSION_ENDED", "The session has ended.");
+  }
+  if (isSimpleSocial(state.config) && LEGACY_ONLY_CONTROLS.has(event.type)) {
+    return sessionError(
+      "POLICY_ACTION_NOT_ALLOWED",
+      "This control is not part of a simple social.",
+    );
+  }
+  if (
+    event.type === "NextGroupCalled" ||
+    event.type === "NextGroupChanged" ||
+    event.type === "NextGroupReleased"
+  ) {
+    if (!isSimpleSocial(state.config)) {
+      return sessionError(
+        "INVALID_CONFIG",
+        "Called groups require the simple-social policy.",
+      );
+    }
+    if (
+      event.type !== "NextGroupReleased" &&
+      simpleSessionTimeIsUp(state, event.at)
+    ) {
+      return sessionError(
+        "SESSION_TIME_UP",
+        "Session time is up; no new groups can be called.",
+      );
+    }
   }
   if (state.pausedBySeq !== null && BLOCKED_WHILE_PAUSED.has(event.type)) {
     return sessionError(

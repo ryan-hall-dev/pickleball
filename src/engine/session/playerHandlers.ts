@@ -10,11 +10,19 @@ import {
   type PresenceInterval,
 } from "./state";
 import { PLAYERS_PER_MATCH, type ParticipantId } from "./types";
+import { invalidateCalledSeat } from "./calledGroupHandlers";
+import {
+  isSimpleSocial,
+  reservedCourtId,
+  SIMPLE_SOCIAL_REST_MS,
+  validateSimpleParticipant,
+} from "./simplePolicy";
 
 /** Looks up a participant who must be present, not playing and not skipped. */
 export function requireAvailableParticipant(
   draft: StateDraft,
   participantId: ParticipantId,
+  now: number = draft.next.lastAt ?? -Infinity,
 ): SessionError | ParticipantState {
   const participantState = draft.next.participants[participantId];
   if (!participantState) {
@@ -33,7 +41,7 @@ export function requireAvailableParticipant(
       `${label} is already playing on ${playingCourtLabel(draft, participantState)}.`,
     );
   }
-  if (isSkipped(participantState)) {
+  if (isSkipped(participantState, now)) {
     return sessionError("PLAYER_SKIPPED", `${label} is skipped.`);
   }
   return participantState;
@@ -79,6 +87,10 @@ export const handlePlayerJoined: EventHandler<"PlayerJoined"> = (
     return sessionError("MALFORMED_EVENT", "PlayerJoined needs a participant.");
   }
   const existing = draft.next.participants[participant.participantId];
+  if (isSimpleSocial(draft.next.config)) {
+    const error = validateSimpleParticipant(participant);
+    if (error) return error;
+  }
   if (existing && isPresent(existing)) {
     return sessionError(
       "PLAYER_ALREADY_PRESENT",
@@ -122,6 +134,12 @@ export const handlePlayerJoinReverted: EventHandler<"PlayerJoinReverted"> = (
   const label = draft.participantLabel(participantId);
   const lastPresence =
     participantState.presence[participantState.presence.length - 1];
+  if (reservedCourtId(draft.next, participantId, event.at) !== null) {
+    return sessionError(
+      "UNDO_BLOCKED",
+      "Release this player's called group before undoing their arrival.",
+    );
+  }
   if (
     lastPresence?.startedBySeq !== target.event.seq ||
     lastPresence.to !== null
@@ -141,7 +159,10 @@ export const handlePlayerJoinReverted: EventHandler<"PlayerJoinReverted"> = (
   // earlier stay (a player can leave while skipped or locked) survives the undo.
   const joinSeq = target.event.seq;
   const lastSkip = participantState.skips[participantState.skips.length - 1];
-  if (isSkipped(participantState) && lastSkip.skippedBySeq > joinSeq) {
+  if (
+    isSkipped(participantState, event.at) &&
+    lastSkip.skippedBySeq > joinSeq
+  ) {
     return sessionError("UNDO_BLOCKED", `Un-skip ${label} first.`);
   }
   if ((participantState.lock?.lockedBySeq ?? -1) > joinSeq) {
@@ -188,6 +209,7 @@ export const handlePlayerLeft: EventHandler<"PlayerLeft"> = (draft, event) => {
     endedBySeq: event.seq,
   };
   draft.set("participants", participantId, { ...participantState, presence });
+  invalidateCalledSeat(draft, participantId);
   return null;
 };
 
@@ -230,15 +252,39 @@ export const handlePlayerSkipped: EventHandler<"PlayerSkipped"> = (
   const participantState = requireAvailableParticipant(
     draft,
     event.payload.participantId,
+    event.at,
   );
   if (isSessionError(participantState)) return participantState;
+  if (
+    isSimpleSocial(draft.next.config) &&
+    event.payload.returnsAt !== event.at + SIMPLE_SOCIAL_REST_MS
+  ) {
+    return sessionError("MALFORMED_EVENT", "Rest must last ten minutes.");
+  }
+  if (
+    !isSimpleSocial(draft.next.config) &&
+    event.payload.returnsAt !== undefined
+  ) {
+    return sessionError(
+      "POLICY_ACTION_NOT_ALLOWED",
+      "Timed rest requires the simple-social policy.",
+    );
+  }
   draft.set("participants", event.payload.participantId, {
     ...participantState,
     skips: [
       ...participantState.skips,
-      { from: event.at, to: null, skippedBySeq: event.seq },
+      {
+        from: event.at,
+        to: null,
+        skippedBySeq: event.seq,
+        ...(event.payload.returnsAt === undefined
+          ? {}
+          : { returnsAt: event.payload.returnsAt }),
+      },
     ],
   });
+  invalidateCalledSeat(draft, event.payload.participantId);
   return null;
 };
 
@@ -252,7 +298,11 @@ export const handlePlayerUnskipped: EventHandler<"PlayerUnskipped"> = (
   if (isSessionError(participantState)) return participantState;
   const skips = [...participantState.skips];
   const lastSkip = skips[skips.length - 1];
-  if (lastSkip?.skippedBySeq !== target.event.seq || lastSkip.to !== null) {
+  if (
+    lastSkip?.skippedBySeq !== target.event.seq ||
+    lastSkip.to !== null ||
+    !isSkipped(participantState, event.at)
+  ) {
     return sessionError(
       "PLAYER_NOT_SKIPPED",
       `${draft.participantLabel(participantId)} is not skipped by that action.`,

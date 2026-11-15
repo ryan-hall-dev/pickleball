@@ -15,6 +15,12 @@ import {
   type PlaySegment,
 } from "./state";
 import { PLAYERS_PER_TEAM, type MatchId, type ParticipantId } from "./types";
+import {
+  isSimpleSocial,
+  reservedCourtId,
+  simpleSessionTimeIsUp,
+  validateSimpleTeams,
+} from "./simplePolicy";
 
 /** Validates and starts a match at `event.at`; shared by `MatchStarted` and `SessionStarted.initialMatches`. */
 export function startMatch(
@@ -66,8 +72,43 @@ export function startMatch(
     );
   }
   const consumedLocks: Record<ParticipantId, PlayerLock> = {};
+  if (isSimpleSocial(draft.next.config)) {
+    if (simpleSessionTimeIsUp(draft.next, event.at))
+      return sessionError(
+        "SESSION_TIME_UP",
+        "Session time is up; finish the active games.",
+      );
+    const error = validateSimpleTeams(teamA, teamB, draft.next.participants);
+    if (error) return error;
+    const call = courtState.nextGroup;
+    if (assignment.calledEventId !== undefined || call) {
+      if (
+        !call ||
+        assignment.calledEventId !== call.calledEventId ||
+        JSON.stringify([teamA, teamB]) !==
+          JSON.stringify([call.teamA, call.teamB])
+      ) {
+        return sessionError(
+          "UNKNOWN_CALLED_GROUP",
+          "Start the current called group or explicitly change it first.",
+        );
+      }
+    }
+    for (const id of playerIds) {
+      const reserved = reservedCourtId(draft.next, id, event.at);
+      if (reserved !== null && reserved !== courtId)
+        return sessionError(
+          "PLAYER_RESERVED",
+          "A player is called for another court.",
+        );
+    }
+  }
   for (const participantId of playerIds) {
-    const participantState = requireAvailableParticipant(draft, participantId);
+    const participantState = requireAvailableParticipant(
+      draft,
+      participantId,
+      event.at,
+    );
     if (isSessionError(participantState)) return participantState;
     if (participantState.lock !== null) {
       consumedLocks[participantId] = participantState.lock;
@@ -103,10 +144,20 @@ export function startMatch(
     endedBySeq: null,
     segments,
     consumedLocks,
+    ...(isSimpleSocial(draft.next.config) && courtState.nextGroup
+      ? {
+          consumedCall: {
+            ...courtState.nextGroup,
+            teamA: [...courtState.nextGroup.teamA],
+            teamB: [...courtState.nextGroup.teamB],
+          },
+        }
+      : {}),
     queueOrderAtStart,
   });
   draft.set("courts", courtId, {
     ...courtState,
+    ...(isSimpleSocial(draft.next.config) ? { nextGroup: null } : {}),
     activeMatchId: matchId,
     matchIds: [...courtState.matchIds, matchId],
   });
@@ -200,12 +251,43 @@ export const handleMatchStartReverted: EventHandler<"MatchStartReverted"> = (
     );
   }
 
-  draft.remove("matches", matchId);
   const courtState = draft.next.courts[match.courtId];
+  if (match.consumedCall) {
+    if (courtState.nextGroup) {
+      return sessionError(
+        "UNDO_BLOCKED",
+        "Release the newer called group before undoing this start.",
+      );
+    }
+    for (const participantId of [
+      ...match.consumedCall.teamA,
+      ...match.consumedCall.teamB,
+    ]) {
+      if (
+        participantId !== null &&
+        reservedCourtId(draft.next, participantId, event.at) !== null
+      ) {
+        return sessionError(
+          "UNDO_BLOCKED",
+          "Release the player's newer called group before undoing this start.",
+        );
+      }
+    }
+  }
+  draft.remove("matches", matchId);
   draft.set("courts", match.courtId, {
     ...courtState,
     activeMatchId: null,
     matchIds: courtState.matchIds.filter((id) => id !== matchId),
+    ...(match.consumedCall
+      ? {
+          nextGroup: {
+            ...match.consumedCall,
+            teamA: [...match.consumedCall.teamA],
+            teamB: [...match.consumedCall.teamB],
+          },
+        }
+      : {}),
   });
   for (const segment of match.segments) {
     const participantState = draft.next.participants[segment.participantId];
@@ -306,6 +388,7 @@ function reopenMatch(
   draft: StateDraft,
   target: HistoryEntry,
   matchId: MatchId,
+  now: number,
 ): SessionError | null {
   const match = requireMatch(draft, matchId);
   if (isSessionError(match)) return match;
@@ -340,6 +423,11 @@ function reopenMatch(
   for (const segment of lineup) {
     const participantState = draft.next.participants[segment.participantId];
     const label = draft.participantLabel(segment.participantId);
+    if (reservedCourtId(draft.next, segment.participantId, now) !== null)
+      return sessionError(
+        "UNDO_BLOCKED",
+        "Release the player's called group before undoing the finish.",
+      );
     if (participantState.activeMatchId !== null) {
       return sessionError(
         "UNDO_BLOCKED",
@@ -398,6 +486,7 @@ export const handleMatchCompletionReverted: EventHandler<
     draft,
     target,
     targetEvent(target, "MatchCompleted").payload.matchId,
+    event.at,
   );
 
 export const handleMatchAbandonReverted: EventHandler<
@@ -407,6 +496,7 @@ export const handleMatchAbandonReverted: EventHandler<
     draft,
     target,
     targetEvent(target, "MatchAbandoned").payload.matchId,
+    event.at,
   );
 
 /** Index of `participantId`'s seat in an active match, or an error when the match or player doesn't qualify. */
@@ -468,8 +558,28 @@ export const handlePlayerReplaced: EventHandler<"PlayerReplaced"> = (
   if (isSessionError(match)) return match;
   const outIndex = requireSeatInActiveMatch(draft, match, outId, "replacement");
   if (typeof outIndex !== "number") return outIndex;
-  const incoming = requireAvailableParticipant(draft, inId);
+  const incoming = requireAvailableParticipant(draft, inId, event.at);
   if (isSessionError(incoming)) return incoming;
+  if (isSimpleSocial(draft.next.config)) {
+    if (reservedCourtId(draft.next, inId, event.at) !== null)
+      return sessionError(
+        "PLAYER_RESERVED",
+        "This player is called for another game.",
+      );
+    const lineup = currentLineup(match);
+    const team = (side: "A" | "B") =>
+      lineup
+        .filter((segment) => segment.team === side)
+        .map((segment) =>
+          segment.participantId === outId ? inId : segment.participantId,
+        );
+    const error = validateSimpleTeams(
+      team("A"),
+      team("B"),
+      draft.next.participants,
+    );
+    if (error) return error;
+  }
 
   const segments = takeOffCourt(draft, match, outIndex, event, countGameForOut);
   segments.push({
