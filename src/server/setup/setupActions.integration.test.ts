@@ -34,6 +34,7 @@ import {
   readSessionDraft,
   removeDraftParticipant,
   saveSessionDraft,
+  saveSimpleSessionDraft,
   setDraftParticipantDetails,
   saveSetup,
   startSessionDraft,
@@ -373,6 +374,195 @@ describe.skipIf(!localStack)("session setup drafts (local Supabase)", () => {
     // Then the socials, with their setups, sessions and courts.
     await deleteTestSocials(admin, createdSocialIds);
     vi.unstubAllEnvs();
+  });
+
+  describe("short Setup preparation", () => {
+    let simpleHost: TestHost;
+    let simpleCoHost: TestHost;
+    let sessionId: string;
+    const input = () => ({
+      sessionId,
+      name: "Short social",
+      courtCount: 2,
+      durationMinutes: 75,
+    });
+
+    beforeAll(async () => {
+      const simpleSocialId = await createTestSocial("Integration short Setup");
+      simpleHost = await signedInUser("Short Host", "host", simpleSocialId);
+      simpleCoHost = await signedInUser("Short Cohost", "host", simpleSocialId);
+      actingClient = simpleHost.client;
+      expect(
+        await startSessionDraft({ name: "Draft", ...plannedTimes(80) }),
+      ).toEqual({ ok: true, notice: null });
+      sessionId = (await openDraftFor(simpleHost)).sessionId;
+    });
+
+    it("lets an ordinary host resize session-local courts without changing catalogue or other settings", async () => {
+      actingClient = simpleHost.client;
+      expect(
+        await saveAtCurrentRevision(
+          saveInputFor(sessionId, {
+            location: "Preserved place",
+            hostName: "Preserved host",
+          }),
+        ),
+      ).toEqual({ ok: true });
+      const [before] = await socialSessionRows(simpleHost);
+      const catalogueBefore = await admin
+        .from("courts")
+        .select("*")
+        .eq("social_id", simpleHost.socialId);
+      const originalConfig = before.config_snapshot as Record<string, Json>;
+      const configWithMarker = {
+        ...originalConfig,
+        policyVersion: "simple-social-v1",
+        preparationMarker: "preserved",
+      };
+      const marked = await admin
+        .from("sessions")
+        .update({ config_snapshot: configWithMarker })
+        .eq("id", sessionId)
+        .eq("social_id", simpleHost.socialId);
+      expect(marked.error).toBeNull();
+      expect(
+        await saveSimpleSessionDraft(input(), before.draft_revision),
+      ).toEqual({ ok: true, draftRevision: before.draft_revision + 1 });
+      const grown = await openDraftFor(simpleHost);
+      expect(grown.config.courts).toHaveLength(2);
+      expect(
+        grown.config.courts.map((court) => [court.name, court.format]),
+      ).toEqual([
+        ["Court 1", "doubles"],
+        ["Court 2", "doubles"],
+      ]);
+      expect(
+        new Set(grown.config.courts.map((court) => court.courtId)).size,
+      ).toBe(2);
+      expect(
+        await saveSimpleSessionDraft(
+          { ...input(), name: "Same courts" },
+          grown.draftRevision,
+        ),
+      ).toMatchObject({ ok: true });
+      const unchanged = await openDraftFor(simpleHost);
+      expect(unchanged.config.courts).toEqual(grown.config.courts);
+      expect(
+        await saveSimpleSessionDraft(
+          { ...input(), courtCount: 1 },
+          unchanged.draftRevision,
+        ),
+      ).toMatchObject({ ok: true });
+      const shrunk = await openDraftFor(simpleHost);
+      expect(shrunk.config.courts).toEqual(grown.config.courts.slice(0, 1));
+      expect(
+        await saveSimpleSessionDraft(input(), shrunk.draftRevision),
+      ).toMatchObject({ ok: true });
+      const [after] = await socialSessionRows(simpleHost);
+      const afterConfig = after.config_snapshot as Record<string, Json>;
+      expect(afterConfig).toMatchObject({
+        ...configWithMarker,
+        courts: expect.any(Array),
+        matchFormat: "doubles",
+      });
+      const regrown = await openDraftFor(simpleHost);
+      expect(regrown.config.courts[0]).toEqual(grown.config.courts[0]);
+      expect(regrown.config.courts[1].courtId).not.toBe(
+        grown.config.courts[1].courtId,
+      );
+      expect(after).toMatchObject({
+        location: before.location,
+        host_name: before.host_name,
+        planned_start: before.planned_start,
+      });
+      expect(
+        Date.parse(after.planned_end) - Date.parse(after.planned_start),
+      ).toBe(75 * 60_000);
+      const catalogueAfter = await admin
+        .from("courts")
+        .select("*")
+        .eq("social_id", simpleHost.socialId);
+      expect(catalogueAfter).toEqual(catalogueBefore);
+    });
+
+    it("rejects invalid, stale, other-social and unauthorized saves without writes", async () => {
+      const before = await socialSessionRows(simpleHost);
+      const revision = before[0].draft_revision;
+      actingClient = simpleCoHost.client;
+      expect(await saveSimpleSessionDraft(input(), revision - 1)).toMatchObject(
+        { ok: false, isConflict: true },
+      );
+      expect(
+        await saveSimpleSessionDraft({ ...input(), courtCount: 0 }, revision),
+      ).toMatchObject({ ok: false });
+      expect(
+        await saveSimpleSessionDraft(
+          { ...input(), durationMinutes: 721 },
+          revision,
+        ),
+      ).toMatchObject({ ok: false });
+      expect(await saveSimpleSessionDraft(input(), -1)).toMatchObject({
+        ok: false,
+      });
+      actingClient = hostAlice.client;
+      expect(await saveSimpleSessionDraft(input(), revision)).toEqual({
+        ok: false,
+        message: DRAFT_NOT_OPEN,
+      });
+      for (const [client, denial] of [
+        [nonHostClient, "NOT_A_HOST"],
+        [signedOutClient, "SIGNED_OUT"],
+      ] as const) {
+        actingClient = client;
+        expect(await saveSimpleSessionDraft(input(), revision)).toEqual({
+          ok: false,
+          message: HOST_ACCESS_DENIAL_MESSAGES[denial],
+        });
+      }
+      expect(await socialSessionRows(simpleHost)).toEqual(before);
+    });
+
+    it("allows one concurrent save per revision and rejects a co-host's stale edit", async () => {
+      const draft = await openDraftFor(simpleHost);
+      actingClient = simpleHost.client;
+      const results = await Promise.all([
+        saveSimpleSessionDraft(
+          { ...input(), name: "Race A", courtCount: 3 },
+          draft.draftRevision,
+        ),
+        saveSimpleSessionDraft(
+          { ...input(), name: "Race B", courtCount: 4 },
+          draft.draftRevision,
+        ),
+      ]);
+      expect(results.filter((result) => result.ok)).toHaveLength(1);
+      expect(
+        results.filter((result) => !result.ok && result.isConflict),
+      ).toHaveLength(1);
+      const saved = await openDraftFor(simpleCoHost);
+      expect(saved.draftRevision).toBe(draft.draftRevision + 1);
+      expect(saved.config.courts).toHaveLength(saved.name === "Race A" ? 3 : 4);
+      actingClient = simpleCoHost.client;
+      expect(
+        await saveSimpleSessionDraft(input(), draft.draftRevision),
+      ).toMatchObject({ ok: false, isConflict: true });
+    });
+
+    it("refuses a live session", async () => {
+      const draft = await openDraftFor(simpleHost);
+      const changed = await admin
+        .from("sessions")
+        .update({ status: "live", started_at: new Date().toISOString() })
+        .eq("id", sessionId)
+        .eq("social_id", simpleHost.socialId);
+      expect(changed.error).toBeNull();
+      actingClient = simpleHost.client;
+      const before = await socialSessionRows(simpleHost);
+      expect(
+        await saveSimpleSessionDraft(input(), draft.draftRevision),
+      ).toEqual({ ok: false, message: DRAFT_NOT_OPEN });
+      expect(await socialSessionRows(simpleHost)).toEqual(before);
+    });
   });
 
   describe("authorisation", () => {

@@ -16,6 +16,7 @@ import {
   recommendedRotationPreferences,
   rotationPreferencesSchema,
   saveSessionDraftInputSchema,
+  saveSimpleSessionDraftInputSchema,
   startSessionDraftInputSchema,
 } from "./setupRules";
 
@@ -33,6 +34,50 @@ const validDraft = {
   changeoverMinutes: 2,
   rotation: recommendedRotationPreferences(),
 };
+
+describe("saveSimpleSessionDraftInputSchema", () => {
+  const input = {
+    sessionId: validDraft.sessionId,
+    name: validDraft.name,
+    courtCount: 2,
+    durationMinutes: 90,
+  };
+
+  it("normalises the name and accepts the technical bounds", () => {
+    expect(saveSimpleSessionDraftInputSchema.parse(input).name).toBe(
+      "Saturday social",
+    );
+    for (const courtCount of [1, 1000]) {
+      for (const durationMinutes of [1, 720]) {
+        expect(
+          saveSimpleSessionDraftInputSchema.safeParse({
+            ...input,
+            courtCount,
+            durationMinutes,
+          }).success,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it.each([
+    { sessionId: "invalid" },
+    { name: " " },
+    { name: "Bad\u0007name" },
+    { courtCount: 0 },
+    { courtCount: 1001 },
+    { courtCount: 1.5 },
+    { courtCount: Infinity },
+    { durationMinutes: 0 },
+    { durationMinutes: 721 },
+    { durationMinutes: 1.5 },
+  ])("rejects invalid short Setup input %j", (override) => {
+    expect(
+      saveSimpleSessionDraftInputSchema.safeParse({ ...input, ...override })
+        .success,
+    ).toBe(false);
+  });
+});
 
 describe("saveSessionDraftInputSchema", () => {
   it("tidies names and stores an empty location as null", () => {

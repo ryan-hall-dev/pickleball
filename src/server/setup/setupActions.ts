@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { CourtConfig, CourtFormat } from "@/engine/session";
@@ -20,6 +21,9 @@ import {
   type SessionDraft,
 } from "./setupDraft";
 import {
+  parseSessionDraftConfig,
+  saveSimpleSessionDraftInputSchema,
+  type SaveSimpleSessionDraftInput,
   setDraftParticipantDetailsInputSchema,
   type SetDraftParticipantDetailsInput,
   addClubCourtInputSchema,
@@ -44,6 +48,7 @@ import {
   type SavedSetupConfig,
   type StartSessionDraftInput,
 } from "./setupRules";
+import { sessionCourtsFromCount } from "./sessionCourtsFromCount";
 
 // Setup screen writes (plan §7 M4). Every action verifies the caller as a host
 // with getUser() first, then writes with the service-role client
@@ -373,6 +378,83 @@ export async function saveSessionDraft(
     return { ok: true, draftRevision: draftRevisionFrom(data) };
   } catch (error) {
     logActionFailure("Saving a session draft failed", host, error);
+    return { ok: false, message: SOMETHING_WENT_WRONG };
+  }
+}
+
+/** Preparation for short Setup; no Start or live UI is exposed by this action. */
+export async function saveSimpleSessionDraft(
+  input: SaveSimpleSessionDraftInput,
+  expectedDraftRevision: number,
+): Promise<SaveSessionDraftResult> {
+  const authorization = await authorizeCurrentHost("host");
+  if (!authorization.ok) {
+    return {
+      ok: false,
+      message: HOST_ACCESS_DENIAL_MESSAGES[authorization.reason],
+    };
+  }
+  const { host } = authorization;
+  const parsed = saveSimpleSessionDraftInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: firstIssueMessage(parsed.error) };
+  }
+  const parsedRevision = draftRevisionSchema.safeParse(expectedDraftRevision);
+  if (!parsedRevision.success) {
+    return { ok: false, message: SOMETHING_WENT_WRONG };
+  }
+
+  try {
+    const adminClient = createSupabaseAdminClient();
+    const { data: draft, error: readError } = await adminClient
+      .from("sessions")
+      .select(
+        "config_snapshot, draft_revision, location, host_name, planned_start",
+      )
+      .eq("id", parsed.data.sessionId)
+      .eq("social_id", host.socialId)
+      .eq("status", "draft")
+      .maybeSingle();
+    if (readError)
+      throw new Error(`Reading the draft failed: ${readError.message}`);
+    if (!draft) return { ok: false, message: DRAFT_NOT_OPEN };
+    if (draft.draft_revision !== parsedRevision.data) {
+      return { ok: false, message: DRAFT_CHANGED_ELSEWHERE, isConflict: true };
+    }
+    const courts = sessionCourtsFromCount(
+      parseSessionDraftConfig(draft.config_snapshot).courts,
+      parsed.data.courtCount,
+      randomUUID,
+    );
+    const plannedEnd = new Date(
+      Date.parse(draft.planned_start) +
+        parsed.data.durationMinutes * MS_PER_MINUTE,
+    ).toISOString();
+    // CAS checks again under the row lock: a co-host may have saved since the read.
+    const { data, error } = await adminClient.rpc("save_session_draft", {
+      p_actor_user_id: host.userId,
+      p_session_id: parsed.data.sessionId,
+      p_expected_draft_revision: parsedRevision.data,
+      p_name: parsed.data.name,
+      p_location: draft.location ?? "",
+      p_host_name: draft.host_name,
+      p_planned_start: draft.planned_start,
+      p_planned_end: plannedEnd,
+      p_config_patch: { courts, matchFormat: "doubles" } as unknown as Json,
+    });
+    if (error?.message === DRAFT_NOT_OPEN_ERROR) {
+      return { ok: false, message: DRAFT_NOT_OPEN };
+    }
+    if (error?.message === DRAFT_CHANGED_ELSEWHERE_ERROR) {
+      return { ok: false, message: DRAFT_CHANGED_ELSEWHERE, isConflict: true };
+    }
+    if (error?.code === POSTGRES_CHECK_VIOLATION) {
+      return { ok: false, message: "Check the session details and try again." };
+    }
+    if (error) throw new Error(`Saving the draft failed: ${error.message}`);
+    return { ok: true, draftRevision: draftRevisionFrom(data) };
+  } catch (error) {
+    logActionFailure("Saving a simple session draft failed", host, error);
     return { ok: false, message: SOMETHING_WENT_WRONG };
   }
 }

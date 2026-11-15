@@ -179,6 +179,21 @@ export const saveSessionDraftInputSchema = z
 export type SaveSessionDraftInput = z.input<typeof saveSessionDraftInputSchema>;
 export type ValidSessionDraft = z.output<typeof saveSessionDraftInputSchema>;
 
+/** Short Setup saves session-local courts; planned times remain draft placeholders. */
+export const saveSimpleSessionDraftInputSchema = z.object({
+  sessionId: z.uuid(),
+  name: shortLabelSchema("Enter a session name."),
+  courtCount: z.number().int().min(1).max(1000),
+  durationMinutes: wholeMinutesSchema({
+    min: 1,
+    max: MAX_SESSION_DURATION_MINUTES,
+  }),
+});
+
+export type SaveSimpleSessionDraftInput = z.input<
+  typeof saveSimpleSessionDraftInputSchema
+>;
+
 /** A new draft: the browser picks the default times (it knows the host's time zone). */
 export const startSessionDraftInputSchema = z
   .object({
