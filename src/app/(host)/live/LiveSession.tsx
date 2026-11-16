@@ -306,6 +306,9 @@ export function LiveSession({
                   selected={prepareCourtId === court.courtId}
                   onPrepare={() => setPrepareCourtId(court.courtId)}
                   onAction={act}
+                  undoOptions={session.undoOptions.filter(
+                    (option) => option.courtId === court.courtId,
+                  )}
                 />
               ))}
             </div>

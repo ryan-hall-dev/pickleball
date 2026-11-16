@@ -13,8 +13,10 @@ import type {
   LiveCommand,
   LiveCourt,
   LivePlayer,
+  LiveSessionView,
   LiveTeams,
 } from "@/server/live/liveTypes";
+import { CourtRecovery } from "./CourtRecovery";
 
 function Teams({
   teams,
@@ -64,6 +66,7 @@ export function LiveCourtCard({
   selected,
   onPrepare,
   onAction,
+  undoOptions,
 }: {
   court: LiveCourt;
   players: LivePlayer[];
@@ -73,6 +76,7 @@ export function LiveCourtCard({
   selected: boolean;
   onPrepare: () => void;
   onAction: (command: LiveCommand) => void;
+  undoOptions: LiveSessionView["undoOptions"];
 }) {
   const [editing, setEditing] = useState(false);
   const group = court.called ?? court.suggestion;
@@ -110,6 +114,14 @@ export function LiveCourtCard({
           Start the next group when all four are on court.
         </p>
       )}
+      <CourtRecovery
+        key={court.activeMatch?.matchId ?? "idle"}
+        court={court}
+        players={players}
+        undoOptions={undoOptions}
+        disabled={disabled}
+        onAction={onAction}
+      />
       <section
         aria-label={`Up next for ${court.name}`}
         className="mt-5 rounded-[20px] border border-blue-edge bg-blue-surface p-4"

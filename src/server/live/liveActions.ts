@@ -1,7 +1,10 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
+  findHistoryEntry,
+  compensationTargetSeq,
   isSimpleSocial,
   replay,
   SIMPLE_SOCIAL_REST_MS,
@@ -13,6 +16,7 @@ import { loadSessionLog } from "@/server/sessionLog";
 import {
   submitSessionAction,
   type NewSessionAction,
+  type SubmitSessionActionInput,
 } from "@/server/submitSessionAction";
 import { liveProjection } from "./liveProjection";
 import {
@@ -63,6 +67,7 @@ export async function readLiveSession(
       throw new Error(`Log replay failed at ${result.failedSeq}.`);
     if (!isSimpleSocial(result.state.config))
       return { ok: true, status: "legacy" };
+    const now = Math.max(Date.now(), result.state.lastAt ?? 0);
     return {
       ok: true,
       status: "session",
@@ -70,7 +75,13 @@ export async function readLiveSession(
         row.id,
         row.name,
         result.state,
-        Math.max(Date.now(), result.state.lastAt ?? 0),
+        now,
+        {
+          seq: result.state.lastSeq + 1,
+          at: now,
+          eventId: randomUUID(),
+          actorId: authorization.host.userId,
+        },
         parsed.data.prepareCourtId,
       ),
     };
@@ -133,6 +144,20 @@ function commandAction(
     }
     case "finish":
       return { type: "MatchCompleted", payload: { matchId: command.matchId } };
+    case "replace":
+      return {
+        type: "PlayerReplaced",
+        payload: {
+          matchId: command.matchId,
+          outId: command.outId,
+          inId: command.inId,
+          countGameForOut: false,
+        },
+      };
+    case "interrupt":
+      return { type: "MatchAbandoned", payload: { matchId: command.matchId } };
+    case "undo":
+      return null;
     case "rest":
       return {
         type: "PlayerSkipped",
@@ -199,39 +224,77 @@ export async function writeLiveAction(
     const landed = log.events.find(
       (event) => event.eventId === parsed.data.eventId,
     );
-    const eventTypes = {
-      call: "NextGroupCalled",
-      change: "NextGroupChanged",
-      release: "NextGroupReleased",
-      start: "MatchStarted",
-      finish: "MatchCompleted",
-      rest: "PlayerSkipped",
-      ready: "PlayerUnskipped",
-      leave: "PlayerLeft",
-      end: "SessionEnded",
-    } as const;
-    if (landed && landed.type !== eventTypes[parsed.data.command.kind])
-      return {
-        ok: false,
-        message: "That action ID was already used. Refresh and try again.",
-        outcome: "rejected",
-      };
-    const action = landed
-      ? ({ type: landed.type, payload: landed.payload } as NewSessionAction)
-      : commandAction(parsed.data.command, replayed.state, at);
-    if (!action)
-      return {
-        ok: false,
-        message: "The group or player changed. Refresh before trying again.",
-        outcome: "conflict",
-      };
+    const command = parsed.data.command;
+    let request: SubmitSessionActionInput["request"];
+    if (command.kind === "undo") {
+      const target = findHistoryEntry(replayed.state, command.targetSeq);
+      if (
+        !target ||
+        (target.event.type !== "MatchStarted" &&
+          target.event.type !== "MatchCompleted")
+      ) {
+        return {
+          ok: false,
+          message: "Only a game start or finish can be undone here.",
+          outcome: "rejected",
+        };
+      }
+      const undoType =
+        target.event.type === "MatchStarted"
+          ? "MatchStartReverted"
+          : "MatchCompletionReverted";
+      if (
+        landed &&
+        (landed.type !== undoType ||
+          compensationTargetSeq(landed) !== command.targetSeq)
+      ) {
+        return {
+          ok: false,
+          message: "That action ID was already used. Refresh and try again.",
+          outcome: "rejected",
+        };
+      }
+      request = { kind: "undo", targetSeq: command.targetSeq };
+    } else {
+      const eventTypes = {
+        call: "NextGroupCalled",
+        change: "NextGroupChanged",
+        release: "NextGroupReleased",
+        start: "MatchStarted",
+        finish: "MatchCompleted",
+        replace: "PlayerReplaced",
+        interrupt: "MatchAbandoned",
+        rest: "PlayerSkipped",
+        ready: "PlayerUnskipped",
+        leave: "PlayerLeft",
+        end: "SessionEnded",
+      } as const;
+      if (landed && landed.type !== eventTypes[command.kind]) {
+        return {
+          ok: false,
+          message: "That action ID was already used. Refresh and try again.",
+          outcome: "rejected",
+        };
+      }
+      const action = landed
+        ? ({ type: landed.type, payload: landed.payload } as NewSessionAction)
+        : commandAction(command, replayed.state, at);
+      if (!action) {
+        return {
+          ok: false,
+          message: "The group or player changed. Refresh before trying again.",
+          outcome: "conflict",
+        };
+      }
+      request = { kind: "action", action };
+    }
     const result = await submitSessionAction(
       client,
       {
         sessionId: parsed.data.sessionId,
         eventId: parsed.data.eventId,
         expectedLastSeq: parsed.data.expectedLastSeq,
-        request: { kind: "action", action },
+        request,
       },
       { now: () => at },
     );

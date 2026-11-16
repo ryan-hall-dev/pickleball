@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { replay } from "@/engine/session";
+import { playerMetrics, replay } from "@/engine/session";
 import type { Database, Json } from "@/lib/database.types";
 import * as adminClientModule from "@/lib/supabase/admin";
 import { approveCheckin } from "@/server/checkin/hostCheckinActions";
@@ -486,6 +486,279 @@ describe.skipIf(!localStack)("simple live host controls", () => {
       factory.mockRestore();
       actingClient = host;
     }
+  });
+  it("replaces only eligible valid players, interrupts without credit, and safely recovers starts/finishes", async () => {
+    actingClient = host;
+    const teams = {
+      teamA: [participantIds[0], participantIds[4]],
+      teamB: [participantIds[1], participantIds[5]],
+    };
+    async function startGame() {
+      const callId = randomUUID();
+      expect(
+        await write({ kind: "call", courtId, ...teams }, undefined, callId),
+      ).toMatchObject({ ok: true });
+      const matchId = randomUUID();
+      expect(
+        await write({ kind: "start", courtId, calledEventId: callId, matchId }),
+      ).toMatchObject({ ok: true });
+      return { callId, matchId, startSeq: (await view()).lastSeq };
+    }
+    async function state() {
+      const result = replay((await loadSessionLog(host, sessionId))!.events);
+      if (!result.ok) throw new Error(result.error.message);
+      return result.state;
+    }
+    const beforeGames = new Map(
+      playerMetrics(await state(), Date.now()).map((player) => [
+        player.participantId,
+        player.gamesCompleted,
+      ]),
+    );
+    const first = await startGame();
+    expect(
+      await write({
+        kind: "replace",
+        matchId: first.matchId,
+        outId: participantIds[0],
+        inId: participantIds[1],
+      }),
+    ).toMatchObject({ ok: false, outcome: "rejected" });
+    const additionalFemale = (await view()).players.find(
+      (player) =>
+        player.gender === "female" &&
+        !participantIds.includes(player.participantId),
+    )!;
+    const reserve = randomUUID();
+    expect(
+      await write(
+        {
+          kind: "call",
+          courtId,
+          teamA: [participantIds[2], participantIds[6]],
+          teamB: [participantIds[3], additionalFemale.participantId],
+        },
+        undefined,
+        reserve,
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      await write({
+        kind: "replace",
+        matchId: first.matchId,
+        outId: participantIds[0],
+        inId: participantIds[2],
+      }),
+    ).toMatchObject({
+      ok: false,
+      outcome: "rejected",
+      message: expect.stringContaining("called"),
+    });
+    expect(
+      await write({ kind: "release", calledEventId: reserve }),
+    ).toMatchObject({ ok: true });
+    expect(
+      await write({
+        kind: "replace",
+        matchId: first.matchId,
+        outId: participantIds[0],
+        inId: participantIds[6],
+      }),
+    ).toMatchObject({ ok: false, outcome: "rejected" });
+    const replacement = {
+      kind: "replace" as const,
+      matchId: first.matchId,
+      outId: participantIds[0],
+      inId: participantIds[2],
+    };
+    const replaceId = randomUUID();
+    const beforeReplace = await view();
+    expect(
+      await write(replacement, beforeReplace.lastSeq, replaceId),
+    ).toMatchObject({ ok: true });
+    expect(
+      await write(replacement, beforeReplace.lastSeq, replaceId),
+    ).toMatchObject({ ok: true, wasDuplicate: true });
+    const replaced = await state();
+    const outgoing = replaced.matches[first.matchId].segments.find(
+      (segment) => segment.participantId === participantIds[0],
+    )!;
+    const incoming = replaced.matches[first.matchId].segments.find(
+      (segment) => segment.participantId === participantIds[2],
+    )!;
+    expect(outgoing.to).not.toBeNull();
+    expect(outgoing.countGameForOut).toBe(false);
+    expect(incoming.team).toBe(outgoing.team);
+    expect(
+      await write({ kind: "finish", matchId: first.matchId }),
+    ).toMatchObject({ ok: true });
+    const finished = await view();
+    const finishSeq = finished.lastSeq;
+    const metrics = playerMetrics(await state(), Date.now());
+    expect(
+      metrics.find((player) => player.participantId === participantIds[0])!
+        .gamesCompleted,
+    ).toBe(beforeGames.get(participantIds[0]));
+    expect(
+      metrics.find((player) => player.participantId === participantIds[2])!
+        .gamesCompleted,
+    ).toBe(beforeGames.get(participantIds[2])! + 1);
+    expect(finished.undoOptions).toEqual([
+      { courtId, matchId: first.matchId, targetSeq: finishSeq, kind: "finish" },
+    ]);
+    const undoId = randomUUID();
+    expect(
+      await write(
+        { kind: "undo", targetSeq: finishSeq },
+        finished.lastSeq,
+        undoId,
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      await write(
+        { kind: "undo", targetSeq: finishSeq },
+        finished.lastSeq,
+        undoId,
+      ),
+    ).toMatchObject({ ok: true, wasDuplicate: true });
+    expect((await view()).courts[0].activeMatch?.matchId).toBe(first.matchId);
+    expect(
+      await write({ kind: "undo", targetSeq: first.startSeq }),
+    ).toMatchObject({ ok: false, outcome: "rejected" });
+    const interruptId = randomUUID();
+    const beforeInterrupt = await view();
+    expect(
+      await write(
+        { kind: "interrupt", matchId: first.matchId },
+        beforeInterrupt.lastSeq,
+        interruptId,
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      await write(
+        { kind: "interrupt", matchId: first.matchId },
+        beforeInterrupt.lastSeq,
+        interruptId,
+      ),
+    ).toMatchObject({ ok: true, wasDuplicate: true });
+    const interrupted = await state();
+    const at = interrupted.matches[first.matchId].endedAt!;
+    expect(interrupted.matches[first.matchId].status).toBe("abandoned");
+    const afterMetrics = playerMetrics(interrupted, at);
+    for (const id of [
+      participantIds[2],
+      participantIds[1],
+      participantIds[4],
+      participantIds[5],
+    ]) {
+      expect(
+        afterMetrics.find((player) => player.participantId === id),
+      ).toMatchObject({
+        status: "waiting",
+        currentWaitMs: 0,
+        gamesCompleted: beforeGames.get(id),
+      });
+    }
+    const row = await admin
+      .from("matches")
+      .select("status")
+      .eq("session_id", sessionId)
+      .eq("id", first.matchId)
+      .single();
+    expect(row.error).toBeNull();
+    expect(row.data!.status).toBe("abandoned");
+    expect((await view()).undoOptions).toEqual([]);
+
+    const second = await startGame();
+    const beforeUndoStart = await view();
+    const undoStartId = randomUUID();
+    expect(beforeUndoStart.undoOptions).toEqual([
+      {
+        courtId,
+        matchId: second.matchId,
+        targetSeq: second.startSeq,
+        kind: "start",
+      },
+    ]);
+    expect(
+      await write(
+        { kind: "undo", targetSeq: second.startSeq },
+        beforeUndoStart.lastSeq,
+        undoStartId,
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      await write(
+        { kind: "undo", targetSeq: second.startSeq },
+        beforeUndoStart.lastSeq,
+        undoStartId,
+      ),
+    ).toMatchObject({ ok: true, wasDuplicate: true });
+    expect((await view()).courts[0]).toMatchObject({
+      activeMatch: null,
+      called: { calledEventId: second.callId, ...teams },
+    });
+    expect((await view()).undoOptions).toEqual([]);
+    expect(await write({ kind: "undo", targetSeq: 1 })).toMatchObject({
+      ok: false,
+      outcome: "rejected",
+    });
+    expect(
+      await write({ kind: "undo", targetSeq: (await view()).lastSeq }),
+    ).toMatchObject({ ok: false, outcome: "rejected" });
+    expect(
+      await write({ kind: "release", calledEventId: second.callId }),
+    ).toMatchObject({ ok: true });
+    const third = await startGame();
+    expect(
+      await write({ kind: "finish", matchId: third.matchId }),
+    ).toMatchObject({ ok: true });
+    const unsafeFinish = (await view()).lastSeq;
+    expect(
+      await write(
+        { kind: "undo", targetSeq: unsafeFinish },
+        unsafeFinish,
+        undoId,
+      ),
+    ).toMatchObject({ ok: false, outcome: "rejected" });
+    expect(
+      await write({ kind: "rest", participantId: participantIds[0] }),
+    ).toMatchObject({ ok: true });
+    expect((await view()).undoOptions).toEqual([]);
+    expect(
+      await write({ kind: "undo", targetSeq: unsafeFinish }),
+    ).toMatchObject({ ok: false, outcome: "rejected" });
+    const resting = (await view()).players.find(
+      (player) => player.participantId === participantIds[0],
+    )!;
+    expect(
+      await write({
+        kind: "ready",
+        participantId: participantIds[0],
+        targetSeq: resting.skipSeq!,
+      }),
+    ).toMatchObject({ ok: true });
+    actingClient = otherHost;
+    for (const command of [
+      {
+        kind: "replace",
+        matchId: third.matchId,
+        outId: participantIds[0],
+        inId: participantIds[2],
+      },
+      { kind: "interrupt", matchId: third.matchId },
+      { kind: "undo", targetSeq: unsafeFinish },
+    ] satisfies LiveCommand[]) {
+      expect(
+        await writeLiveAction({
+          sessionId,
+          eventId: randomUUID(),
+          expectedLastSeq: unsafeFinish,
+          command,
+        }),
+      ).toMatchObject({ ok: false, outcome: "rejected" });
+    }
+    actingClient = host;
   });
   it("rest freezes wait and ready restores it; deadline blocks calls/starts and end releases groups", async () => {
     const player = participantIds[0];

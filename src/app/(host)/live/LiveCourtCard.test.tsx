@@ -51,6 +51,7 @@ it("uses court UUIDs to exclude another called group's players even when labels 
       selected={false}
       onPrepare={vi.fn()}
       onAction={vi.fn()}
+      undoOptions={[]}
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Change players" }));
@@ -65,4 +66,64 @@ it("uses court UUIDs to exclude another called group's players even when labels 
       within(picker).queryByRole("option", { name: /Other call/ }),
     ).toBeNull();
   }
+});
+
+it("closes a recovery confirmation when a co-host changes the active match", () => {
+  const onAction = vi.fn();
+  const players: LivePlayer[] = Array.from({ length: 4 }, (_, index) => ({
+    participantId: `a0000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    name: `Player ${index + 1}`,
+    skill: "intermediate",
+    gender: "male",
+    status: "playing",
+    currentWaitMs: null,
+    returnsAt: null,
+    skipSeq: null,
+    calledCourtId: null,
+    calledCourtName: null,
+  }));
+  const court: LiveCourt = {
+    courtId: "c0000000-0000-4000-8000-000000000001",
+    name: "Court 1",
+    called: null,
+    suggestion: null,
+    activeMatch: {
+      matchId: "d0000000-0000-4000-8000-000000000001",
+      startedAt: 0,
+      teamA: players.slice(0, 2).map((player) => player.participantId),
+      teamB: players.slice(2).map((player) => player.participantId),
+    },
+  };
+  const props = {
+    players,
+    now: 0,
+    timeIsUp: false,
+    disabled: false,
+    selected: false,
+    onPrepare: vi.fn(),
+    onAction,
+    undoOptions: [],
+  };
+  const { rerender } = render(<LiveCourtCard {...props} court={court} />);
+  fireEvent.click(screen.getByText("Court options"));
+  fireEvent.click(screen.getByRole("button", { name: "End as interrupted" }));
+  expect(
+    screen.getByRole("group", { name: "Confirm interrupted game" }),
+  ).toBeInTheDocument();
+  rerender(
+    <LiveCourtCard
+      {...props}
+      court={{
+        ...court,
+        activeMatch: {
+          ...court.activeMatch!,
+          matchId: "d0000000-0000-4000-8000-000000000002",
+        },
+      }}
+    />,
+  );
+  expect(
+    screen.queryByRole("group", { name: "Confirm interrupted game" }),
+  ).toBeNull();
+  expect(onAction).not.toHaveBeenCalled();
 });

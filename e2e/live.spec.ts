@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import {
   adminClient,
@@ -186,4 +187,167 @@ test("a host runs a game, returns its four players to waiting and rests one", as
   if (endedEventsError) throw endedEventsError;
   expect(endedEvents).toHaveLength(7);
   expect(endedEvents?.at(-1)?.type).toBe("SessionEnded");
+});
+
+test("a host safely undoes start/finish, replaces a player and ends an interrupted game", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  if (testInfo.project.name === "mobile")
+    await page.setViewportSize({ width: 390, height: 844 });
+  await useRandomClientIp(page);
+  const { socialId } = await signInAsNewManager(page, "live-recovery");
+  await page.getByRole("button", { name: "Start a new session" }).click();
+  await page.getByLabel("Session name").fill("Recovery social");
+  await page.getByLabel("Court count").fill("1");
+  await page.getByLabel("Session duration (minutes)").fill("75");
+  await expect(page.getByRole("main").getByRole("status")).toHaveText("Saved");
+  const { data: draft, error: draftError } = await adminClient
+    .from("sessions")
+    .select("id")
+    .eq("social_id", socialId)
+    .eq("status", "draft")
+    .single();
+  if (draftError) throw draftError;
+  const roster = Array.from({ length: 5 }, (_, index) => ({
+    id: randomUUID(),
+    social_id: socialId,
+    session_id: draft.id,
+    first_name: `Recovery${index + 1}`,
+    last_name: "Player",
+    gender: "male",
+    skill_level: "intermediate" as const,
+  }));
+  const { error: playersError } = await adminClient
+    .from("session_participants")
+    .insert(roster);
+  if (playersError) throw playersError;
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Start session", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Start Recovery social?" })
+    .getByRole("button", { name: "Confirm start" })
+    .click();
+  await expect(page).toHaveURL(/\/live$/);
+  const court = page.getByRole("article", { name: "Court 1", exact: true });
+  const waiting = page.getByRole("region", { name: /^Waiting/ });
+  const restButtons = waiting.getByRole("button", { name: /^Rest / });
+  await court.getByRole("button", { name: "Prepare next four" }).click();
+  await court.getByRole("button", { name: "Call these four" }).click();
+  await court.getByRole("button", { name: "Start these four" }).click();
+  await expect(restButtons).toHaveCount(1);
+  await court.getByText("Court options", { exact: true }).click();
+  await court.getByRole("button", { name: "Undo game start" }).click();
+  await expect(restButtons).toHaveCount(5);
+  await expect(
+    court.getByRole("heading", { name: "Up next · Called" }),
+  ).toBeVisible();
+  await court.getByRole("button", { name: "Start these four" }).click();
+  await court.getByRole("button", { name: "Game finished" }).click();
+  await expect(restButtons).toHaveCount(5);
+  await court.getByText("Court options", { exact: true }).click();
+  await court.getByRole("button", { name: "Undo game finish" }).click();
+  await expect(restButtons).toHaveCount(1);
+  await expect(
+    court.getByRole("button", { name: "Game finished" }),
+  ).toBeVisible();
+  // Reopening a match resets its recovery panel to avoid stale confirmations.
+  await court.getByText("Court options", { exact: true }).click();
+  const incomingName = (await restButtons
+    .first()
+    .getAttribute("aria-label"))!.replace("Rest ", "");
+  const incoming = roster.find(
+    (player) => `${player.first_name} ${player.last_name}` === incomingName,
+  )!;
+  await court
+    .getByRole("button", { name: "Replace player", exact: true })
+    .click();
+  const replacement = court.getByRole("form", {
+    name: "Replace player on Court 1",
+  });
+  const outgoingId = await replacement
+    .getByLabel("Player leaving the game")
+    .inputValue();
+  const outgoing = roster.find((player) => player.id === outgoingId)!;
+  await replacement.getByLabel("Replacement player").selectOption(incoming.id);
+  await replacement
+    .getByRole("button", { name: "Confirm replacement" })
+    .click();
+  await expect(replacement).not.toBeVisible();
+  await expect(court.getByText(incomingName, { exact: true })).toBeVisible();
+  await expect(
+    court.getByRole("button", { name: "Undo game start" }),
+  ).toHaveCount(0);
+  await waiting
+    .getByRole("button", {
+      name: `Mark ${outgoing.first_name} ${outgoing.last_name} as left`,
+      exact: true,
+    })
+    .click();
+  await expect(restButtons).toHaveCount(0);
+  await court
+    .getByRole("button", { name: "Replace player", exact: true })
+    .click();
+  await expect(court.getByRole("status")).toHaveText(
+    /No valid replacement is available/,
+  );
+  await expect(
+    court.getByRole("button", { name: "Confirm replacement" }),
+  ).toBeDisabled();
+  await court
+    .getByRole("button", { name: "End as interrupted", exact: true })
+    .click();
+  const interrupted = court.getByRole("group", {
+    name: "Confirm interrupted game",
+  });
+  await expect(interrupted).toContainText("No completed game is counted");
+  await interrupted
+    .getByRole("button", { name: "Confirm interrupted game", exact: true })
+    .click();
+  await expect(restButtons).toHaveCount(4);
+  await expect(court.getByText("Court free", { exact: true })).toBeVisible();
+  await expect(
+    waiting.getByText("Nobody resting.", { exact: true }),
+  ).toBeVisible();
+  await expect(court.getByRole("button", { name: /Undo game/ })).toHaveCount(0);
+  const { data: events, error: eventsError } = await adminClient
+    .from("session_events")
+    .select("type,payload")
+    .eq("session_id", draft.id)
+    .order("seq");
+  if (eventsError) throw eventsError;
+  expect(events?.map((event) => event.type)).toEqual([
+    "SessionStarted",
+    "NextGroupCalled",
+    "MatchStarted",
+    "MatchStartReverted",
+    "MatchStarted",
+    "MatchCompleted",
+    "MatchCompletionReverted",
+    "PlayerReplaced",
+    "PlayerLeft",
+    "MatchAbandoned",
+  ]);
+  expect(
+    events?.find((event) => event.type === "PlayerReplaced")?.payload,
+  ).toMatchObject({
+    outId: outgoing.id,
+    inId: incoming.id,
+    countGameForOut: false,
+  });
+  const { data: matches, error: matchesError } = await adminClient
+    .from("matches")
+    .select("status")
+    .eq("session_id", draft.id);
+  if (matchesError) throw matchesError;
+  expect(matches).toEqual([{ status: "abandoned" }]);
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    ),
+  ).toBeLessThanOrEqual(0);
 });

@@ -1,6 +1,6 @@
 # Simple social MVP: check in, see the wait, prepare the next four
 
-Status: **in-progress — basic Setup/live slice verified, 2026-11-16**. Session-only participants, simple scheduling, short Setup and the basic live workflow are implemented. Rare recovery controls, remaining edge-case coverage and a real social pilot remain. Nothing is pushed or applied to the hosted project.
+Status: **in-progress — Setup/live and recovery controls verified, 2026-11-16**. Session-only participants, simple scheduling, short Setup and the basic live workflow are implemented. Remaining edge-case browser coverage, minor UI polish and a real social pilot remain. Nothing is pushed or applied to the hosted project.
 Branch: `feature/session-manager-mvp`.
 Date: 2026-11-14. Updated with the subsequent decisions made in this conversation.
 Phone mockup: `docs/designs/simple-social/phone-review.html` (design review only; illustrative data).
@@ -11,7 +11,7 @@ Phone mockup: `docs/designs/simple-social/phone-review.html` (design review only
 - Basic live Courts/Up next, fixed calls and edited groups, separate start/finish, Waiting/rest/ready/leave, check-ins and confirmed End are implemented. Server writes retain authorization, UUID idempotency and sequence protection. Uncertain writes retain the same-event retry; rejected/conflicting writes release controls after refresh.
 - Public check-in shows draft status/duration and actual live clocks, with honest unavailable timing for invalid legacy durations. Additive function migrations through `20261115120000` are applied locally only.
 - Browser regressions prove the main phone journey, persistence, rest/ready and consecutive sessions without a full reload. The start modal closes before navigation; new session UUIDs reset retained Live state. Real-database tests prove a raced live approval rolls back and same-event retry adds exactly one participant/event.
-- **Next increment:** rare mid-game replacement, End as interrupted and safe start/finish Undo. Also retain follow-up coverage for live approval/co-host/offline/deadline browser edge cases and minor UI copy/status polish. Existing unit/integration coverage is not a substitute for those browser cases or a real social pilot.
+- Rare court-menu replacement, confirmed End as interrupted and engine-approved start/finish Undo are implemented. Replacement preserves the seat/team and partial time; only final players receive completed-game credit. Recovery state is keyed by match UUID so co-host changes dismiss stale confirmation. **Next:** remaining approval/co-host/offline/deadline browser edge cases, UI copy/status polish and the pilot. Existing unit/integration coverage is not a substitute for those browser cases or a real social pilot.
 
 ## Goal
 
@@ -160,6 +160,16 @@ Each increment is implemented, reviewed, tested, committed on the existing branc
 4. **Phone live workflow** — agent: implementer. Courts, Game finished, next-four suggestions, host replacements, waiting list and timed rest. Complete the live check-in approval path: the database supports it, but today's host action does not provide the full flow. Persist the agreed called-group commitments for co-hosts; define cancel/release, replacement, court closure and session-end behaviour. Revalidate eligibility and hard group/team rules at actual start, even for a confirmed group. Suggestions remain derived. Files: new live route, existing session actions/handlers, minimal supporting migrations only as required.
 5. **Prune and pilot** — agent: implementer/researcher. Remove unreferenced old UI and old-only runtime scoring paths, retain replay/compatibility and useful tests, update `DESIGN.md`, `AGENTS.md`, ADRs and old plans. Run a real social pilot before adding further features.
 
+## Recovery increment — 2026-11-16
+
+Approved scope, following the basic slice `1e27b2f`:
+
+- [x] Server whitelist and projection: same-seat valid replacement; End as interrupted; Undo restricted to original game starts/finishes and offered only when canonical engine compensation is safe. Preserve actor/social checks, sequence CAS, same-event retries and explicit failure outcomes. No schema change.
+- [x] Rare court-menu controls and focused phone/browser recovery journey. Normal finish/start stays two separate taps without new mandatory modals. Interrupted requires explicit confirmation; rest remains separate.
+- [x] Independent review and combined unit/integration, database and production-browser checks; update this plan/roadmap/handoff and commit locally.
+
+Replacement preserves partial playing time; the outgoing player returns to waiting and receives no completed-game credit. The final four receive credit if the game completes. No new scoring or credit toggle is exposed. Existing engine events and compensation remain the source of truth; no generic action-history UI or broad Undo is introduced. The real social pilot and remaining edge-case browser coverage remain separate work.
+
 ## Verification and acceptance
 
 - pgTAP/integration: same-session normalised-name uniqueness under concurrent approve/add, session-scoped device access, fresh details next session, social isolation, authorisation and atomic start/finish/next-group writes.
@@ -180,6 +190,8 @@ Each increment is implemented, reviewed, tested, committed on the existing branc
 - Rollback pairs the pre-change code commit with its verified backup if a schema change prevents running the old code. Any restore needs Ryan's approval because it discards later local writes. Post-change checks include replaying existing logs, comparing preserved record counts, and verifying social isolation.
 
 ## Log
+
+- 2026-11-16: **recovery increment completed locally.** Added same-seat valid replacement, confirmed interrupted-game ending and recent canonical engine-approved start/finish Undo; no engine or schema changes. Exact-target duplicate recovery, invalid/reserved replacement, interrupted wait/game accounting and unsafe Undo are verified against local PostgreSQL. Fixed a review finding by keying recovery state to the active match UUID; co-host changes now dismiss old confirmation. Independent review has no blockers. Final gates: 869 unit/integration tests (70 files), 541 pgTAP assertions, 47 production-browser tests with five existing duplicate-project exclusions, lint/typecheck/format/build. Recovery browser tests pass desktop/mobile and assert ten ordered events and an abandoned-only match row. Audit: one moderate, zero high/critical, no dependency changes. No push/hosted action, migration, seed, main reset or old-social cleanup. Remaining browser edges, minor UI polish and a real pilot stay open.
 
 - 2026-11-16: **basic Setup/live vertical slice verified and completed locally.** Short Setup, usable live destination and truthful public timing now work together; rare recovery controls remain a follow-on increment. Fixed unknown/rejected/conflict write recovery, actual-call polling across cached Activity routes, UUID-based reservation eligibility, the retained Start modal, and retained session A state when starting B. Independent final review has no blockers. Final checks: 861 unit/integration tests (69 files), 541 pgTAP assertions, 45 production-browser tests and five existing duplicate-project exclusions, lint/typecheck/format/build; local public/private schema drift is clean. All six original protected snapshots remain unchanged (551 sessions, 1,630 participants, 1,523 events, 259 matches, one request, zero saved setups); nine migration-closed logs and their matches replay correctly. Migrations `20261115110000`/`20261115120000` were backup/restore/scratch-rehearsed and applied locally by Claude; no new migration was applied by Codex in this continuation. No dependency changes; last audit one moderate and zero high/critical. No push, hosted operations, seed, working-database reset or cleanup of old test socials. Full phone-pilot and browser edge-case limitations remain explicit above.
 

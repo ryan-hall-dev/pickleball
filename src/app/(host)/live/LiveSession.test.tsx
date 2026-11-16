@@ -62,6 +62,7 @@ function sessionView(lastSeq: number): LiveSessionView {
     endedAt: null,
     deadline: NOW + 3_600_000,
     timeIsUp: false,
+    undoOptions: [],
     courts: [
       {
         courtId: "c0000000-0000-4000-8000-000000000001",

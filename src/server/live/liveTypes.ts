@@ -37,6 +37,13 @@ export interface LiveSessionView {
   timeIsUp: boolean;
   courts: LiveCourt[];
   players: LivePlayer[];
+  undoOptions: LiveUndoOption[];
+}
+export interface LiveUndoOption {
+  courtId: string;
+  matchId: string;
+  targetSeq: number;
+  kind: "start" | "finish";
 }
 export type ReadLiveResult =
   | { ok: true; status: "session"; session: LiveSessionView }
@@ -60,6 +67,14 @@ export const liveCommandSchema = z.discriminatedUnion("kind", [
     matchId: z.uuid(),
   }),
   z.object({ kind: z.literal("finish"), matchId: z.uuid() }),
+  z.object({
+    kind: z.literal("replace"),
+    matchId: z.uuid(),
+    outId: z.uuid(),
+    inId: z.uuid(),
+  }),
+  z.object({ kind: z.literal("interrupt"), matchId: z.uuid() }),
+  z.object({ kind: z.literal("undo"), targetSeq: z.number().int().positive() }),
   z.object({ kind: z.literal("rest"), participantId: z.uuid() }),
   z.object({
     kind: z.literal("ready"),

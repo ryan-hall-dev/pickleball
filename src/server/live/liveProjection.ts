@@ -1,13 +1,51 @@
 import { simpleRecommend } from "@/engine/schedule/simpleRecommend";
 import {
   currentLineup,
+  compensate,
+  type EventMeta,
   participantName,
   playerMetrics,
   simpleSessionDeadline,
   simpleSessionTimeIsUp,
   type SessionState,
 } from "@/engine/session";
-import type { LiveSessionView } from "./liveTypes";
+import type { LiveSessionView, LiveUndoOption } from "./liveTypes";
+
+function recentUndoOptions(
+  state: SessionState,
+  probe: EventMeta,
+): LiveUndoOption[] {
+  if (state.phase !== "live") return [];
+  const seenCourts = new Set<string>();
+  const options: LiveUndoOption[] = [];
+  // Stop at each court's latest start, even if undone: never surface an older
+  // game merely because the host just recovered from a newer accidental start.
+  for (let index = state.history.length - 1; index >= 0; index -= 1) {
+    const entry = state.history[index];
+    if (entry.event.type !== "MatchStarted") continue;
+    const { courtId, matchId } = entry.event.payload;
+    if (seenCourts.has(courtId)) continue;
+    seenCourts.add(courtId);
+    const match = state.matches[matchId];
+    if (
+      !match ||
+      entry.compensatedBySeq !== null ||
+      match.status === "abandoned"
+    )
+      continue;
+    const targetSeq =
+      match.status === "active" ? match.startedBySeq : match.endedBySeq;
+    if (targetSeq !== null && compensate(state, targetSeq, probe).ok) {
+      options.push({
+        courtId,
+        matchId,
+        targetSeq,
+        kind: match.status === "active" ? "start" : "finish",
+      });
+    }
+  }
+  return options;
+}
 
 /** Compact derived phone view; no action log or historical match details cross the boundary. */
 export function liveProjection(
@@ -15,6 +53,7 @@ export function liveProjection(
   name: string,
   state: SessionState,
   now: number,
+  probe: EventMeta,
   prepareCourtId?: string,
 ): LiveSessionView {
   const suggestions = simpleRecommend(
@@ -91,5 +130,6 @@ export function liveProjection(
     timeIsUp: simpleSessionTimeIsUp(state, now),
     courts,
     players,
+    undoOptions: recentUndoOptions(state, probe),
   };
 }
