@@ -11,3 +11,5 @@ Status: draft | planned | in-progress | blocked | done
 | Simple social MVP | [plans/simple-social-mvp.md](plans/simple-social-mvp.md) | Setup/live + recovery + browser edge cases verified; real pilot pending | feature/session-manager-mvp |
 
 | Simple social pilot | [plans/simple-social-pilot.md](plans/simple-social-pilot.md) | prepared; social/host/date/environment and field observation pending | feature/session-manager-mvp |
+
+| First social launch | [plans/social-launch.md](plans/social-launch.md) | empty pilot DB created; CLI sign-ins, SMTP, schema/deploy approval and phone rehearsal pending | feature/session-manager-mvp |
