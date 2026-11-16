@@ -39,7 +39,7 @@ vi.mock("../setup/PendingCheckinTray", () => ({
     approveDecision: NonNullable<typeof tray.approveDecision>;
   }) => {
     tray.approveDecision = props.approveDecision;
-    return null;
+    return <section aria-label="Check-ins waiting" />;
   },
 }));
 
@@ -408,5 +408,28 @@ describe("LiveSession glanceable controls", () => {
       sessionId: SESSION_ID,
       prepareCourtId: sessionView(7).courts[0].courtId,
     });
+  });
+});
+
+describe("LiveSession layout", () => {
+  it("shows check-ins first, then waiting players, then courts", async () => {
+    await renderLive();
+    const checkIns = screen.getByRole("region", { name: "Check-ins waiting" });
+    const waiting = screen.getByRole("region", { name: /^Waiting/ });
+    const courts = screen.getByRole("heading", { name: "Courts & Up next" });
+    const follows = (earlier: Element, later: Element) =>
+      Boolean(
+        earlier.compareDocumentPosition(later) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    expect(follows(checkIns, waiting)).toBe(true);
+    expect(follows(waiting, courts)).toBe(true);
+    // The jump links follow the same order.
+    expect(
+      screen
+        .getAllByRole("link")
+        .map((link) => link.textContent)
+        .filter((text) => ["Check-ins", "Waiting", "Courts"].includes(text!)),
+    ).toEqual(["Check-ins", "Waiting", "Courts"]);
   });
 });

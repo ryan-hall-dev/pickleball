@@ -293,16 +293,31 @@ export function LiveSession({
       {!ended && (
         <>
           <nav aria-label="Live sections" className="flex flex-wrap gap-2">
-            <a className={OUTLINE_BUTTON_CLASS_NAME} href="#courts">
-              Courts
+            <a className={OUTLINE_BUTTON_CLASS_NAME} href="#checkins">
+              Check-ins
             </a>
             <a className={OUTLINE_BUTTON_CLASS_NAME} href="#waiting">
               Waiting
             </a>
-            <a className={OUTLINE_BUTTON_CLASS_NAME} href="#checkins">
-              Check-ins
+            <a className={OUTLINE_BUTTON_CLASS_NAME} href="#courts">
+              Courts
             </a>
           </nav>
+          {/* Hosts approve arrivals and show the QR code most in the first
+              hour, so check-ins come first, then waiting players, then courts. */}
+          <div id="checkins">
+            <PendingCheckinTray
+              approveDecision={approve}
+              onParticipantApproved={() => void refresh()}
+              onAttendanceChangedElsewhere={() => void refresh()}
+            />
+          </div>
+          <LiveWaiting
+            players={session.players}
+            now={now}
+            disabled={disabled}
+            onAction={act}
+          />
           <section id="courts" aria-labelledby="courts-heading">
             <h2 id="courts-heading" className="mb-3 text-xl font-bold">
               Courts &amp; Up next
@@ -329,19 +344,6 @@ export function LiveSession({
               ))}
             </div>
           </section>
-          <LiveWaiting
-            players={session.players}
-            now={now}
-            disabled={disabled}
-            onAction={act}
-          />
-          <div id="checkins">
-            <PendingCheckinTray
-              approveDecision={approve}
-              onParticipantApproved={() => void refresh()}
-              onAttendanceChangedElsewhere={() => void refresh()}
-            />
-          </div>
         </>
       )}
       <dialog

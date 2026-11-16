@@ -78,6 +78,23 @@ test("a host runs a game, returns its four players to waiting and rests one", as
   const waiting = page.getByRole("region", { name: /^Waiting/ });
   const restButtons = waiting.getByRole("button", { name: /^Rest / });
   await expect(restButtons).toHaveCount(4);
+  // Order on the page: check-ins and the QR link, then waiting players, then
+  // courts (desktop and the 390 px phone project).
+  const checkInsTop = (
+    await page.getByRole("region", { name: /^Check-ins waiting/ }).boundingBox()
+  )?.y;
+  const qrTop = (
+    await page.getByRole("link", { name: "Show QR code" }).boundingBox()
+  )?.y;
+  const waitingTop = (await waiting.boundingBox())?.y;
+  const courtsTop = (
+    await page.getByRole("heading", { name: "Courts & Up next" }).boundingBox()
+  )?.y;
+  expect(checkInsTop).toBeDefined();
+  expect(qrTop).toBeDefined();
+  expect(checkInsTop!).toBeLessThan(waitingTop!);
+  expect(qrTop!).toBeLessThan(waitingTop!);
+  expect(waitingTop!).toBeLessThan(courtsTop!);
   await expect(court.getByText("Court free", { exact: true })).toBeVisible();
   await court.getByRole("button", { name: "Prepare next four" }).click();
   await court.getByRole("button", { name: "Call these four" }).click();

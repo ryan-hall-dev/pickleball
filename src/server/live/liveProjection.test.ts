@@ -107,3 +107,79 @@ it("does not offer interrupt or ended-session Undo", () => {
   session.apply("SessionEnded", {});
   expect(undoOptions(session)).toEqual([]);
 });
+
+// Pilot roster (2026-11-16): the first suggestion for Court 1 was Jake Hill +
+// Kea Snow against Just Bing + Jess Sing. "Just Bing" and "Jess Sing" read
+// almost the same on a phone and were reported as one player shown twice; the
+// log held eight distinct participants, so this pins the real invariant: a
+// suggested or called doubles group is four distinct participant UUIDs, shown
+// as four distinct names, even when names look alike.
+it("suggests and calls four distinct participants, shown with four distinct names, for look-alike names", () => {
+  const roster = [
+    ["Ben", "Gold", "male"],
+    ["Jon", "Dirt", "male"],
+    ["Jake", "Hill", "male"],
+    ["Just", "Bing", "male"],
+    ["Le", "Wing", "female"],
+    ["Kea", "Snow", "female"],
+    ["Jess", "Sing", "female"],
+    ["Zoe", "Tool", "female"],
+  ] as const;
+  const participants = makeParticipants(roster.length).map((player, index) => ({
+    ...player,
+    firstName: roster[index][0],
+    lastName: roster[index][1],
+    gender: roster[index][2],
+    skill: "intermediate" as const,
+  }));
+  const session = TestSession.start({ participants, courts: 2 });
+  session.config.policyVersion = "simple-social-v1";
+  const project = () =>
+    liveProjection(
+      "session",
+      "Social",
+      session.state,
+      session.now,
+      session.nextMeta(),
+      fixtureCourtId(1),
+    );
+  const namesOf = (
+    view: ReturnType<typeof project>,
+    ids: readonly (string | null)[],
+  ) =>
+    ids.map(
+      (id) => view.players.find((player) => player.participantId === id)?.name,
+    );
+  expect(new Set(project().players.map((player) => player.name)).size).toBe(8);
+
+  const seatIds = (ids: readonly (string | null)[]) =>
+    ids.map((id) => {
+      if (id === null) throw new Error("A seat is vacant.");
+      return id;
+    });
+  const suggestion = project().courts[0].suggestion!;
+  const suggestionA = seatIds(suggestion.teamA);
+  const suggestionB = seatIds(suggestion.teamB);
+  const suggestedIds = [...suggestionA, ...suggestionB];
+  expect(new Set(suggestedIds).size).toBe(4);
+  expect(new Set(namesOf(project(), suggestedIds)).size).toBe(4);
+
+  session.apply("NextGroupCalled", {
+    courtId: fixtureCourtId(1),
+    teamA: suggestionA,
+    teamB: suggestionB,
+  });
+  const called = project().courts[0].called!;
+  const calledIds = [...seatIds(called.teamA), ...seatIds(called.teamB)];
+  expect(calledIds).toEqual(suggestedIds);
+  expect(new Set(namesOf(project(), calledIds)).size).toBe(4);
+
+  // A duplicated seat can never be stored, whatever a client sends.
+  expect(() =>
+    session.apply("NextGroupChanged", {
+      calledEventId: called.calledEventId,
+      teamA: [suggestedIds[0], suggestedIds[1]],
+      teamB: [suggestedIds[2], suggestedIds[2]],
+    }),
+  ).toThrow();
+});
