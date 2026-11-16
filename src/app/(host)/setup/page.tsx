@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import Link from "next/link";
 import { CARD_CLASS_NAME } from "@/components/controlStyles";
 import { readHostAccess } from "@/server/auth/currentHost";
-import {
-  listActiveClubCourts,
-  listSocialSavedSetupsUnderRls,
-  readSocialOpenSession,
-} from "@/server/setup/setupDraft";
+import { readSocialOpenSession } from "@/server/setup/setupDraft";
 import { CoHostDraftNoticeProvider } from "./CoHostDraftNotice";
 import { SessionSetupEditor } from "./SessionSetupEditor";
 import { SetupPageHeader } from "./SetupPageHeader";
@@ -46,18 +43,11 @@ async function SessionSetupContent() {
   const openSession = await readSocialOpenSession(hostAccess.host.socialId);
 
   if (openSession.status === "draft") {
-    const [clubCourts, savedSetups] = await Promise.all([
-      listActiveClubCourts(),
-      listSocialSavedSetupsUnderRls(hostAccess.host.socialId),
-    ]);
     return (
       <SessionSetupEditor
         // A new draft remounts the editor with fresh state.
         key={openSession.draft.sessionId}
         draft={openSession.draft}
-        initialClubCourts={clubCourts}
-        canAddCourts={hostAccess.host.role === "manager"}
-        initialSavedSetups={savedSetups}
         socialName={hostAccess.host.socialName}
       />
     );
@@ -78,6 +68,12 @@ async function SessionSetupContent() {
             <p className="text-muted">
               You can set up your next session once this one has ended.
             </p>
+            <Link
+              href="/live"
+              className="inline-flex min-h-11 items-center font-semibold text-link"
+            >
+              Open live session
+            </Link>
           </>
         ) : (
           <>

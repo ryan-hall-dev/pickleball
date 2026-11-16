@@ -78,9 +78,15 @@ const HEADING_ID = "pending-checkins-heading";
 export function PendingCheckinTray({
   onParticipantApproved,
   onAttendanceChangedElsewhere,
+  approveDecision = approveCheckin,
 }: {
   onParticipantApproved: (participant: DraftParticipant | null) => void;
   onAttendanceChangedElsewhere: () => void;
+  /** Live supplies client event metadata; draft approval keeps its existing path. */
+  approveDecision?: (
+    requestId: string,
+    missingGender?: Gender,
+  ) => Promise<HostCheckinDecisionResult>;
 }) {
   const [state, dispatch] = useReducer(trayReducer, INITIAL_TRAY_STATE);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -104,10 +110,12 @@ export function PendingCheckinTray({
       missingGender?: Gender,
     ) => {
       dispatch({ type: "decision_started", checkinRequestId, action });
+      const decision =
+        action === "approve" ? approveDecision : DECISION_FUNCTIONS[action];
       const result = await settleWithin(
         missingGender
-          ? DECISION_FUNCTIONS[action](checkinRequestId, missingGender)
-          : DECISION_FUNCTIONS[action](checkinRequestId),
+          ? decision(checkinRequestId, missingGender)
+          : decision(checkinRequestId),
         SERVER_CALL_TIMEOUT_MS,
         FAILED_DECISION,
       );
@@ -116,7 +124,7 @@ export function PendingCheckinTray({
         onParticipantApproved(result.participant);
       }
     },
-    [onParticipantApproved],
+    [onParticipantApproved, approveDecision],
   );
 
   const expireDecidedRow = useCallback((checkinRequestId: string) => {
@@ -436,11 +444,16 @@ function RowAttention({ attention }: { attention: TrayRowAttention }) {
           "This name is already checked in to this session.",
           "They can't be added twice.",
         ]
-      : [
-          FAILED_ACTION_WORDS[attention.failedAction],
-          "Check your connection and retry.",
-        ];
-  const isFailure = typeof attention !== "string";
+      : attention === "sessionChanged"
+        ? [
+            "The session changed before this was saved.",
+            "Nobody was added. Check the latest courts, then approve again.",
+          ]
+        : [
+            FAILED_ACTION_WORDS[attention.failedAction],
+            "Check your connection and retry.",
+          ];
+  const isFailure = attention !== "nameAlreadyInSession";
   return (
     <p
       role={isFailure ? "alert" : undefined}

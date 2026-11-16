@@ -95,18 +95,23 @@ export type ListPendingCheckinsResult =
  *   name_already_in_session: approve refused, someone with this name is
  *     already in the session;
  *   already_decided: another host decided it first (or it isn't this social's);
- *   failed: nothing is known to have changed; the host can retry.
+ *   session_changed: a live approval was refused because the session's log
+ *     moved on since the host's screen was read (stale expected sequence).
+ *     Nothing was written; the host approves again on the refreshed state;
+ *   failed: the outcome is not known (it may or may not have been saved); the
+ *     host retries, on Live with the same event id.
  */
 export type HostCheckinDecisionResult =
   | { kind: "approved"; participant: DraftParticipant | null }
   | { kind: "rejected" }
   | { kind: "name_already_in_session" }
   | { kind: "already_decided" }
+  | { kind: "session_changed" }
   | { kind: "failed" };
 
 export type HostCheckinRefusal = Extract<
   HostCheckinDecisionResult,
-  { kind: "name_already_in_session" | "already_decided" }
+  { kind: "name_already_in_session" | "already_decided" | "session_changed" }
 >["kind"];
 
 /**
@@ -125,6 +130,9 @@ export function hostCheckinRefusalFromError(error: {
     // Another social's request looks the same as none at all.
     case "CHECKIN_REQUEST_NOT_FOUND":
       return "already_decided";
+    // The live log gained an action between the host's read and this write.
+    case "STALE_EXPECTED_SEQ":
+      return "session_changed";
     default:
       return null;
   }

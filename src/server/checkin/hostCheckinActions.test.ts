@@ -121,13 +121,37 @@ describe("host approval details and live prevalidation", () => {
     });
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
-  it("refuses a stale live sequence before writing", async () => {
+  it("answers a stale live sequence as a conflict before writing", async () => {
     sessionStatus = "live";
     mocks.loadLog.mockResolvedValue({ events: [] });
     expect(await approveCheckin(requestId, "female", metadata)).toEqual({
-      kind: "failed",
+      kind: "session_changed",
     });
     expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("answers the database's stale-sequence refusal as a conflict, never as approved", async () => {
+    // The log moved between prevalidation and the atomic write.
+    mocks.rpc.mockReturnValue({
+      abortSignal: async () => ({
+        data: null,
+        error: { message: "STALE_EXPECTED_SEQ" },
+      }),
+    });
+    expect(await approveCheckin(requestId, "female", metadata)).toEqual({
+      kind: "session_changed",
+    });
+  });
+  it("keeps an unexplained database failure uncertain (failed), not a conflict", async () => {
+    mocks.rpc.mockReturnValue({
+      abortSignal: async () => ({
+        data: null,
+        error: { message: "connection reset" },
+      }),
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await approveCheckin(requestId, "female", metadata)).toEqual({
+      kind: "failed",
+    });
   });
   it("validates a live join before forwarding bounded event metadata", async () => {
     sessionStatus = "live";

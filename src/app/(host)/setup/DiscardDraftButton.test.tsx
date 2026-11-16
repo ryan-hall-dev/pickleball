@@ -68,7 +68,7 @@ describe("DiscardDraftButton", () => {
     const dialog = openDialog();
     expect(dialog).toHaveAccessibleName("Discard “Saturday social”?");
     expect(dialog).toHaveAccessibleDescription(
-      "This discards the draft for every host of Riverside Picklers, including anyone editing it right now. Its details, courts, attendees and rotation settings will be lost and can't be brought back. Saved setups aren't affected.",
+      "This discards the draft for every host of Riverside Picklers, including anyone editing it right now. Its details, courts and players will be lost and can't be brought back.",
     );
     expect(dialog).toHaveTextContent(
       "Sat 7 Nov · 18:00 – 20:00 · 12 attending · Hosted by Ryan H.",

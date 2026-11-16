@@ -32,6 +32,11 @@ const checkinPageRpcSchema = z.discriminatedUnion("status", [
       status: z.enum(["draft", "live"]),
       planned_start: timestampSchema,
       planned_end: timestampSchema,
+      // Null when the saved duration is unusable (under a minute or over 12 h):
+      // the page then shows no duration or end rather than inventing one.
+      duration_minutes: z.number().positive().max(720).nullable(),
+      started_at: timestampSchema.nullable(),
+      ends_at: timestampSchema.nullable(),
       courts_count: z.number().int().nonnegative(),
       checked_in_count: z.number().int().nonnegative(),
     }),
@@ -55,6 +60,10 @@ export interface CurrentCheckinRequest {
 export interface CheckinSessionHeader {
   sessionId: string;
   name: string;
+  status: "draft" | "live";
+  durationMinutes: number | null;
+  startedAt: string | null;
+  endsAt: string | null;
   plannedStart: string;
   plannedEnd: string;
   courtsCount: number;
@@ -91,6 +100,10 @@ export function checkinPageFromRpc(rpcResult: unknown): CheckinPage {
         session: {
           sessionId: parsed.session.id,
           name: parsed.session.name,
+          status: parsed.session.status,
+          durationMinutes: parsed.session.duration_minutes,
+          startedAt: parsed.session.started_at,
+          endsAt: parsed.session.ends_at,
           plannedStart: parsed.session.planned_start,
           plannedEnd: parsed.session.planned_end,
           courtsCount: parsed.session.courts_count,

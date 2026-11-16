@@ -165,9 +165,8 @@ export function DiscardDraftButton({
             </span>
             <p id={explanationId} className="text-[15px]">
               This discards the draft for every host of {socialName}, including
-              anyone editing it right now. Its details, courts, attendees and
-              rotation settings will be lost and can&apos;t be brought back.
-              Saved setups aren&apos;t affected.
+              anyone editing it right now. Its details, courts and players will
+              be lost and can&apos;t be brought back.
             </p>
           </div>
           <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px] font-semibold">

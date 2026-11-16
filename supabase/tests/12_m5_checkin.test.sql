@@ -198,6 +198,7 @@ select is(
     'id', 'd1200000-0000-4000-8000-000000000001'::uuid,
     'name', 'M5 draft', 'status', 'draft',
     'planned_start', '2026-11-11 18:00+00'::timestamptz, 'planned_end', '2026-11-11 20:00+00'::timestamptz,
+    'duration_minutes', 120, 'started_at', null, 'ends_at', null,
     'courts_count', 2, 'checked_in_count', 4
   ),
   'the header carries the session name, status, planned times, selected courts and attendance count'
@@ -236,6 +237,7 @@ select is(
     'id', 'd1200000-0000-4000-8000-000000000002'::uuid,
     'name', 'Other live', 'status', 'live',
     'planned_start', '2026-11-11 18:00+00'::timestamptz, 'planned_end', '2026-11-11 20:00+00'::timestamptz,
+    'duration_minutes', 120, 'started_at', now(), 'ends_at', now() + interval '120 minutes',
     'courts_count', 1, 'checked_in_count', 0
   ),
   'a live session shows status live and the courts enabled at the start'

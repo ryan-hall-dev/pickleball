@@ -1,9 +1,17 @@
 # Simple social MVP: check in, see the wait, prepare the next four
 
-Status: **in-progress — approved by Ryan, 2026-11-15**. Finish the interrupted session-only foundation first, then build the simpler version in small tested commits. Nothing is pushed or applied to the hosted project.
+Status: **in-progress — basic Setup/live slice verified, 2026-11-16**. Session-only participants, simple scheduling, short Setup and the basic live workflow are implemented. Rare recovery controls, remaining edge-case coverage and a real social pilot remain. Nothing is pushed or applied to the hosted project.
 Branch: `feature/session-manager-mvp`.
 Date: 2026-11-14. Updated with the subsequent decisions made in this conversation.
 Phone mockup: `docs/designs/simple-social/phone-review.html` (design review only; illustrative data).
+
+## Current implementation — 2026-11-16
+
+- Short Setup saves name, session-local court count and duration, preserving draft autosave, conflict detection, player details, check-in approval and discard safety. Confirmed Start opens the usable live route.
+- Basic live Courts/Up next, fixed calls and edited groups, separate start/finish, Waiting/rest/ready/leave, check-ins and confirmed End are implemented. Server writes retain authorization, UUID idempotency and sequence protection. Uncertain writes retain the same-event retry; rejected/conflicting writes release controls after refresh.
+- Public check-in shows draft status/duration and actual live clocks, with honest unavailable timing for invalid legacy durations. Additive function migrations through `20261115120000` are applied locally only.
+- Browser regressions prove the main phone journey, persistence, rest/ready and consecutive sessions without a full reload. The start modal closes before navigation; new session UUIDs reset retained Live state. Real-database tests prove a raced live approval rolls back and same-event retry adds exactly one participant/event.
+- **Next increment:** rare mid-game replacement, End as interrupted and safe start/finish Undo. Also retain follow-up coverage for live approval/co-host/offline/deadline browser edge cases and minor UI copy/status polish. Existing unit/integration coverage is not a substitute for those browser cases or a real social pilot.
 
 ## Goal
 
@@ -80,7 +88,7 @@ Work through edge-case examples before coding: the oldest four being an invalid 
 
 ## What we keep, remove and defer
 
-Inspected 2026-11-14 against both committed files and the existing uncommitted session-only work. “Built” means code exists, not that the current combined working tree has been verified in this planning task.
+The table below preserves the baseline inspected on 2026-11-14; the Current implementation section above records the verified 2026-11-16 state. At that baseline, “Built” meant code existed, not that the combined tree had been verified.
 
 | Area                                                                   | Current implementation/status                                                  | Proposal for the simple version                                                                                                                                                       |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -172,6 +180,8 @@ Each increment is implemented, reviewed, tested, committed on the existing branc
 - Rollback pairs the pre-change code commit with its verified backup if a schema change prevents running the old code. Any restore needs Ryan's approval because it discards later local writes. Post-change checks include replaying existing logs, comparing preserved record counts, and verifying social isolation.
 
 ## Log
+
+- 2026-11-16: **basic Setup/live vertical slice verified and completed locally.** Short Setup, usable live destination and truthful public timing now work together; rare recovery controls remain a follow-on increment. Fixed unknown/rejected/conflict write recovery, actual-call polling across cached Activity routes, UUID-based reservation eligibility, the retained Start modal, and retained session A state when starting B. Independent final review has no blockers. Final checks: 861 unit/integration tests (69 files), 541 pgTAP assertions, 45 production-browser tests and five existing duplicate-project exclusions, lint/typecheck/format/build; local public/private schema drift is clean. All six original protected snapshots remain unchanged (551 sessions, 1,630 participants, 1,523 events, 259 matches, one request, zero saved setups); nine migration-closed logs and their matches replay correctly. Migrations `20261115110000`/`20261115120000` were backup/restore/scratch-rehearsed and applied locally by Claude; no new migration was applied by Codex in this continuation. No dependency changes; last audit one moderate and zero high/critical. No push, hosted operations, seed, working-database reset or cleanup of old test socials. Full phone-pilot and browser edge-case limitations remain explicit above.
 
 - 2026-11-15: hidden `startSimpleSession` preparation complete: server-built roster/courts and duration, revision/roster race protection, actual server start time and duplicate-first retry recovery. No Start UI exposure or migration. Independent review passed; 867 unit/integration tests, lint/typecheck/format, production build and two production smoke checks passed. Next is the complete short Setup/basic live slice plus truthful public-card timing.
 

@@ -128,6 +128,13 @@ test("a player submits fresh details, reloads pending, and receives approval wit
   await expect(
     page.getByRole("heading", { name: `Welcome to ${social.socialName}` }),
   ).toBeVisible();
+  await expect(
+    page.getByText("Session not started", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("120 min session", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("to first game", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("searchbox")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Male", exact: true }),

@@ -1,22 +1,18 @@
 import type { OpenCheckinPage } from "@/server/checkin/checkinResults";
-import {
-  formatCheckinHeaderWhen,
-  formatFirstGameEstimate,
-} from "./checkinHeaderFormatting";
+import { formatCheckinHeaderWhen } from "./checkinHeaderFormatting";
 
-/**
- * The header card on P01-P04 (acceptance criterion 3): session name, date and
- * planned times, time left, courts, checked-in count and the first-game
- * estimate. Drafts show "LIVE NOW" too (decision 2026-11-09).
- */
+/** Public session details follow the recorded lifecycle, never draft forecasts. */
 export function LiveSessionCard({ page }: { page: OpenCheckinPage }) {
   const { session, now } = page;
   const stats = [
     { value: String(session.courtsCount), label: "courts" },
     { value: String(session.checkedInCount), label: "checked in" },
     {
-      value: formatFirstGameEstimate(session.plannedStart, now),
-      label: "to first game",
+      value:
+        session.durationMinutes === null
+          ? "Unavailable"
+          : `${session.durationMinutes} min`,
+      label: "duration",
     },
   ];
   return (
@@ -26,7 +22,7 @@ export function LiveSessionCard({ page }: { page: OpenCheckinPage }) {
     >
       <p className="flex items-center gap-2 text-xs font-bold tracking-[0.12em] text-lime uppercase">
         <span aria-hidden="true" className="size-[7px] rounded-full bg-lime" />
-        Live now
+        {session.status === "draft" ? "Session not started" : "Live now"}
       </p>
       <h1
         id="checkin-session-name"

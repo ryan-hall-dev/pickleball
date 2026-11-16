@@ -175,11 +175,11 @@ export async function approveCheckin(
         );
         if (!log) return { kind: "failed" };
         const replayed = replay(log.events);
-        if (
-          !replayed.ok ||
-          replayed.state.lastSeq !== parsedLive.data.expectedLastSeq
-        )
-          return { kind: "failed" };
+        if (!replayed.ok) return { kind: "failed" };
+        // Stale screen: nothing is written. The request is still pending, so
+        // no earlier try of this approval landed either.
+        if (replayed.state.lastSeq !== parsedLive.data.expectedLastSeq)
+          return { kind: "session_changed" };
         const gender = request.gender ?? parsedGender.data;
         const checkedGender = genderSchema.safeParse(gender);
         if (!checkedGender.success) return { kind: "failed" };

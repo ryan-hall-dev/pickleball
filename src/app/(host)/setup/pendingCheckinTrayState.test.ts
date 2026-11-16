@@ -248,6 +248,35 @@ describe("trayReducer: decisions", () => {
       ["reject", "reject"],
     ]);
   });
+
+  it("keeps a row whose live approval hit a changed session pending, with a fresh Approve", () => {
+    const state = apply(loaded, {
+      type: "decision_finished",
+      checkinRequestId: kai.checkinRequestId,
+      action: "approve",
+      result: { kind: "session_changed" },
+    });
+    const view = trayRowView(rowFor(state, kai));
+    // Never shown as approved, and a later poll may still list it.
+    expect(view.decidedOutcome).toBeNull();
+    expect(state.locallyDecidedRequestIds.has(kai.checkinRequestId)).toBe(
+      false,
+    );
+    expect(waitingRequestCount(state.rows)).toBe(
+      waitingRequestCount(loaded.rows),
+    );
+    expect(view.surface).toBe("attention");
+    expect(view.attentions).toEqual(["sessionChanged"]);
+    expect(view.buttons).toEqual([
+      { kind: "approve", action: "approve", isDisabled: false, isBusy: false },
+      { kind: "reject", action: "reject", isDisabled: false, isBusy: false },
+    ]);
+    // The conflict note survives the next poll until the host acts again.
+    const repolled = apply(state, polled(loaded.rows.map((r) => r.request)));
+    expect(trayRowView(rowFor(repolled, kai)).attentions).toEqual([
+      "sessionChanged",
+    ]);
+  });
 });
 
 describe("trayRowView", () => {

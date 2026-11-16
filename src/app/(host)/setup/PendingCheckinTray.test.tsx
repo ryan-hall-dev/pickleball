@@ -231,6 +231,37 @@ describe("PendingCheckinTray", () => {
     expect(screen.getByText("Added to Who's playing")).toBeInTheDocument();
   });
 
+  it("says the session changed after a live conflict, adds nobody, and approves again", async () => {
+    listMock.mockResolvedValue(listing(kai));
+    const approveDecision = vi
+      .fn()
+      .mockResolvedValueOnce({ kind: "session_changed" })
+      .mockResolvedValueOnce({ kind: "approved", participant: null });
+    const onParticipantApproved = vi.fn();
+    render(
+      <PendingCheckinTray
+        onParticipantApproved={onParticipantApproved}
+        onAttendanceChangedElsewhere={vi.fn()}
+        approveDecision={approveDecision}
+      />,
+    );
+    await settle();
+
+    fireEvent.click(screen.getByRole("button", { name: "Approve Kai Moreno" }));
+    await settle();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The session changed before this was saved. Nobody was added. Check the latest courts, then approve again.",
+    );
+    expect(onParticipantApproved).not.toHaveBeenCalled();
+    expect(screen.queryByText("Added to Who's playing")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Approve Kai Moreno" }));
+    await settle();
+    expect(approveDecision).toHaveBeenCalledTimes(2);
+    expect(onParticipantApproved).toHaveBeenCalledWith(null);
+    expect(screen.getByText("Added to Who's playing")).toBeInTheDocument();
+  });
+
   it("counts an approve with no answer within 15 s as failed", async () => {
     listMock.mockResolvedValue(listing(kai));
     approveMock.mockReturnValue(new Promise(() => {}));

@@ -81,10 +81,11 @@ async function signedInHostPage(browser: Browser, email: string) {
 async function startDraft(page: Page, social: TestSocialWithHosts) {
   await page.getByRole("button", { name: "Start a new session" }).click();
   await expect(
-    page.getByRole("heading", { name: "Session details" }),
+    page.getByRole("heading", { name: "A simple start" }),
   ).toBeVisible();
   const sessionName = `E2E tray ${randomUUID().slice(0, 6)}`;
   await page.getByLabel("Session name").fill(sessionName);
+  await page.getByLabel("Court count").fill("1");
   await expect(page.getByRole("main").getByRole("status").first()).toHaveText(
     "Saved",
   );
@@ -172,7 +173,7 @@ test("players check in, hosts approve and reject from the tray, and a second hos
   const draft = await startDraft(managerPage, social);
   const hostPage = await signedInHostPage(browser, social.hostEmail);
   await expect(
-    hostPage.getByRole("heading", { name: "Session details" }),
+    hostPage.getByRole("heading", { name: "A simple start" }),
   ).toBeVisible();
 
   // Empty to start with, for every host.

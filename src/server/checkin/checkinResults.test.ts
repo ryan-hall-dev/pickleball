@@ -15,6 +15,9 @@ const openPageRpc = {
     id: "a0000000-0000-4000-8000-000000000001",
     name: "Saturday Social",
     status: "draft",
+    duration_minutes: 120,
+    started_at: null,
+    ends_at: null,
     planned_start: "2026-11-07T18:00:00+00:00",
     planned_end: "2026-11-07T20:00:00+00:00",
     courts_count: 4,
@@ -36,6 +39,10 @@ describe("checkinPageFromRpc", () => {
       session: {
         sessionId: "a0000000-0000-4000-8000-000000000001",
         name: "Saturday Social",
+        status: "draft",
+        durationMinutes: 120,
+        startedAt: null,
+        endsAt: null,
         plannedStart: "2026-11-07T18:00:00+00:00",
         plannedEnd: "2026-11-07T20:00:00+00:00",
         courtsCount: 4,
@@ -48,6 +55,72 @@ describe("checkinPageFromRpc", () => {
       },
       now: "2026-11-07T17:54:12.345678+00:00",
     });
+  });
+
+  it("keeps actual live clocks separate from draft placeholders", () => {
+    expect(
+      checkinPageFromRpc({
+        ...openPageRpc,
+        session: {
+          ...openPageRpc.session,
+          status: "live",
+          duration_minutes: 75,
+          started_at: "2026-11-15T15:00:00Z",
+          ends_at: "2026-11-15T16:15:00Z",
+        },
+      }),
+    ).toMatchObject({
+      session: {
+        status: "live",
+        durationMinutes: 75,
+        startedAt: "2026-11-15T15:00:00Z",
+        endsAt: "2026-11-15T16:15:00Z",
+        plannedStart: openPageRpc.session.planned_start,
+      },
+    });
+  });
+
+  it("accepts a null duration (unusable saved duration) without inventing timing", () => {
+    const draft = checkinPageFromRpc({
+      ...openPageRpc,
+      session: { ...openPageRpc.session, duration_minutes: null },
+    });
+    expect(draft.status === "open" && draft.session.durationMinutes).toBeNull();
+    const live = checkinPageFromRpc({
+      ...openPageRpc,
+      session: {
+        ...openPageRpc.session,
+        status: "live",
+        duration_minutes: null,
+        started_at: "2026-11-15T15:00:00Z",
+        ends_at: null,
+      },
+    });
+    expect(live.status === "open" && live.session).toMatchObject({
+      durationMinutes: null,
+      startedAt: "2026-11-15T15:00:00Z",
+      endsAt: null,
+    });
+  });
+  it("fails explicitly when lifecycle metadata is missing or malformed", () => {
+    expect(() =>
+      checkinPageFromRpc({
+        ...openPageRpc,
+        session: { ...openPageRpc.session, duration_minutes: 0 },
+      }),
+    ).toThrow();
+    expect(() =>
+      checkinPageFromRpc({
+        ...openPageRpc,
+        session: { ...openPageRpc.session, status: undefined },
+      }),
+    ).toThrow();
+    expect(() =>
+      checkinPageFromRpc({
+        ...openPageRpc,
+        session: { ...openPageRpc.session, ends_at: "invalid" },
+      }),
+    ).toThrow();
   });
 
   it("maps a page with no phone data", () => {

@@ -8,29 +8,28 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { useRouter } from "next/navigation";
 import { AttentionMessage } from "@/components/AttentionMessage";
 import {
   ATTENTION_OUTLINE_BUTTON_CLASS_NAME,
+  CARD_CLASS_NAME,
   LINK_BUTTON_CLASS_NAME,
+  OUTLINE_BUTTON_CLASS_NAME,
+  PRIMARY_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
 import {
-  applySavedSetup,
   readSessionDraft,
-  saveSessionDraft,
+  saveSimpleSessionDraft,
   setDraftParticipantDetails,
-  saveSetup,
-  type ApplySavedSetupResult,
   type SaveSessionDraftResult,
 } from "@/server/setup/setupActions";
-import type {
-  ClubCourt,
-  DraftParticipant,
-  SavedSetupSummary,
-  SessionDraft,
-} from "@/server/setup/setupDraft";
-import type { SaveSessionDraftInput } from "@/server/setup/setupRules";
+import { startSimpleSession } from "@/server/setup/startSimpleSession";
+import type { DraftParticipant, SessionDraft } from "@/server/setup/setupDraft";
+import {
+  saveSimpleSessionDraftInputSchema,
+  type SaveSimpleSessionDraftInput,
+} from "@/server/setup/setupRules";
 import { CoHostDraftNotice } from "./CoHostDraftNotice";
-import { CourtsCard } from "./CourtsCard";
 import { DiscardDraftButton } from "./DiscardDraftButton";
 import { PendingCheckinTray } from "./PendingCheckinTray";
 import {
@@ -38,25 +37,11 @@ import {
   ownDraftWritesNotYetLoaded,
   trackOwnDraftWrite,
 } from "./ownDraftWrites";
-import { RotationCard } from "./RotationCard";
-import {
-  ReuseSetupBanner,
-  SavedSetupsButtons,
-  SavedSetupsList,
-  SaveSetupForm,
-  type SavedSetupsPanel,
-} from "./SavedSetups";
-import { topObjectiveSummary } from "./rotationOptions";
-import { SessionDetailsCard } from "./SessionDetailsCard";
-import { SessionSummary, type SummaryTiming } from "./SessionSummary";
 import { SetupPageHeader } from "./SetupPageHeader";
-import { setupReadiness } from "./setupReadiness";
-import { SetupStepper } from "./SetupStepper";
 import {
-  setupFormFromDraft,
-  validateSetupForm,
-  type SetupForm,
-} from "./setupPlanning";
+  isParticipantFormUnfinished,
+  unfinishedParticipantFormMessage,
+} from "./setupReadiness";
 import { useDraftAttendance } from "./useDraftAttendance";
 import { EMPTY_PARTICIPANT_FORM, type ParticipantForm } from "./whosPlaying";
 import { WhosPlayingCard } from "./WhosPlayingCard";
@@ -238,7 +223,7 @@ function useDraftAutosave({
   startsInConflict,
 }: {
   sessionId: string;
-  saveInput: SaveSessionDraftInput | null;
+  saveInput: SaveSimpleSessionDraftInput | null;
   isPaused: boolean;
   initialDraftRevision: number;
   startsInConflict: boolean;
@@ -261,7 +246,7 @@ function useDraftAutosave({
   /** Set by the Reload button so its own reload doesn't ask "leave page?". */
   const isReloadingDeliberatelyRef = useRef(false);
   const isSavingRef = useRef(false);
-  const queuedSaveInputRef = useRef<SaveSessionDraftInput | null>(null);
+  const queuedSaveInputRef = useRef<SaveSimpleSessionDraftInput | null>(null);
   /** Key of the save awaiting the server, so the unmount flush doesn't repeat it. */
   const inFlightSaveKeyRef = useRef<string | null>(null);
   /** The running save loop; resolves with the result of its last save. */
@@ -281,7 +266,7 @@ function useDraftAutosave({
   }, []);
 
   const runSave = useCallback(
-    (input: SaveSessionDraftInput): Promise<SaveSessionDraftResult> => {
+    (input: SaveSimpleSessionDraftInput): Promise<SaveSessionDraftResult> => {
       if (isSavingRef.current && saveLoopRef.current) {
         queuedSaveInputRef.current = input;
         return saveLoopRef.current;
@@ -294,7 +279,7 @@ function useDraftAutosave({
         let result: SaveSessionDraftResult;
         for (;;) {
           inFlightSaveKeyRef.current = JSON.stringify(inputToSave);
-          result = await saveSessionDraft(
+          result = await saveSimpleSessionDraft(
             inputToSave,
             draftRevisionRef.current,
           ).catch(() => ({
@@ -413,7 +398,7 @@ function useDraftAutosave({
   const release = useCallback(
     (
       applied: {
-        savedInput: SaveSessionDraftInput | null;
+        savedInput: SaveSimpleSessionDraftInput | null;
         draftRevision: number;
       } | null,
     ) => {
@@ -527,81 +512,53 @@ function SaveStatusIndicator({
   );
 }
 
-function wholeNumberOrNull(text: string): number | null {
-  return /^\d+$/.test(text.trim()) ? Number(text.trim()) : null;
-}
-
 interface SessionSetupFormProps {
   draft: SessionDraft;
-  initialClubCourts: ClubCourt[];
-  /** Only the social manager adds courts. */
-  canAddCourts: boolean;
-  /** The host's own saved setups, most recently used first. */
-  initialSavedSetups: SavedSetupSummary[];
-  /** Named in the discard dialog: discarding affects every host of the social. */
   socialName: string;
-}
-
-/** What happened after saving or applying a setup (shown under the header). */
-type SavedSetupMessage = { tone: "info" | "attention"; text: string };
-
-/** Saving the latest edits, then applying a saved setup: where it stopped. */
-type SavedSetupApplication =
-  | {
-      stoppedAt: "savingLatestEdits";
-      result: Extract<SaveSessionDraftResult, { ok: false }>;
-    }
-  | { stoppedAt: "applying"; result: ApplySavedSetupResult };
-
-/** The applying step as a settings write, for ownDraftWrites.ts. */
-function draftWriteResultOf(
-  application: SavedSetupApplication,
-): SaveSessionDraftResult {
-  if (application.stoppedAt === "savingLatestEdits") return application.result;
-  const { result } = application;
-  if (result.ok) return { ok: true, draftRevision: result.draft.draftRevision };
-  return result.isConflict
-    ? { ok: false, message: result.message, isConflict: true }
-    : { ok: false, message: result.message };
 }
 
 function SessionSetupForm({
   draft,
-  initialClubCourts,
-  canAddCourts,
-  initialSavedSetups,
   socialName,
   earlierOwnWrites,
 }: SessionSetupFormProps & { earlierOwnWrites: EarlierOwnWrites }) {
-  const isWaitingForEarlierWrites = earlierOwnWrites === "pending";
-  const [clubCourts, setClubCourts] = useState(initialClubCourts);
-  const [form, setForm] = useState<SetupForm>(() =>
-    setupFormFromDraft(
-      draft,
-      new Set(initialClubCourts.map((court) => court.id)),
+  const router = useRouter();
+  const [form, setForm] = useState(() => ({
+    name: draft.name,
+    courtCount: String(draft.config.courts.length),
+    durationMinutes: String(
+      (Date.parse(draft.plannedEnd) - Date.parse(draft.plannedStart)) / 60_000,
     ),
-  );
+  }));
   const [participantForm, setParticipantForm] = useState<ParticipantForm>(
     EMPTY_PARTICIPANT_FORM,
   );
   const [isAutosavePaused, setIsAutosavePaused] = useState(false);
-  const [savedSetups, setSavedSetups] = useState(initialSavedSetups);
-  const [appliedSavedSetupId, setAppliedSavedSetupId] = useState(
-    draft.config.appliedSavedSetupId,
-  );
-  const [openSavedSetupsPanel, setOpenSavedSetupsPanel] =
-    useState<SavedSetupsPanel>("none");
-  const [isReuseBannerDismissed, setIsReuseBannerDismissed] = useState(false);
-  const [isApplyingSetup, setIsApplyingSetup] = useState(false);
   const [isCompletingParticipantDetails, setIsCompletingParticipantDetails] =
     useState(false);
-  const [savedSetupMessage, setSavedSetupMessage] =
-    useState<SavedSetupMessage | null>(null);
-  const [isReloadRequired, setIsReloadRequired] = useState(false);
-  const validation = useMemo(
-    () => validateSetupForm(form, draft.sessionId),
-    [form, draft.sessionId],
-  );
+  const [isStarting, setIsStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [hasAttemptedStart, setHasAttemptedStart] = useState(false);
+  const startEventIdRef = useRef<string | null>(null);
+  const startDialogRef = useRef<HTMLDialogElement>(null);
+  const isWaitingForEarlierWrites = earlierOwnWrites === "pending";
+  const validation = useMemo(() => {
+    const parsed = saveSimpleSessionDraftInputSchema.safeParse({
+      sessionId: draft.sessionId,
+      name: form.name,
+      courtCount: /^\d+$/.test(form.courtCount.trim())
+        ? Number(form.courtCount)
+        : NaN,
+      durationMinutes: /^\d+$/.test(form.durationMinutes.trim())
+        ? Number(form.durationMinutes)
+        : NaN,
+    });
+    const fieldErrors: Record<string, string> = {};
+    if (!parsed.success)
+      for (const issue of parsed.error.issues)
+        fieldErrors[String(issue.path[0])] ??= issue.message;
+    return { saveInput: parsed.success ? parsed.data : null, fieldErrors };
+  }, [draft.sessionId, form]);
   const {
     status: autosaveStatus,
     retry,
@@ -622,10 +579,9 @@ function SessionSetupForm({
   });
   const status: SaveStatus = isWaitingForEarlierWrites
     ? { kind: "saving" }
-    : isReloadRequired || earlierOwnWrites === "unreadable"
+    : earlierOwnWrites === "unreadable"
       ? { kind: "reloadRequired" }
       : autosaveStatus;
-  const { fieldErrors, durationMinutes } = validation;
   const attendance = useDraftAttendance(
     draft.sessionId,
     draft.participants,
@@ -656,8 +612,8 @@ function SessionSetupForm({
   );
   const { addApprovedParticipant, rereadParticipants } = attendance;
   const showApprovedCheckin = useCallback(
-    (approvedParticipant: DraftParticipant | null) => {
-      if (approvedParticipant) addApprovedParticipant(approvedParticipant);
+    (approved: DraftParticipant | null) => {
+      if (approved) addApprovedParticipant(approved);
       else void rereadParticipants();
     },
     [addApprovedParticipant, rereadParticipants],
@@ -665,281 +621,284 @@ function SessionSetupForm({
   const showAttendanceChangedElsewhere = useCallback(() => {
     void rereadParticipants();
   }, [rereadParticipants]);
-  const attendingPlayerCount = attendance.participants.length;
-  const readiness = setupReadiness({
-    fieldErrors,
-    selectedCourtCount: form.selectedCourtIds.length,
-    matchFormat: form.matchFormat,
-    attendingPlayerCount,
-    participantForm,
-    isDraftSaved: status.kind === "saved",
-  });
+  const unfinishedParticipant = isParticipantFormUnfinished(participantForm);
+  const missingDetails = attendance.participants.some(
+    (player) => player.gender === null || player.skillLevel === null,
+  );
+  const attendanceBusy =
+    attendance.pendingChanges.length > 0 ||
+    attendance.failures.length > 0 ||
+    attendance.refreshProblem !== null;
+  const ready =
+    validation.saveInput !== null &&
+    attendance.participants.length >= 4 &&
+    !unfinishedParticipant &&
+    !missingDetails &&
+    !attendanceBusy &&
+    !isCompletingParticipantDetails &&
+    status.kind === "saved";
 
-  const targetMatchMinutes = fieldErrors.targetMatchMinutes
-    ? null
-    : wholeNumberOrNull(form.targetMatchMinutes);
-  const changeoverMinutes = fieldErrors.changeoverMinutes
-    ? null
-    : wholeNumberOrNull(form.changeoverMinutes);
-  const timing: SummaryTiming | null =
-    durationMinutes !== null &&
-    durationMinutes > 0 &&
-    !fieldErrors.endTime &&
-    targetMatchMinutes !== null &&
-    changeoverMinutes !== null
-      ? { durationMinutes, targetMatchMinutes, changeoverMinutes }
-      : null;
-
-  function updateForm(patch: Partial<SetupForm>) {
-    setForm((currentForm) => ({ ...currentForm, ...patch }));
+  function openStartDialog() {
+    if (!ready) return;
+    setStartError(null);
+    setHasAttemptedStart(false);
+    startEventIdRef.current = crypto.randomUUID();
+    startDialogRef.current?.showModal();
   }
-
-  function addCourt(court: ClubCourt) {
-    setClubCourts((currentCourts) => [...currentCourts, court]);
-    // Select the new court when it can host the chosen format.
-    if (court.supportedFormats.includes(form.matchFormat)) {
-      updateForm({ selectedCourtIds: [...form.selectedCourtIds, court.id] });
-    }
-  }
-
-  async function saveThisSetup(setupName: string) {
-    if (!validation.saveInput) {
-      return {
-        ok: false as const,
-        message: "Fix the highlighted fields first, then save the setup.",
-      };
-    }
-    const result = await saveSetup({
-      setupName,
-      draft: validation.saveInput,
-    }).catch(() => ({ ok: false as const, message: OFFLINE_MESSAGE }));
-    if (result.ok) {
-      setSavedSetups(result.savedSetups);
-      setOpenSavedSetupsPanel("none");
-      // It's what's on screen already: no need to offer it back.
-      setIsReuseBannerDismissed(true);
-      setSavedSetupMessage({ tone: "info", text: result.message });
-    }
-    return result;
-  }
-
-  async function applySetup(setup: SavedSetupSummary) {
-    setSavedSetupMessage(null);
-    // Applying replaces the form, so invalid edits (which can't be saved
-    // first) would be lost without a word: refuse instead.
-    if (!validation.saveInput) {
-      setSavedSetupMessage({
-        tone: "attention",
-        text: `Fix the highlighted fields first, then use \u201c${setup.name}\u201d.`,
-      });
+  async function confirmStart() {
+    if (isStarting) return;
+    setIsStarting(true);
+    setStartError(null);
+    const saved = await holdAndSaveLatest();
+    if (!saved.ok) {
+      setStartError(saved.message);
+      if (!saved.isConflict) release(null);
+      setIsStarting(false);
       return;
     }
-    setIsApplyingSetup(true);
-    const application = saveLatestEditsThenApply(setup.setupId);
-    // Recorded from the start, as one write: an editor mounted after leaving
-    // mid-apply waits for all of it.
-    trackOwnDraftWrite(draft.sessionId, application.then(draftWriteResultOf));
-    const applied = await application;
-    if (applied.stoppedAt === "savingLatestEdits") {
-      const flushed = applied.result;
-      setIsApplyingSetup(false);
-      if (flushed.isConflict) return;
-      release(null);
-      setSavedSetupMessage({
-        tone: "attention",
-        text: `Your latest edits couldn't be saved, so \u201c${setup.name}\u201d wasn't applied. ${flushed.message}`,
-      });
-      return;
-    }
-    const result = applied.result;
-    setIsApplyingSetup(false);
-    if (!result.ok) {
-      // Applied but not read back: keep autosave held so the stale screen
-      // can't overwrite it; the message asks for a reload.
-      if ("requiresReload" in result && result.requiresReload) {
-        setIsReloadRequired(true);
-      } else if ("isConflict" in result && result.isConflict) {
-        markConflict();
-        return;
-      } else {
-        release(null);
-      }
-      setSavedSetupMessage({ tone: "attention", text: result.message });
-      return;
-    }
-    // A court added since this page loaded is still a club court: keep it
-    // (its other formats aren't known here, so it offers the applied one).
-    const knownCourtIds = new Set(clubCourts.map((court) => court.id));
-    const newCourts: ClubCourt[] = result.draft.config.courts
-      .filter((court) => !knownCourtIds.has(court.courtId))
-      .map((court) => ({
-        id: court.courtId,
-        name: court.name,
-        supportedFormats: [court.format],
-      }));
-    if (newCourts.length > 0) {
-      setClubCourts((currentCourts) => [...currentCourts, ...newCourts]);
-    }
-    const appliedForm = setupFormFromDraft(
-      result.draft,
-      new Set([...knownCourtIds, ...newCourts.map((court) => court.id)]),
-    );
-    setForm(appliedForm);
-    release({
-      savedInput: validateSetupForm(appliedForm, draft.sessionId).saveInput,
-      draftRevision: result.draft.draftRevision,
-    });
-    setSavedSetups(result.savedSetups);
-    setAppliedSavedSetupId(setup.setupId);
-    setOpenSavedSetupsPanel("none");
-    setSavedSetupMessage({
-      tone: result.notice ? "attention" : "info",
-      text: [`Using \u201c${setup.name}\u201d.`, result.notice]
-        .filter(Boolean)
-        .join(" "),
-    });
-  }
-
-  /**
-   * The server applies on top of the saved draft, so the latest edits are
-   * saved first, with autosave held so it can't write stale values meanwhile.
-   */
-  async function saveLatestEditsThenApply(
-    setupId: string,
-  ): Promise<SavedSetupApplication> {
-    const flushed = await holdAndSaveLatest();
-    if (!flushed.ok) return { stoppedAt: "savingLatestEdits", result: flushed };
-    const result = await applySavedSetup({
+    setHasAttemptedStart(true);
+    const result = await startSimpleSession({
       sessionId: draft.sessionId,
-      setupId,
+      eventId: startEventIdRef.current!,
       expectedDraftRevision: draftRevisionRef.current,
-    }).catch(() => ({ ok: false as const, message: OFFLINE_MESSAGE }));
-    return { stoppedAt: "applying", result };
+    }).catch(() => ({
+      ok: false as const,
+      message:
+        "Couldn't confirm whether the session started. Retry with the same action, or reload.",
+    }));
+    if (result.ok) {
+      // Cached routes retain the dialog; release its modal inertness before leaving.
+      startDialogRef.current?.close();
+      router.push("/live");
+      router.refresh();
+      return;
+    }
+    setStartError(result.message);
+    setIsStarting(false);
+    if ("isConflict" in result && result.isConflict) markConflict();
   }
-
-  const reuseCandidate =
-    savedSetups.length > 0 && !appliedSavedSetupId && !isReuseBannerDismissed
-      ? savedSetups[0]
-      : null;
-
+  function closeStartDialog() {
+    if (isStarting || hasAttemptedStart) return;
+    startDialogRef.current?.close();
+  }
+  const blocked =
+    isWaitingForEarlierWrites ||
+    isCompletingParticipantDetails ||
+    isStarting ||
+    hasAttemptedStart;
   return (
-    // Nothing is editable until this tab's earlier writes have landed.
-    <fieldset
-      disabled={isWaitingForEarlierWrites || isCompletingParticipantDetails}
-      aria-busy={isWaitingForEarlierWrites || isCompletingParticipantDetails}
-      className="contents"
-    >
-      <SetupPageHeader
-        actions={
-          <>
-            <SaveStatusIndicator status={status} onRetry={retry} />
-            <SavedSetupsButtons
-              isDisabled={isApplyingSetup || status.kind === "conflict"}
-              openPanel={openSavedSetupsPanel}
-              onOpenPanelChange={setOpenSavedSetupsPanel}
-            />
-            <DiscardDraftButton
-              sessionId={draft.sessionId}
-              draftName={form.name}
-              plannedStart={validation.plannedStart}
-              plannedEnd={validation.plannedEnd}
-              attendingPlayerCount={attendingPlayerCount}
-              hostName={form.hostName}
-              socialName={socialName}
-              onAutosavePausedChange={setIsAutosavePaused}
-            />
-          </>
+    <>
+      <fieldset
+        disabled={blocked}
+        aria-busy={
+          isWaitingForEarlierWrites ||
+          isCompletingParticipantDetails ||
+          isStarting
         }
-      />
-      {openSavedSetupsPanel === "list" && (
-        <SavedSetupsList
-          savedSetups={savedSetups}
-          isApplying={isApplyingSetup || status.kind === "conflict"}
-          onUse={(setup) => void applySetup(setup)}
+        className="contents"
+      >
+        <SetupPageHeader
+          actions={
+            <>
+              <SaveStatusIndicator status={status} onRetry={retry} />
+              <DiscardDraftButton
+                sessionId={draft.sessionId}
+                draftName={form.name}
+                plannedStart={null}
+                plannedEnd={null}
+                attendingPlayerCount={attendance.participants.length}
+                hostName=""
+                socialName={socialName}
+                onAutosavePausedChange={setIsAutosavePaused}
+              />
+            </>
+          }
         />
-      )}
-      {openSavedSetupsPanel === "save" && (
-        <SaveSetupForm
-          isDisabled={isApplyingSetup || status.kind === "conflict"}
-          defaultName={form.name}
-          onSave={saveThisSetup}
-          onClose={() => setOpenSavedSetupsPanel("none")}
-        />
-      )}
-      <CoHostDraftNotice />
-      <div aria-live="polite" className="empty:hidden">
-        {savedSetupMessage &&
-          (savedSetupMessage.tone === "info" ? (
-            <p className="text-[15px] text-lime-soft">
-              {savedSetupMessage.text}
+        <CoHostDraftNotice />
+        {status.kind === "conflict" && (
+          <DraftConflictBanner onReload={reloadDiscardingEdits} />
+        )}
+        <section
+          aria-labelledby="short-setup-heading"
+          className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
+        >
+          <h2 id="short-setup-heading" className="text-xl font-bold">
+            A simple start
+          </h2>
+          <p className="text-sm text-muted">
+            Set the space and session length. Players check in for today.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(
+              [
+                { key: "name", label: "Session name", type: "text" },
+                { key: "courtCount", label: "Court count", type: "number" },
+                {
+                  key: "durationMinutes",
+                  label: "Session duration (minutes)",
+                  type: "number",
+                },
+              ] as const
+            ).map(({ key, label, type }) => (
+              <label
+                key={key}
+                className={`flex flex-col gap-1.5 text-sm text-muted ${key === "name" ? "sm:col-span-2" : ""}`}
+              >
+                {label}
+                <input
+                  type={type}
+                  value={form[key]}
+                  min={type === "number" ? 1 : undefined}
+                  max={
+                    key === "courtCount"
+                      ? 1000
+                      : key === "durationMinutes"
+                        ? 720
+                        : undefined
+                  }
+                  step={type === "number" ? 1 : undefined}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      [key]: event.target.value,
+                    }))
+                  }
+                  aria-invalid={Boolean(validation.fieldErrors[key])}
+                  aria-describedby={
+                    validation.fieldErrors[key]
+                      ? `setup-error-${key}`
+                      : undefined
+                  }
+                  className="h-12 min-w-0 rounded-[14px] border border-inner-border bg-inner px-3.5 text-base text-text"
+                />
+                {validation.fieldErrors[key] && (
+                  <span
+                    id={`setup-error-${key}`}
+                    className="text-xs text-orange-text"
+                  >
+                    {validation.fieldErrors[key]}
+                  </span>
+                )}
+              </label>
+            ))}
+          </div>
+          <p className="text-sm text-muted">
+            Courts are numbered automatically. The duration begins when you
+            start the session.
+          </p>
+          <div className="rounded-2xl border border-inner-border bg-inner p-4">
+            <h3 className="font-bold">Doubles, every game</h3>
+            <p className="mt-1 text-sm text-muted">
+              Four men, four women, or mixed with one man and one woman on each
+              team.
             </p>
+          </div>
+        </section>
+        <PendingCheckinTray
+          onParticipantApproved={showApprovedCheckin}
+          onAttendanceChangedElsewhere={showAttendanceChangedElsewhere}
+        />
+        <WhosPlayingCard
+          attendance={attendance}
+          participantForm={participantForm}
+          onParticipantFormChange={setParticipantForm}
+        />
+        <section
+          aria-label="Start session"
+          className={`${CARD_CLASS_NAME} flex flex-col gap-3`}
+        >
+          <p className="text-sm text-muted">
+            {attendance.participants.length} players approved ·{" "}
+            {form.courtCount || "0"} courts · {form.durationMinutes || "0"}{" "}
+            minutes
+          </p>
+          {unfinishedParticipant && (
+            <p className="text-sm text-orange-text">
+              {unfinishedParticipantFormMessage(participantForm)}
+            </p>
+          )}
+          {attendance.participants.length < 4 && (
+            <p className="text-sm text-orange-text">
+              Approve or add at least four players before starting.
+            </p>
+          )}
+          {missingDetails && (
+            <p className="text-sm text-orange-text">
+              Complete every player&apos;s gender and level before starting.
+            </p>
+          )}
+          {attendanceBusy && (
+            <p className="text-sm text-orange-text">
+              Wait for player changes to save and resolve any errors.
+            </p>
+          )}
+          <button
+            type="button"
+            disabled={!ready}
+            onClick={openStartDialog}
+            className={`${PRIMARY_BUTTON_CLASS_NAME} w-full`}
+          >
+            Start session
+          </button>
+        </section>
+      </fieldset>
+      <dialog
+        ref={startDialogRef}
+        aria-labelledby="confirm-start-heading"
+        onCancel={(event) => {
+          event.preventDefault();
+          closeStartDialog();
+        }}
+        className="m-auto w-[calc(100%-32px)] max-w-[560px] rounded-[28px] border border-card-border bg-card p-6 text-text shadow-[0_24px_64px_rgba(0,0,0,0.5)] backdrop:bg-bg-backdrop/90"
+      >
+        <h2 id="confirm-start-heading" className="text-[26px] font-extrabold">
+          Start {form.name.trim()}?
+        </h2>
+        <p className="mt-3 text-muted">
+          {attendance.participants.length} players · {form.courtCount} courts ·{" "}
+          {form.durationMinutes} minutes. The session clock starts now.
+          You&apos;ll call and start games from the live screen.
+        </p>
+        {startError && (
+          <div role="alert" className="mt-3">
+            <AttentionMessage>{startError}</AttentionMessage>
+          </div>
+        )}
+        <div className="mt-5 flex flex-wrap gap-3">
+          {hasAttemptedStart ? (
+            <button
+              type="button"
+              disabled={isStarting}
+              className={OUTLINE_BUTTON_CLASS_NAME}
+              onClick={reloadDiscardingEdits}
+            >
+              Reload session
+            </button>
           ) : (
-            <AttentionMessage>{savedSetupMessage.text}</AttentionMessage>
-          ))}
-      </div>
-      {status.kind === "conflict" && (
-        <DraftConflictBanner onReload={reloadDiscardingEdits} />
-      )}
-      {reuseCandidate && status.kind !== "conflict" && (
-        <ReuseSetupBanner
-          setup={reuseCandidate}
-          isApplying={isApplyingSetup}
-          onUse={() => void applySetup(reuseCandidate)}
-          onDismiss={() => setIsReuseBannerDismissed(true)}
-        />
-      )}
-      <SetupStepper steps={readiness.steps} />
-      <PendingCheckinTray
-        onParticipantApproved={showApprovedCheckin}
-        onAttendanceChangedElsewhere={showAttendanceChangedElsewhere}
-      />
-      <div className="flex flex-wrap items-start gap-[18px]">
-        <div className="flex min-w-0 flex-[999_1_640px] flex-col gap-[18px]">
-          {/* Applying a setup replaces these values: no edits meanwhile. */}
-          <fieldset disabled={isApplyingSetup} className="contents">
-            <SessionDetailsCard
-              form={form}
-              fieldErrors={fieldErrors}
-              durationMinutes={durationMinutes}
-              isEndNextDay={validation.isEndNextDay}
-              onChange={updateForm}
-            />
-            <CourtsCard
-              clubCourts={clubCourts}
-              selectedCourtIds={form.selectedCourtIds}
-              matchFormat={form.matchFormat}
-              attendingPlayerCount={attendingPlayerCount}
-              courtsError={fieldErrors.courts}
-              canAddCourts={canAddCourts}
-              onChange={updateForm}
-              onCourtAdded={addCourt}
-            />
-          </fieldset>
-          <WhosPlayingCard
-            attendance={attendance}
-            participantForm={participantForm}
-            onParticipantFormChange={setParticipantForm}
-          />
-          <fieldset disabled={isApplyingSetup} className="contents">
-            <RotationCard
-              rotation={form.rotation}
-              onChange={(rotation) => updateForm({ rotation })}
-            />
-          </fieldset>
+            <button
+              type="button"
+              disabled={isStarting}
+              className={OUTLINE_BUTTON_CLASS_NAME}
+              onClick={closeStartDialog}
+            >
+              Keep editing
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={isStarting || status.kind === "conflict"}
+            className={PRIMARY_BUTTON_CLASS_NAME}
+            onClick={() => void confirmStart()}
+          >
+            {isStarting
+              ? "Starting…"
+              : hasAttemptedStart
+                ? "Retry start"
+                : "Confirm start"}
+          </button>
         </div>
-        <SessionSummary
-          sessionName={form.name}
-          plannedStart={validation.plannedStart}
-          plannedEnd={validation.plannedEnd}
-          timing={timing}
-          courtCount={form.selectedCourtIds.length}
-          matchFormat={form.matchFormat}
-          attendingPlayerCount={attendingPlayerCount}
-          rotationSummary={topObjectiveSummary(form.rotation)}
-          readiness={readiness}
-        />
-      </div>
-    </fieldset>
+      </dialog>
+    </>
   );
 }
 

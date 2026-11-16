@@ -20,6 +20,11 @@ export type TrayRowActivity =
   | { kind: "failed"; action: TrayDecisionAction }
   /** Approve was refused: someone with this name was added meanwhile (H03). */
   | { kind: "approveStopped" }
+  /**
+   * A live Approve was refused because the session moved on. Nothing was
+   * saved; the host approves again on the refreshed state.
+   */
+  | { kind: "sessionChanged" }
   | { kind: "decided"; outcome: TrayDecidedOutcome };
 
 export interface TrayRow {
@@ -195,6 +200,11 @@ function finishDecision(
         attendanceChangesSeenElsewhere:
           state.attendanceChangesSeenElsewhere + 1,
       };
+    case "session_changed":
+      return updateRow(state, checkinRequestId, (row) => ({
+        ...row,
+        activity: { kind: "sessionChanged" },
+      }));
     case "failed":
       return updateRow(state, checkinRequestId, (row) => ({
         ...row,
@@ -257,7 +267,9 @@ export interface TrayRowButton {
 }
 
 export type TrayRowAttention =
-  "nameAlreadyInSession" | { failedAction: TrayDecisionAction };
+  | "nameAlreadyInSession"
+  | "sessionChanged"
+  | { failedAction: TrayDecisionAction };
 
 export interface TrayRowView {
   surface: "neutral" | "attention" | "lime";
@@ -302,6 +314,7 @@ export function trayRowView(row: TrayRow): TrayRowView {
     request.isNameAlreadyInSession || activity.kind === "approveStopped";
   const attentions: TrayRowAttention[] = [];
   if (isNameAlreadyInSession) attentions.push("nameAlreadyInSession");
+  if (activity.kind === "sessionChanged") attentions.push("sessionChanged");
   if (activity.kind === "failed") {
     attentions.push({ failedAction: activity.action });
   }

@@ -79,6 +79,7 @@ test("a social's hosts share its draft, a stale tab hears about the co-host's ch
     .getByRole("button", { name: "Start a new session" })
     .click();
   await managerPage.getByLabel("Session name").fill(draftName);
+  await managerPage.getByLabel("Court count").fill("1");
   await expect(saveStatus(managerPage)).toHaveText("Saved");
 
   // The co-host's "Start a new session" opens that draft and says so.
@@ -89,9 +90,7 @@ test("a social's hosts share its draft, a stale tab hears about the co-host's ch
     ),
   ).toBeVisible();
   await expect(coHostPage.getByLabel("Session name")).toHaveValue(draftName);
-  await coHostPage
-    .getByLabel("Location (optional)")
-    .fill(`Co-host courts ${token}`);
+  await coHostPage.getByLabel("Session duration (minutes)").fill("90");
   await expect(saveStatus(coHostPage)).toHaveText("Saved");
 
   // The manager's tab was loaded before that change: its next edit is refused.
@@ -104,21 +103,21 @@ test("a social's hosts share its draft, a stale tab hears about the co-host's ch
   );
   const { data: draftRow, error } = await adminClient
     .from("sessions")
-    .select("name, location")
+    .select("name, planned_start, planned_end")
     .eq("social_id", socialAId)
     .eq("status", "draft")
     .single();
   if (error) throw error;
-  expect(draftRow).toEqual({
-    name: draftName,
-    location: `Co-host courts ${token}`,
-  });
+  expect(draftRow.name).toBe(draftName);
+  expect(
+    Date.parse(draftRow.planned_end) - Date.parse(draftRow.planned_start),
+  ).toBe(90 * 60_000);
 
   // After a reload the manager sees the co-host's change.
   await conflictBanner.getByRole("button", { name: "Reload" }).click();
-  await expect(managerPage.getByLabel("Location (optional)")).toHaveValue(
-    `Co-host courts ${token}`,
-  );
+  await expect(
+    managerPage.getByLabel("Session duration (minutes)"),
+  ).toHaveValue("90");
 
   // Another social's manager: no open session, nothing of social A.
   const otherPage = await newSignedOutPage(browser);
@@ -150,7 +149,9 @@ test("a social's hosts share its draft, a stale tab hears about the co-host's ch
   await expect(coHostDialog).toContainText(
     `This discards the draft for every host of ${socialAName}, including anyone editing it right now.`,
   );
-  await expect(coHostDialog).toContainText("Hosted by E2E manager");
+  await expect(coHostDialog).toContainText(
+    "Its details, courts and players will be lost",
+  );
   await coHostDialog.getByRole("button", { name: "Keep draft" }).click();
   await expect(coHostDialog).toBeHidden();
   expect(await readDraftRow()).toEqual(rowBeforeDiscard);

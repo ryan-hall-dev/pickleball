@@ -9,7 +9,7 @@ export function SetupPageHeader({ actions }: { actions?: ReactNode }) {
           Set up a session
         </h1>
         <p className="mt-1 text-muted">
-          Fill in the details and courts, check the players, then start.
+          Choose the court count and duration, approve players, then start.
         </p>
       </div>
       {actions && (

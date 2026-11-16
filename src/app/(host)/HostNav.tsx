@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Design order: Session setup, Live courts, History. Later milestones add Live
-// courts and History; Hosts (admin tools) stays last. There is no Members
-// section: participants exist per session only (session-only participants).
+// Phone workflow; manager tools stay outside ordinary game turnover.
 const HOST_NAV_ITEMS = [
   { href: "/setup", label: "Session setup" },
+  { href: "/live", label: "Live courts" },
   { href: "/hosts", label: "Hosts" },
 ] as const;
 

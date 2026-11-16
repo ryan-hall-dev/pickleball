@@ -93,6 +93,7 @@ describe("hostCheckinRefusalFromError", () => {
     ["NAME_ALREADY_IN_SESSION", "name_already_in_session"],
     ["CHECKIN_REQUEST_NOT_PENDING", "already_decided"],
     ["CHECKIN_REQUEST_NOT_FOUND", "already_decided"],
+    ["STALE_EXPECTED_SEQ", "session_changed"],
     ["ALREADY_IN_SESSION", null],
     ["SESSION_CLOSED", null],
     ["EVENT_REQUIRED", null],

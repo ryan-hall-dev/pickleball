@@ -14,6 +14,10 @@ const page: OpenCheckinPage = {
   session: {
     sessionId: "a0000000-0000-4000-8000-000000000001",
     name: "Saturday",
+    status: "draft",
+    durationMinutes: 120,
+    startedAt: null,
+    endsAt: null,
     plannedStart: "2026-11-15T10:00:00Z",
     plannedEnd: "2026-11-15T12:00:00Z",
     courtsCount: 2,
