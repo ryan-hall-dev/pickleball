@@ -133,7 +133,8 @@ export function LiveCourtCard({
         </h4>
         {timeIsUp ? (
           <p className="mt-2 text-sm text-muted">
-            Session time is up. No new groups can start.
+            Session time is up, so no new groups can be called and no game can
+            start. Finish active games, then end the session.
           </p>
         ) : group ? (
           <>

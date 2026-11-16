@@ -415,14 +415,21 @@ test("the deadline blocks called starts and new calls but lets active games fini
   await expect(
     page.getByRole("button", { name: /Prepare next four|Call these four/ }),
   ).toHaveCount(0);
+  const timeUp = page.getByRole("region", { name: /Session time is up/ });
+  await expect(timeUp).toContainText("Still on court: Court 1");
+  await expect(timeUp).toContainText("Nothing is ended for you");
   await expect(
-    page.getByRole("button", { name: "End session", exact: true }),
+    timeUp.getByRole("button", { name: "End session", exact: true }),
   ).toBeDisabled();
   await court(page).getByRole("button", { name: "Game finished" }).click();
+  // The notice's own End session is now enabled and nothing was ended for the host.
   await expect(
-    page.getByRole("button", { name: "End session", exact: true }),
+    timeUp.getByRole("button", { name: "End session", exact: true }),
   ).toBeEnabled();
-  await page.getByRole("button", { name: "End session", exact: true }).click();
+  await expect(timeUp).not.toContainText("Still on court");
+  await timeUp
+    .getByRole("button", { name: "End session", exact: true })
+    .click();
   await page
     .getByRole("dialog", { name: "End this session?" })
     .getByRole("button", { name: "End session", exact: true })
@@ -455,4 +462,38 @@ test("the deadline blocks called starts and new calls but lets active games fini
         (item) => item.nextGroup === null,
       ),
   ).toBe(true);
+});
+
+test("a host adds a player without a phone once, and they show as waiting after a reload", async ({
+  page,
+}) => {
+  const fixture = await liveFixture(page, { players: 5 });
+  await fixture.persist();
+  await page.goto("/live");
+  await expect(waiting(page)).toContainText("Waiting (5)");
+  await page.getByRole("button", { name: "Add player", exact: true }).click();
+  const form = page.getByRole("form", { name: "Add player" });
+  await form.getByLabel("First name").fill("Walk");
+  await form.getByLabel("Last name").fill("In");
+  await form.getByLabel("Gender").selectOption("female");
+  await form.getByLabel("Level").selectOption("beginner");
+  await form.getByRole("button", { name: "Add to waiting list" }).click();
+  await expect(form).toHaveCount(0);
+  await expect(waiting(page)).toContainText("Waiting (6)");
+  await expect(waiting(page)).toContainText("Walk In");
+  await page.reload();
+  await expect(waiting(page)).toContainText("Waiting (6)");
+  // The same name is never merged: a second add is refused and nobody joins.
+  await page.getByRole("button", { name: "Add player", exact: true }).click();
+  await form.getByLabel("First name").fill("walk");
+  await form.getByLabel("Last name").fill("IN");
+  await form.getByLabel("Gender").selectOption("female");
+  await form.getByLabel("Level").selectOption("beginner");
+  await form.getByRole("button", { name: "Add to waiting list" }).click();
+  await expect(form).toContainText("already in the session");
+  await expect(waiting(page)).toContainText("Waiting (6)");
+  const joined = (await fixture.readEvents()).filter(
+    (event) => event.type === "PlayerJoined",
+  );
+  expect(joined).toHaveLength(1);
 });

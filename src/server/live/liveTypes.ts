@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Gender } from "@/server/participantRules";
 import type { SkillLevel } from "@/server/skillLevels";
+import { draftParticipantInputSchema } from "@/server/setup/setupRules";
 
 export interface LivePlayer {
   participantId: string;
@@ -103,3 +104,15 @@ export type LiveWriteFailureOutcome = "rejected" | "conflict" | "unknown";
 export type LiveWriteResult =
   | { ok: true; seq: number; wasDuplicate: boolean }
   | { ok: false; message: string; outcome: LiveWriteFailureOutcome };
+
+/**
+ * A host adds a player whose phone is missing or flat. `eventId` is kept by the
+ * browser for as long as one form is open, so a retry after an uncertain answer
+ * settles the same write and never adds the player twice.
+ */
+export const liveAddPlayerSchema = draftParticipantInputSchema.extend({
+  sessionId: z.uuid(),
+  eventId: z.uuid(),
+  expectedLastSeq: z.number().int().positive(),
+});
+export type LiveAddPlayerInput = z.input<typeof liveAddPlayerSchema>;

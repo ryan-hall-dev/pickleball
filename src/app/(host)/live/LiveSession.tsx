@@ -12,6 +12,7 @@ import {
 import { settleWithin } from "@/lib/settleWithin";
 import { approveCheckin } from "@/server/checkin/hostCheckinActions";
 import type { HostCheckinDecisionResult } from "@/server/checkin/hostCheckinResults";
+import { addLivePlayer } from "@/server/live/liveAddPlayer";
 import { readLiveSession, writeLiveAction } from "@/server/live/liveActions";
 import type {
   LiveCommand,
@@ -21,7 +22,10 @@ import type {
   ReadLiveResult,
 } from "@/server/live/liveTypes";
 import type { Gender } from "@/server/participantRules";
+import type { DraftParticipantInput } from "@/server/setup/setupRules";
 import { PendingCheckinTray } from "../setup/PendingCheckinTray";
+import { LiveAddPlayer, type AddPlayerOutcome } from "./LiveAddPlayer";
+import { TimeUpNotice } from "./TimeUpNotice";
 import { LiveCourtCard } from "./LiveCourtCard";
 import { LiveWaiting } from "./LiveWaiting";
 
@@ -46,7 +50,11 @@ export function LiveSession({
   const [isWorking, setIsWorking] = useState(false);
   const [failedWrite, setFailedWrite] = useState<LiveWriteInput | null>(null);
   const [prepareCourtId, setPrepareCourtId] = useState<string>();
-  const [clock, setClock] = useState(0);
+  // The wall-clock moment the latest server answer arrived, and "now" on this
+  // device. The session clock is server time plus real elapsed time, so a tab
+  // that was throttled in the background is right the instant it wakes up.
+  const [receivedAt, setReceivedAt] = useState<number | null>(null);
+  const [wallNow, setWallNow] = useState<number | null>(null);
   const [endConfirmation, setEndConfirmation] = useState(false);
   const endDialog = useRef<HTMLDialogElement>(null);
   const latestSession = useRef<LiveSessionView | null>(
@@ -92,7 +100,8 @@ export function LiveSession({
       latestSession.current = response.session;
     }
     setResult(response);
-    setClock(0);
+    setReceivedAt(Date.now());
+    setWallNow(Date.now());
   }, []);
   useEffect(() => {
     let stopped = false;
@@ -109,20 +118,31 @@ export function LiveSession({
       void refresh(() => stopped);
     };
     const interval = setInterval(poll, 5_000);
-    const timer = setInterval(() => setClock((value) => value + 1000), 1000);
+    const timer = setInterval(() => setWallNow(Date.now()), 1000);
+    const wake = () => {
+      if (!document.hidden) setWallNow(Date.now());
+    };
+    document.addEventListener("visibilitychange", wake);
     document.addEventListener("visibilitychange", poll);
     return () => {
       stopped = true;
       clearInterval(interval);
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", wake);
       document.removeEventListener("visibilitychange", poll);
     };
   }, [refresh]);
+  // Another host may end the session while this confirmation is open.
+  const endedElsewhere =
+    result.ok &&
+    result.status === "session" &&
+    result.session.phase === "ended";
+  const confirmationOpen = endConfirmation && !endedElsewhere;
   useEffect(() => {
     const dialog = endDialog.current;
-    if (endConfirmation && dialog && !dialog.open) dialog.showModal();
-    if (!endConfirmation && dialog?.open) dialog.close();
-  }, [endConfirmation]);
+    if (confirmationOpen && dialog && !dialog.open) dialog.showModal();
+    if (!confirmationOpen && dialog?.open) dialog.close();
+  }, [confirmationOpen]);
 
   const submit = useCallback(
     async (input: LiveWriteInput) => {
@@ -197,6 +217,39 @@ export function LiveSession({
     [refresh],
   );
 
+  const addPlayer = useCallback(
+    async (
+      player: DraftParticipantInput,
+      eventId: string,
+    ): Promise<AddPlayerOutcome> => {
+      const current = latestSession.current;
+      if (!current || working.current)
+        return { kind: "failed", message: "Wait for the current save." };
+      working.current = true;
+      setIsWorking(true);
+      setMessage(null);
+      const response = await settleWithin(
+        addLivePlayer({
+          ...player,
+          sessionId: current.sessionId,
+          eventId,
+          expectedLastSeq: current.lastSeq,
+        }),
+        TIMEOUT_MS,
+        WRITE_FAILURE,
+      ).catch(() => WRITE_FAILURE);
+      // Show the real state whatever the answer: after a conflict this is what
+      // gives the next try the current sequence.
+      await refresh();
+      working.current = false;
+      setIsWorking(false);
+      return response.ok
+        ? { kind: "added" }
+        : { kind: "failed", message: response.message };
+    },
+    [refresh],
+  );
+
   const session =
     result.ok && result.status === "session" ? result.session : null;
   if (!session)
@@ -217,7 +270,10 @@ export function LiveSession({
         </Link>
       </section>
     );
-  const now = session.now + clock;
+  const now =
+    receivedAt !== null && wallNow !== null
+      ? session.now + Math.max(0, wallNow - receivedAt)
+      : session.now;
   const timeIsUp = session.timeIsUp || now >= session.deadline;
   const ended = session.phase === "ended";
   const activeGames = session.courts.filter(
@@ -276,6 +332,15 @@ export function LiveSession({
           </div>
         )}
       </section>
+      {timeIsUp && !ended && (
+        <TimeUpNotice
+          activeCourtNames={session.courts
+            .filter((court) => court.activeMatch)
+            .map((court) => court.name)}
+          disabled={disabled}
+          onEnd={() => setEndConfirmation(true)}
+        />
+      )}
       {message && <AttentionMessage>{message}</AttentionMessage>}
       {failedWrite && (
         <button
@@ -305,7 +370,8 @@ export function LiveSession({
           </nav>
           {/* Hosts approve arrivals and show the QR code most in the first
               hour, so check-ins come first, then waiting players, then courts. */}
-          <div id="checkins">
+          <div id="checkins" className="flex flex-col gap-3">
+            <LiveAddPlayer disabled={disabled} onAdd={addPlayer} />
             <PendingCheckinTray
               approveDecision={approve}
               onParticipantApproved={() => void refresh()}
@@ -357,8 +423,9 @@ export function LiveSession({
           End this session?
         </h2>
         <p className="mt-3 text-muted">
-          Unstarted called groups will be released. The next session starts with
-          a fresh player list.
+          Waiting times stop when you confirm. Unstarted called groups will be
+          released. Nothing is ended for you: any game still on court has to be
+          finished first. The next session starts with a fresh player list.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <button

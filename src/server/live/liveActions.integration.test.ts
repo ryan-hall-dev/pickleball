@@ -12,6 +12,7 @@ import { loadSessionLog } from "@/server/sessionLog";
 import { deleteTestSocials } from "@/server/testing/deleteTestSocials";
 import { DEFAULT_SESSION_DRAFT_CONFIG } from "../setup/setupRules";
 import { readLiveSession, writeLiveAction } from "./liveActions";
+import { addLivePlayer } from "./liveAddPlayer";
 import type { LiveCommand, LiveSessionView } from "./liveTypes";
 import { startSimpleSession } from "../setup/startSimpleSession";
 
@@ -760,6 +761,82 @@ describe.skipIf(!localStack)("simple live host controls", () => {
     }
     actingClient = host;
   });
+  it("adds a manual player exactly once, never merges names, and refuses stale, foreign and clashing adds", async () => {
+    actingClient = host;
+    const before = await view(false);
+    const addId = randomUUID();
+    const walkIn = {
+      sessionId,
+      firstName: "Walk",
+      lastName: "In",
+      skillLevel: "beginner" as const,
+      gender: "female" as const,
+    };
+    const add = (eventId: string, expectedLastSeq: number, extra = {}) =>
+      addLivePlayer({ ...walkIn, ...extra, eventId, expectedLastSeq });
+    // A double click sends the same write twice at once.
+    const both = await Promise.all([
+      add(addId, before.lastSeq),
+      add(addId, before.lastSeq),
+    ]);
+    expect(both.every((result) => result.ok)).toBe(true);
+    expect(
+      both.filter((result) => result.ok && !result.wasDuplicate),
+    ).toHaveLength(1);
+    // A lost answer is retried later, with a sequence that is now stale.
+    expect(await add(addId, before.lastSeq)).toMatchObject({
+      ok: true,
+      wasDuplicate: true,
+    });
+    const added = await view(false);
+    expect(added.lastSeq).toBe(before.lastSeq + 1);
+    expect(added.players).toHaveLength(before.players.length + 1);
+    const walkIns = added.players.filter((player) => player.name === "Walk In");
+    expect(walkIns).toHaveLength(1);
+    expect(walkIns[0]).toMatchObject({ status: "waiting", gender: "female" });
+    const rows = await admin
+      .from("session_participants")
+      .select("id, social_id")
+      .eq("session_id", sessionId)
+      .eq("first_name", "Walk");
+    expect(rows.data).toEqual([
+      { id: walkIns[0].participantId, social_id: socialId },
+    ]);
+    const events = (await loadSessionLog(host, sessionId))!.events.filter(
+      (event) => event.eventId === addId,
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("PlayerJoined");
+
+    // The same name is never merged: it is refused, even respelled with spaces and case.
+    expect(
+      await add(randomUUID(), added.lastSeq, {
+        firstName: "  walk ",
+        lastName: "IN",
+      }),
+    ).toMatchObject({ ok: false, outcome: "rejected" });
+    // A stale screen adds nobody.
+    expect(
+      await add(randomUUID(), before.lastSeq, {
+        firstName: "Late",
+        lastName: "Comer",
+      }),
+    ).toMatchObject({ ok: false, outcome: "conflict" });
+    // Another social's host, a non-host and a signed-out caller change nothing.
+    for (const client of [otherHost, nonHost, signedOut]) {
+      actingClient = client;
+      expect(
+        await add(randomUUID(), added.lastSeq, {
+          firstName: "Not",
+          lastName: "Mine",
+        }),
+      ).toMatchObject({ ok: false });
+    }
+    actingClient = host;
+    const final = await view(false);
+    expect(final.lastSeq).toBe(added.lastSeq);
+    expect(final.players).toHaveLength(added.players.length);
+  });
   it("rest freezes wait and ready restores it; deadline blocks calls/starts and end releases groups", async () => {
     const player = participantIds[0];
     expect(await write({ kind: "rest", participantId: player })).toMatchObject({
@@ -824,5 +901,37 @@ describe.skipIf(!localStack)("simple live host controls", () => {
     const ended = await view();
     expect(ended.phase).toBe("ended");
     expect(ended.courts[0].called).toBeNull();
+  });
+  it("stops waiting times at End and keeps them frozen on a much later reload; nobody can join afterwards", async () => {
+    actingClient = host;
+    const ended = await view(false);
+    expect(ended.phase).toBe("ended");
+    expect(ended.players.some((player) => player.currentWaitMs! > 0)).toBe(
+      true,
+    );
+    const clock = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(ended.now + 529 * 60_000);
+    try {
+      const reloaded = await view(false);
+      expect(reloaded.phase).toBe("ended");
+      expect(reloaded.endedAt).toBe(ended.endedAt);
+      expect(reloaded.players.map((player) => player.currentWaitMs)).toEqual(
+        ended.players.map((player) => player.currentWaitMs),
+      );
+    } finally {
+      clock.mockRestore();
+    }
+    expect(
+      await addLivePlayer({
+        sessionId,
+        eventId: randomUUID(),
+        expectedLastSeq: ended.lastSeq,
+        firstName: "After",
+        lastName: "End",
+        skillLevel: "beginner",
+        gender: "male",
+      }),
+    ).toMatchObject({ ok: false, outcome: "rejected" });
   });
 });

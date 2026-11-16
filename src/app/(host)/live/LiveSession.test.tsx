@@ -7,11 +7,13 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Activity } from "react";
 import { approveCheckin } from "@/server/checkin/hostCheckinActions";
 import { readLiveSession, writeLiveAction } from "@/server/live/liveActions";
+import { addLivePlayer } from "@/server/live/liveAddPlayer";
 import type {
   LiveSessionView,
   LiveWriteInput,
@@ -24,6 +26,7 @@ vi.mock("@/server/live/liveActions", () => ({
   readLiveSession: vi.fn(),
   writeLiveAction: vi.fn(),
 }));
+vi.mock("@/server/live/liveAddPlayer", () => ({ addLivePlayer: vi.fn() }));
 vi.mock("@/server/checkin/hostCheckinActions", () => ({
   approveCheckin: vi.fn(),
 }));
@@ -46,6 +49,7 @@ vi.mock("../setup/PendingCheckinTray", () => ({
 const readMock = vi.mocked(readLiveSession);
 const approveMock = vi.mocked(approveCheckin);
 const writeMock = vi.mocked(writeLiveAction);
+const addMock = vi.mocked(addLivePlayer);
 
 const NOW = Date.parse("2026-11-15T18:00:00.000Z");
 const SESSION_ID = "d0000000-0000-4000-8000-000000000001";
@@ -149,6 +153,7 @@ beforeEach(() => {
   readMock.mockReset();
   writeMock.mockReset();
   approveMock.mockReset();
+  addMock.mockReset();
   readMock.mockResolvedValue(readResult(7));
 });
 
@@ -431,5 +436,229 @@ describe("LiveSession layout", () => {
         .map((link) => link.textContent)
         .filter((text) => ["Check-ins", "Waiting", "Courts"].includes(text!)),
     ).toEqual(["Check-ins", "Waiting", "Courts"]);
+  });
+});
+
+function withDeadline(deadline: number, lastSeq = 7): LiveSessionView {
+  const view = sessionView(lastSeq);
+  const wall = Date.now();
+  return {
+    ...view,
+    now: wall,
+    deadline,
+    timeIsUp: wall >= deadline,
+  };
+}
+
+describe("LiveSession scheduled end", () => {
+  it("shows a prominent notice with an enabled End session when time is up and no game is on court", async () => {
+    const response = {
+      ok: true,
+      status: "session",
+      session: { ...sessionView(7), timeIsUp: true, deadline: NOW - 1 },
+    } as const;
+    readMock.mockResolvedValue(response);
+    render(<LiveSession initialResult={response} />);
+    await settle();
+    const notice = screen.getByRole("region", { name: /Session time is up/ });
+    expect(notice).toHaveTextContent("No new groups can be called");
+    expect(notice).toHaveTextContent("Waiting times keep counting");
+    const end = within(notice).getByRole("button", { name: "End session" });
+    expect(end).toBeEnabled();
+  });
+
+  it("names the active courts, ends nothing for the host and keeps End locked until they finish", async () => {
+    const session = { ...sessionView(7), timeIsUp: true, deadline: NOW - 1 };
+    session.courts[0].activeMatch = {
+      matchId: "a0000000-0000-4000-8000-000000000001",
+      startedAt: NOW,
+      teamA: [session.players[0].participantId],
+      teamB: [session.players[1].participantId],
+    };
+    const response = { ok: true, status: "session", session } as const;
+    readMock.mockResolvedValue(response);
+    render(<LiveSession initialResult={response} />);
+    await settle();
+    const notice = screen.getByRole("region", { name: /Session time is up/ });
+    expect(notice).toHaveTextContent("Still on court: Court 1");
+    expect(notice).toHaveTextContent("Nothing is ended for you");
+    expect(
+      within(notice).getByRole("button", { name: "End session" }),
+    ).toBeDisabled();
+    expect(writeMock).not.toHaveBeenCalled();
+  });
+
+  it("crosses the deadline while the tab is open and stops offering new calls", async () => {
+    readMock.mockImplementation(async () => ({
+      ok: true,
+      status: "session",
+      session: withDeadline(NOW + 60_000),
+    }));
+    render(
+      <LiveSession
+        initialResult={{
+          ok: true,
+          status: "session",
+          session: withDeadline(NOW + 60_000),
+        }}
+      />,
+    );
+    await settle();
+    expect(
+      screen.queryByRole("region", { name: /Session time is up/ }),
+    ).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(61_000);
+    });
+    expect(
+      screen.getByRole("region", { name: /Session time is up/ }),
+    ).toBeVisible();
+    expect(
+      screen.getByText(/no new groups can be called and no game can start/),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Call these four" }),
+    ).toBeNull();
+  });
+
+  it("is correct the moment an old, throttled tab becomes visible, before any server answer", async () => {
+    const initial = {
+      ok: true,
+      status: "session",
+      session: withDeadline(NOW + 600_000),
+    } as const;
+    readMock.mockResolvedValue(initial);
+    render(<LiveSession initialResult={initial} />);
+    await settle();
+    expect(
+      screen.queryByRole("region", { name: /Session time is up/ }),
+    ).toBeNull();
+    let hidden = true;
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      get: () => hidden,
+    });
+    try {
+      // Background tabs freeze timers: the wall clock moves, no tick runs.
+      readMock.mockReturnValue(new Promise(() => {}));
+      vi.setSystemTime(NOW + 700_000);
+      hidden = false;
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      expect(
+        screen.getByRole("region", { name: /Session time is up/ }),
+      ).toBeVisible();
+    } finally {
+      Reflect.deleteProperty(document, "hidden");
+    }
+  });
+
+  it("shows the session as ended when another host ends it", async () => {
+    await renderLive();
+    readMock.mockResolvedValue({
+      ok: true,
+      status: "session",
+      session: { ...sessionView(8), phase: "ended", endedAt: NOW },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_100);
+    });
+    expect(screen.getByText("Session ended")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Add player/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rest Ana Brown" })).toBeNull();
+  });
+});
+
+describe("LiveSession add player", () => {
+  async function openForm() {
+    await renderLive();
+    fireEvent.click(screen.getByRole("button", { name: "Add player" }));
+    fireEvent.change(screen.getByLabelText("First name"), {
+      target: { value: "Walk" },
+    });
+    fireEvent.change(screen.getByLabelText("Last name"), {
+      target: { value: "In" },
+    });
+    fireEvent.change(screen.getByLabelText("Gender"), {
+      target: { value: "female" },
+    });
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "beginner" },
+    });
+  }
+  const submitForm = () =>
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Add to waiting list|Retry add player/,
+      }),
+    );
+
+  it("sits beside the check-ins and refuses an incomplete form without calling the server", async () => {
+    await renderLive();
+    fireEvent.click(screen.getByRole("button", { name: "Add player" }));
+    submitForm();
+    expect(addMock).not.toHaveBeenCalled();
+    expect(screen.getByText("Enter a first name.")).toBeVisible();
+    expect(screen.getByText("Choose a level.")).toBeVisible();
+  });
+
+  it("sends a double click once and closes only after a confirmed save", async () => {
+    let finish: (value: LiveWriteResult) => void = () => {};
+    addMock.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    await openForm();
+    submitForm();
+    // Enter pressed again while the first save is still in flight.
+    fireEvent.submit(screen.getByRole("form", { name: "Add player" }));
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+    await settle();
+    expect(addMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("form", { name: "Add player" })).toBeVisible();
+    await act(async () => {
+      finish(SAVED);
+      await vi.advanceTimersByTimeAsync(20);
+    });
+    expect(screen.queryByRole("form", { name: "Add player" })).toBeNull();
+    expect(addMock.mock.calls[0][0]).toMatchObject({
+      firstName: "Walk",
+      lastName: "In",
+      sessionId: SESSION_ID,
+      expectedLastSeq: 7,
+    });
+  });
+
+  it("keeps the form and the same event id after an uncertain answer, then retries without a second add", async () => {
+    addMock.mockResolvedValueOnce(UNKNOWN).mockResolvedValueOnce(SAVED);
+    await openForm();
+    submitForm();
+    await settle();
+    expect(screen.getByText(UNKNOWN.ok ? "" : UNKNOWN.message)).toBeVisible();
+    submitForm();
+    await settle();
+    expect(addMock).toHaveBeenCalledTimes(2);
+    expect(addMock.mock.calls[1][0].eventId).toBe(
+      addMock.mock.calls[0][0].eventId,
+    );
+    expect(screen.queryByRole("form", { name: "Add player" })).toBeNull();
+  });
+
+  it("refreshes after a stale sequence, adds nobody, and retries on the new sequence", async () => {
+    addMock
+      .mockResolvedValueOnce({
+        ok: false,
+        message: "The session changed before this was saved. Nobody was added.",
+        outcome: "conflict",
+      })
+      .mockResolvedValueOnce(SAVED);
+    await openForm();
+    readMock.mockResolvedValue(readResult(9));
+    submitForm();
+    await settle();
+    expect(screen.getByText(/Nobody was added/)).toBeVisible();
+    expect(screen.getByRole("form", { name: "Add player" })).toBeVisible();
+    submitForm();
+    await settle();
+    expect(addMock.mock.calls[1][0].expectedLastSeq).toBe(9);
+    expect(screen.queryByRole("form", { name: "Add player" })).toBeNull();
   });
 });
