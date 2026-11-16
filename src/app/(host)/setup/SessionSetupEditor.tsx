@@ -203,9 +203,9 @@ type SaveFailure = { saveInputKey: string; message: string };
  * page within the settle delay still saves (on unmount), and closing the tab
  * with unsaved edits asks first.
  *
- * `holdAndSaveLatest` / `release` bracket a write that replaces the form from
- * the server (applying a saved setup): no autosave can start in between, and
- * the latest edits are saved first so the server works from them.
+ * `holdAndSaveLatest` pauses autosave and flushes edits before an action uses
+ * the saved draft revision (starting or completing player details). `release`
+ * resumes saving when that action permits further edits.
  *
  * Every save names the draft's settings revision it builds on. If another
  * tab or device saved in between, the server refuses (a conflict): autosave

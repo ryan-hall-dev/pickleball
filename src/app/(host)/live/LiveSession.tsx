@@ -253,14 +253,27 @@ export function LiveSession({
             Set up a new session
           </Link>
         ) : (
-          <button
-            type="button"
-            disabled={disabled || activeGames > 0}
-            className={OUTLINE_BUTTON_CLASS_NAME}
-            onClick={() => setEndConfirmation(true)}
-          >
-            End session
-          </button>
+          <div>
+            <button
+              type="button"
+              disabled={disabled || activeGames > 0}
+              aria-describedby={
+                activeGames > 0 ? "end-session-disabled-reason" : undefined
+              }
+              className={OUTLINE_BUTTON_CLASS_NAME}
+              onClick={() => setEndConfirmation(true)}
+            >
+              End session
+            </button>
+            {activeGames > 0 && (
+              <p
+                id="end-session-disabled-reason"
+                className="mt-2 text-sm text-muted"
+              >
+                Finish the active games before ending the session.
+              </p>
+            )}
+          </div>
         )}
       </section>
       {message && <AttentionMessage>{message}</AttentionMessage>}
@@ -304,7 +317,10 @@ export function LiveSession({
                   timeIsUp={timeIsUp}
                   disabled={disabled}
                   selected={prepareCourtId === court.courtId}
-                  onPrepare={() => setPrepareCourtId(court.courtId)}
+                  onPrepare={() => {
+                    if (prepareCourtId === court.courtId) void refresh();
+                    else setPrepareCourtId(court.courtId);
+                  }}
                   onAction={act}
                   undoOptions={session.undoOptions.filter(
                     (option) => option.courtId === court.courtId,

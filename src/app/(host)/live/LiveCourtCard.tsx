@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AttentionMessage } from "@/components/AttentionMessage";
 import {
   CARD_CLASS_NAME,
   OUTLINE_BUTTON_CLASS_NAME,
@@ -9,6 +10,7 @@ import {
   TEXT_INPUT_CLASS_NAME,
 } from "@/components/controlStyles";
 import { SKILL_LEVEL_LABELS } from "@/server/skillLevels";
+import { GENDER_LABELS } from "@/server/participantRules";
 import type {
   LiveCommand,
   LiveCourt,
@@ -142,10 +144,12 @@ export function LiveCourtCard({
                 : "Longest eligible waits. Call to fix this group."}
             </p>
             {vacancy && (
-              <p className="mt-2 text-sm font-semibold text-orange-soft">
-                A called player is unavailable. Choose a valid replacement
-                before starting.
-              </p>
+              <div className="mt-2">
+                <AttentionMessage>
+                  A called player is unavailable. Choose a valid replacement
+                  before starting.
+                </AttentionMessage>
+              </div>
             )}
             <div className="mt-3 flex flex-wrap gap-2">
               {court.called ? (
@@ -298,7 +302,11 @@ function GroupEditor({
               <option value="">Choose player</option>
               {options.map((player) => (
                 <option value={player.participantId} key={player.participantId}>
-                  {player.name} · {player.gender} ·{" "}
+                  {player.name} ·{" "}
+                  {player.gender
+                    ? GENDER_LABELS[player.gender]
+                    : "Gender missing"}{" "}
+                  ·{" "}
                   {player.skill
                     ? SKILL_LEVEL_LABELS[player.skill]
                     : "Level missing"}

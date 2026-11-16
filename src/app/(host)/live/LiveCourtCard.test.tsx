@@ -18,11 +18,13 @@ it("uses court UUIDs to exclude another called group's players even when labels 
     ["Own call", ownCourtId],
     ["Other call", otherCourtId],
     ["Available", null],
+    ["Male player", null],
   ].map(([name, calledCourtId], index) => ({
     participantId: `a0000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
     name: name!,
     skill: "intermediate",
-    gender: "female",
+    gender:
+      name === "Male player" ? "male" : name === "Available" ? null : "female",
     status: "waiting",
     currentWaitMs: 0,
     returnsAt: null,
@@ -55,7 +57,26 @@ it("uses court UUIDs to exclude another called group's players even when labels 
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Change players" }));
+  const vacancyMessage = screen
+    .getByText(/A called player is unavailable/)
+    .closest("p")!;
+  expect(within(vacancyMessage).getByText("!")).toHaveAttribute(
+    "aria-hidden",
+    "true",
+  );
   for (const picker of screen.getAllByRole("combobox")) {
+    expect(
+      within(picker).getByRole("option", { name: /Own call · Female/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(picker).getByRole("option", { name: /Male player · Male/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(picker).getByRole("option", {
+        name: /Available · Gender missing/,
+      }),
+    ).toBeInTheDocument();
+    expect(picker).not.toHaveTextContent("null");
     expect(
       within(picker).getByRole("option", { name: /Own call/ }),
     ).toBeInTheDocument();

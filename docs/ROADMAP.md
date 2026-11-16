@@ -8,4 +8,6 @@ Status: draft | planned | in-progress | blocked | done
 | Socials and data isolation (M4.5) | [plans/socials.md](plans/socials.md)                                     | done (2026-11-10); seed run 2026-11-10                                                      | feature/session-manager-mvp |
 | Session-only participants         | [plans/session-only-participants.md](plans/session-only-participants.md) | done (2026-11-15, `3610972`)                                                                | feature/session-manager-mvp |
 
-| Simple social MVP | [plans/simple-social-mvp.md](plans/simple-social-mvp.md) | Setup/live + recovery verified (2026-11-16); browser edge cases and pilot remain | feature/session-manager-mvp |
+| Simple social MVP | [plans/simple-social-mvp.md](plans/simple-social-mvp.md) | Setup/live + recovery + browser edge cases verified; real pilot pending | feature/session-manager-mvp |
+
+| Simple social pilot | [plans/simple-social-pilot.md](plans/simple-social-pilot.md) | prepared; social/host/date/environment and field observation pending | feature/session-manager-mvp |

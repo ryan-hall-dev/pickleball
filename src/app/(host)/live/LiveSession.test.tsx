@@ -370,3 +370,43 @@ describe("LiveSession polling lifecycle", () => {
     expect(readMock).toHaveBeenCalledTimes(readsBeforePoll + 2);
   });
 });
+
+describe("LiveSession glanceable controls", () => {
+  it("explains why the session cannot end while a game is active", async () => {
+    const session = sessionView(7);
+    session.courts[0].activeMatch = {
+      matchId: "a0000000-0000-4000-8000-000000000001",
+      startedAt: NOW,
+      teamA: [session.players[0].participantId],
+      teamB: [session.players[1].participantId],
+    };
+    const response = { ok: true, status: "session", session } as const;
+    readMock.mockResolvedValue(response);
+    render(<LiveSession initialResult={response} />);
+    await settle();
+    const end = screen.getByRole("button", { name: "End session" });
+    expect(end).toBeDisabled();
+    expect(end).toHaveAccessibleDescription(
+      "Finish the active games before ending the session.",
+    );
+  });
+
+  it("reads once when selecting a court and reads again when refreshing that same court", async () => {
+    await renderLive();
+    const readsBefore = readMock.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Prepare next four" }));
+    await settle();
+    expect(readMock).toHaveBeenCalledTimes(readsBefore + 1);
+    expect(readMock).toHaveBeenLastCalledWith({
+      sessionId: SESSION_ID,
+      prepareCourtId: sessionView(7).courts[0].courtId,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Refresh next four" }));
+    await settle();
+    expect(readMock).toHaveBeenCalledTimes(readsBefore + 2);
+    expect(readMock).toHaveBeenLastCalledWith({
+      sessionId: SESSION_ID,
+      prepareCourtId: sessionView(7).courts[0].courtId,
+    });
+  });
+});
