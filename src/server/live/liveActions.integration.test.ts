@@ -761,7 +761,7 @@ describe.skipIf(!localStack)("simple live host controls", () => {
     }
     actingClient = host;
   });
-  it("adds a manual player exactly once, never merges names, and refuses stale, foreign and clashing adds", async () => {
+  it("adds a manual player exactly once, lets two different people share a name, and refuses stale, foreign and altered retries", async () => {
     actingClient = host;
     const before = await view(false);
     const addId = randomUUID();
@@ -808,13 +808,6 @@ describe.skipIf(!localStack)("simple live host controls", () => {
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe("PlayerJoined");
 
-    // The same name is never merged: it is refused, even respelled with spaces and case.
-    expect(
-      await add(randomUUID(), added.lastSeq, {
-        firstName: "  walk ",
-        lastName: "IN",
-      }),
-    ).toMatchObject({ ok: false, outcome: "rejected" });
     // A stale screen adds nobody.
     expect(
       await add(randomUUID(), before.lastSeq, {
@@ -836,6 +829,60 @@ describe.skipIf(!localStack)("simple live host controls", () => {
     const final = await view(false);
     expect(final.lastSeq).toBe(added.lastSeq);
     expect(final.players).toHaveLength(added.players.length);
+
+    // Two different people may share a name: a new event id is a new person,
+    // told apart by UUID, and neither is merged into the other.
+    const twinId = randomUUID();
+    const twinInput = {
+      firstName: " walk ",
+      lastName: "IN",
+      gender: "male" as const,
+    };
+    expect(await add(twinId, final.lastSeq, twinInput)).toMatchObject({
+      ok: true,
+      wasDuplicate: false,
+    });
+    const twins = await view(false);
+    const sameName = twins.players.filter(
+      (player) => player.name.toLowerCase() === "walk in",
+    );
+    expect(sameName).toHaveLength(2);
+    expect(new Set(sameName.map((player) => player.participantId)).size).toBe(
+      2,
+    );
+    expect(sameName.map((player) => player.status)).toEqual([
+      "waiting",
+      "waiting",
+    ]);
+    // The twin's lost answer is retried, even with a stale sequence: no third person.
+    expect(await add(twinId, final.lastSeq, twinInput)).toMatchObject({
+      ok: true,
+      wasDuplicate: true,
+    });
+    // The unresolved first add is retried with edited fields: refused, never a second write.
+    expect(
+      await add(addId, twins.lastSeq, { firstName: "Wally", lastName: "In" }),
+    ).toMatchObject({ ok: false, outcome: "rejected" });
+    expect(await add(addId, twins.lastSeq)).toMatchObject({
+      ok: true,
+      wasDuplicate: true,
+    });
+    const settled = await view(false);
+    expect(settled.lastSeq).toBe(twins.lastSeq);
+    expect(settled.players).toHaveLength(twins.players.length);
+    const personRows = await admin
+      .from("session_participants")
+      .select("id")
+      .eq("session_id", sessionId)
+      .ilike("first_name", "walk");
+    expect(personRows.data).toHaveLength(2);
+    const joinEvents = (await loadSessionLog(host, sessionId))!.events.filter(
+      (event) => event.eventId === addId || event.eventId === twinId,
+    );
+    expect(joinEvents.map((event) => event.type)).toEqual([
+      "PlayerJoined",
+      "PlayerJoined",
+    ]);
   });
   it("rest freezes wait and ready restores it; deadline blocks calls/starts and end releases groups", async () => {
     const player = participantIds[0];

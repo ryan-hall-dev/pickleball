@@ -45,7 +45,7 @@ select ok((select gender is null and skill_level is null from public.session_par
 select is((select count(*) from pg_proc where oid in (
   'public.submit_checkin(text,uuid,text,text,text,text,public.skill_level,text)'::regprocedure,
   'public.add_draft_participant(uuid,uuid,uuid,text,text,public.skill_level,text)'::regprocedure,
-  'public.add_participant_mid_session(uuid,uuid,uuid,text,text,public.skill_level,uuid,integer,timestamptz,text)'::regprocedure,
+  'public.add_participant_mid_session(uuid,uuid,uuid,text,text,public.skill_level,uuid,integer,timestamptz,text,boolean)'::regprocedure,
   'public.approve_checkin(uuid,uuid,uuid,uuid,integer,timestamptz,text)'::regprocedure,
   'public.start_session(uuid,uuid,uuid,timestamptz,jsonb,integer)'::regprocedure,
   'public.set_draft_participant_details(uuid,uuid,uuid,text,public.skill_level,integer)'::regprocedure,
@@ -60,7 +60,7 @@ select is(to_regprocedure('public.add_draft_participant(uuid,uuid,uuid,text,text
 select is(to_regprocedure('public.add_participant_mid_session(uuid,uuid,uuid,text,text,public.skill_level,uuid,integer,timestamptz)'), null::regprocedure, 'gender-free live-add signature removed');
 select is(to_regprocedure('public.approve_checkin(uuid,uuid,uuid,uuid,integer,timestamptz)'), null::regprocedure, 'old approval overload removed');
 select is(to_regprocedure('public.start_session(uuid,uuid,uuid,timestamptz,jsonb)'), null::regprocedure, 'old start overload removed; defaulted revision preserves legacy calls');
-select ok(not has_function_privilege('service_role','private.insert_session_participant(uuid,uuid,uuid,text,text,public.skill_level,text)','execute'), 'service role cannot execute private insert directly');
+select ok(not has_function_privilege('service_role','private.insert_session_participant(uuid,uuid,uuid,text,text,public.skill_level,text,boolean)','execute'), 'service role cannot execute private insert directly');
 select ok(not has_function_privilege('anon','private.player_joined_payload(public.session_participants)','execute'), 'anon cannot execute payload helper');
 select throws_ok($$update public.session_participants set gender = 'unknown' where id = 'e1300000-0000-4000-8000-000000000001'$$, '23514', null, 'participant gender has a database constraint');
 select throws_ok($$update public.checkin_requests set gender = 'unknown' where id = 'b1300000-0000-4000-8000-000000000001'$$, '23514', null, 'request gender has a database constraint');
@@ -113,6 +113,14 @@ select is(public.append_session_event('a1300000-0000-4000-8000-000000000001','d1
 select is(public.start_session('a1300000-0000-4000-8000-000000000003','d1300000-0000-4000-8000-000000000003',gen_random_uuid(),now(),'{"config":{"courts":[],"participants":[{"participantId":"e1300000-0000-4000-8000-000000000003"}]},"initialAttendeeIds":["e1300000-0000-4000-8000-000000000003"]}')->>'status','appended','legacy start still accepts historical missing details without policy upgrade');
 select ok((select gender is null and skill_level is null from public.session_participants where id='e1300000-0000-4000-8000-000000000003'),'legacy missing fields remain untouched');
 select ok((select not (config_snapshot ? 'policyVersion') from public.sessions where id='d1300000-0000-4000-8000-000000000003'),'legacy session is never implicitly upgraded');
+-- Two different people may share a name when a host adds them live: UUID and event id identify them.
+select throws_ok($$select public.add_participant_mid_session('a1300000-0000-4000-8000-000000000001','d1300000-0000-4000-8000-000000000001',gen_random_uuid(),'late','KNOWN','beginner',gen_random_uuid(),2,now(),'female')$$,'P0001','NAME_ALREADY_IN_SESSION','the default live add keeps the one-name rule');
+select is(public.add_participant_mid_session('a1300000-0000-4000-8000-000000000001','d1300000-0000-4000-8000-000000000001','e1300000-0000-4000-8000-000000000007','Late','Known','beginner','f1300000-0000-4000-8000-000000000007',2,now(),'female',true)->>'status','appended','a host may add a second person with the same name');
+select is(public.add_participant_mid_session('a1300000-0000-4000-8000-000000000001','d1300000-0000-4000-8000-000000000001','e1300000-0000-4000-8000-000000000008','Late','Known','intermediate','f1300000-0000-4000-8000-000000000008',3,now(),'male',true)->>'status','appended','and a third');
+select is((select count(*) from public.session_participants where session_id='d1300000-0000-4000-8000-000000000001' and first_name='Late' and last_name='Known'),3::bigint,'three distinct participant rows share the name');
+select is(public.add_participant_mid_session('a1300000-0000-4000-8000-000000000001','d1300000-0000-4000-8000-000000000001','e1300000-0000-4000-8000-000000000009','Late','Known','intermediate','f1300000-0000-4000-8000-000000000008',3,now(),'male',true)->>'session_participant_id','e1300000-0000-4000-8000-000000000008','a retried event id returns the original person');
+select is((select count(*) from public.session_participants where session_id='d1300000-0000-4000-8000-000000000001' and first_name='Late' and last_name='Known'),3::bigint,'the retry added nobody');
+select is((select count(*) from public.session_events where session_id='d1300000-0000-4000-8000-000000000001' and event_id in ('f1300000-0000-4000-8000-000000000007','f1300000-0000-4000-8000-000000000008')),2::bigint,'one join event per event id');
 reset role;
 select * from finish();
 rollback;

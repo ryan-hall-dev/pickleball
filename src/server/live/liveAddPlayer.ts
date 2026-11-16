@@ -18,9 +18,11 @@ const STALE_MESSAGE =
 
 /**
  * Adds a session-only player to the live waiting list (one transaction:
- * snapshot row plus `PlayerJoined`). Never merges by name: a name already in
- * the session is refused by the database. A retry with the same event id
- * returns the original write instead of a second player.
+ * snapshot row plus `PlayerJoined`). Two different people may share a name:
+ * they are told apart by UUID and a double submit is stopped by the event id,
+ * never by the name. A retry with the same event id returns the original
+ * write instead of a second player; a different player under a used event id
+ * is refused.
  */
 export async function addLivePlayer(
   input: LiveAddPlayerInput,
@@ -72,7 +74,25 @@ export async function addLivePlayer(
           message: "That action ID was already used. Refresh and try again.",
           outcome: "rejected",
         };
-      participantId = landed.payload.participant.participantId;
+      // The retry must be the same person: a different name or details under
+      // a used event id is a new add and needs its own id.
+      const same = (left: string | undefined, right: string) =>
+        left?.trim().replace(/\s+/g, " ").toLowerCase() ===
+        right.trim().replace(/\s+/g, " ").toLowerCase();
+      const earlier = landed.payload.participant;
+      if (
+        !same(earlier.firstName, details.firstName) ||
+        !same(earlier.lastName, details.lastName) ||
+        earlier.skill !== details.skillLevel ||
+        earlier.gender !== details.gender
+      )
+        return {
+          ok: false,
+          message:
+            "That action ID was already used for a different player. Refresh and add again.",
+          outcome: "rejected",
+        };
+      participantId = earlier.participantId;
     } else {
       if (replayed.state.lastSeq !== details.expectedLastSeq)
         return { ok: false, message: STALE_MESSAGE, outcome: "conflict" };
@@ -108,19 +128,14 @@ export async function addLivePlayer(
         p_last_name: details.lastName,
         p_skill_level: details.skillLevel,
         p_gender: details.gender,
+        // People are told apart by UUID; the event id stops a double add.
+        p_allows_same_name: true,
         p_event_id: details.eventId,
         p_expected_last_seq: details.expectedLastSeq,
         p_occurred_at: new Date(at).toISOString(),
       })
       .abortSignal(checkinDatabaseTimeoutSignal());
     if (error) {
-      if (error.message === "NAME_ALREADY_IN_SESSION")
-        return {
-          ok: false,
-          message:
-            "Someone with this name is already in the session. Nobody was added. Use a different spelling only if they are a different person.",
-          outcome: "rejected",
-        };
       if (error.message === "STALE_EXPECTED_SEQ")
         return { ok: false, message: STALE_MESSAGE, outcome: "conflict" };
       if (error.message === "SESSION_NOT_LIVE")

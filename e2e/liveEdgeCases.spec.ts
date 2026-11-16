@@ -464,7 +464,7 @@ test("the deadline blocks called starts and new calls but lets active games fini
   ).toBe(true);
 });
 
-test("a host adds a player without a phone once, and they show as waiting after a reload", async ({
+test("a host adds players without a phone, including two with the same name, each exactly once", async ({
   page,
 }) => {
   const fixture = await liveFixture(page, { players: 5 });
@@ -483,17 +483,28 @@ test("a host adds a player without a phone once, and they show as waiting after 
   await expect(waiting(page)).toContainText("Walk In");
   await page.reload();
   await expect(waiting(page)).toContainText("Waiting (6)");
-  // The same name is never merged: a second add is refused and nobody joins.
+  // A second, different person with the same name is a separate player.
   await page.getByRole("button", { name: "Add player", exact: true }).click();
   await form.getByLabel("First name").fill("walk");
   await form.getByLabel("Last name").fill("IN");
-  await form.getByLabel("Gender").selectOption("female");
-  await form.getByLabel("Level").selectOption("beginner");
+  await form.getByLabel("Gender").selectOption("male");
+  await form.getByLabel("Level").selectOption("advanced");
   await form.getByRole("button", { name: "Add to waiting list" }).click();
-  await expect(form).toContainText("already in the session");
-  await expect(waiting(page)).toContainText("Waiting (6)");
+  await expect(form).toHaveCount(0);
+  await expect(waiting(page)).toContainText("Waiting (7)");
+  await page.reload();
+  await expect(waiting(page)).toContainText("Waiting (7)");
   const joined = (await fixture.readEvents()).filter(
     (event) => event.type === "PlayerJoined",
   );
-  expect(joined).toHaveLength(1);
+  expect(joined).toHaveLength(2);
+  expect(
+    new Set(
+      joined.map(
+        (event) =>
+          (event.payload as { participant: { participantId: string } })
+            .participant.participantId,
+      ),
+    ).size,
+  ).toBe(2);
 });

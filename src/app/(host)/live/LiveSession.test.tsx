@@ -633,13 +633,47 @@ describe("LiveSession add player", () => {
     submitForm();
     await settle();
     expect(screen.getByText(UNKNOWN.ok ? "" : UNKNOWN.message)).toBeVisible();
+    // While the answer is unresolved the details are locked: an edit could
+    // otherwise turn a possibly-saved add into a second person.
+    for (const label of ["First name", "Last name", "Gender", "Level"])
+      expect(screen.getByLabelText(label)).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     submitForm();
     await settle();
     expect(addMock).toHaveBeenCalledTimes(2);
-    expect(addMock.mock.calls[1][0].eventId).toBe(
+    expect(addMock.mock.calls[1][0]).toEqual(addMock.mock.calls[0][0]);
+    expect(screen.queryByRole("form", { name: "Add player" })).toBeNull();
+  });
+
+  it("lets two different people share a name: after a confirmed add, the next add gets its own event id", async () => {
+    addMock.mockResolvedValue(SAVED);
+    await openForm();
+    submitForm();
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Add player" }));
+    fireEvent.change(screen.getByLabelText("First name"), {
+      target: { value: "Walk" },
+    });
+    fireEvent.change(screen.getByLabelText("Last name"), {
+      target: { value: "In" },
+    });
+    fireEvent.change(screen.getByLabelText("Gender"), {
+      target: { value: "male" },
+    });
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "advanced" },
+    });
+    submitForm();
+    await settle();
+    expect(addMock).toHaveBeenCalledTimes(2);
+    expect(addMock.mock.calls[1][0].eventId).not.toBe(
       addMock.mock.calls[0][0].eventId,
     );
-    expect(screen.queryByRole("form", { name: "Add player" })).toBeNull();
+    expect(addMock.mock.calls[1][0]).toMatchObject({
+      firstName: "Walk",
+      lastName: "In",
+      gender: "male",
+    });
   });
 
   it("refreshes after a stale sequence, adds nobody, and retries on the new sequence", async () => {

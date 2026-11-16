@@ -191,14 +191,14 @@ isOneToOne: false
                   ]
                 },"session_participants": {
                   Row: {
-                    "created_at": string,"first_name": string,"gender": string | null,"id": string,"last_name": string,"session_id": string,"skill_level": Database["public"]['Enums']["skill_level"] | null,"social_id": string
+                    "allows_same_name": boolean,"created_at": string,"first_name": string,"gender": string | null,"id": string,"last_name": string,"session_id": string,"skill_level": Database["public"]['Enums']["skill_level"] | null,"social_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"first_name": string,"gender"?: string | null,"id"?: string,"last_name": string,"session_id": string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id": string
+                    "allows_same_name"?: boolean,"created_at"?: string,"first_name": string,"gender"?: string | null,"id"?: string,"last_name": string,"session_id": string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id": string
                   }
                   Update: {
-                    "created_at"?: string,"first_name"?: string,"gender"?: string | null,"id"?: string,"last_name"?: string,"session_id"?: string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id"?: string
+                    "allows_same_name"?: boolean,"created_at"?: string,"first_name"?: string,"gender"?: string | null,"id"?: string,"last_name"?: string,"session_id"?: string,"skill_level"?: Database["public"]['Enums']["skill_level"] | null,"social_id"?: string
                   }
                   Relationships: [
                     {
@@ -259,7 +259,7 @@ isOneToOne: false
 { Args: { "p_actor_user_id": string,"p_first_name": string,"p_gender": string,"p_last_name": string,"p_session_id": string,"p_session_participant_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: string
                            },
 "add_participant_mid_session":
-{ Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_last_seq": number,"p_first_name": string,"p_gender": string,"p_last_name": string,"p_occurred_at": string,"p_session_id": string,"p_session_participant_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
+{ Args: { "p_actor_user_id": string,"p_allows_same_name"?: boolean,"p_event_id": string,"p_expected_last_seq": number,"p_first_name": string,"p_gender": string,"p_last_name": string,"p_occurred_at": string,"p_session_id": string,"p_session_participant_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
                            },
 "append_session_event":
 { Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_last_seq": number,"p_match_row"?: Json,"p_occurred_at": string,"p_payload": Json,"p_session_id": string,"p_type": Database["public"]['Enums']["session_event_type"] }; Returns: Json

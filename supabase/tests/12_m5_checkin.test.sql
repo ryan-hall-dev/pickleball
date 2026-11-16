@@ -64,7 +64,7 @@ select is(
      'public.submit_checkin(text, uuid, text, text, text, text, public.skill_level, text)'::regprocedure,
      'public.approve_checkin(uuid, uuid, uuid, uuid, integer, timestamptz, text)'::regprocedure,
      'public.add_draft_participant(uuid, uuid, uuid, text, text, public.skill_level, text)'::regprocedure,
-     'public.add_participant_mid_session(uuid, uuid, uuid, text, text, public.skill_level, uuid, integer, timestamptz, text)'::regprocedure
+     'public.add_participant_mid_session(uuid, uuid, uuid, text, text, public.skill_level, uuid, integer, timestamptz, text, boolean)'::regprocedure
    )
    and prosecdef
    and proconfig = array['search_path=""']

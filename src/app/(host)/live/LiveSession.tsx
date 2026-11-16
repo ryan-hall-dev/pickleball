@@ -224,7 +224,11 @@ export function LiveSession({
     ): Promise<AddPlayerOutcome> => {
       const current = latestSession.current;
       if (!current || working.current)
-        return { kind: "failed", message: "Wait for the current save." };
+        return {
+          kind: "failed",
+          message: "Wait for the current save.",
+          uncertain: false,
+        };
       working.current = true;
       setIsWorking(true);
       setMessage(null);
@@ -245,7 +249,11 @@ export function LiveSession({
       setIsWorking(false);
       return response.ok
         ? { kind: "added" }
-        : { kind: "failed", message: response.message };
+        : {
+            kind: "failed",
+            message: response.message,
+            uncertain: response.outcome === "unknown",
+          };
     },
     [refresh],
   );

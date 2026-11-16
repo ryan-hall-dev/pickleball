@@ -23,7 +23,7 @@ import {
 } from "../setup/whosPlaying";
 
 export type AddPlayerOutcome =
-  { kind: "added" } | { kind: "failed"; message: string };
+  { kind: "added" } | { kind: "failed"; message: string; uncertain: boolean };
 
 /**
  * "Add player" for someone whose phone is missing or flat. The same event id
@@ -45,10 +45,14 @@ export function LiveAddPlayer({
   const [fieldErrors, setFieldErrors] = useState<ParticipantFormErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // The last answer was not trustworthy: the add may or may not be saved. The
+  // fields stay fixed so a retry can only settle that same add.
+  const [unresolved, setUnresolved] = useState(false);
   const eventId = useRef<string | null>(null);
   const inFlight = useRef(false);
 
   function edit(field: keyof ParticipantForm, value: string) {
+    if (unresolved) return;
     setForm((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
     // A changed player is a different write: it needs its own event id.
@@ -71,6 +75,7 @@ export function LiveAddPlayer({
     const outcome = await onAdd(validation.participant, eventId.current);
     inFlight.current = false;
     setSaving(false);
+    setUnresolved(outcome.kind === "failed" && outcome.uncertain);
     if (outcome.kind === "added") {
       eventId.current = null;
       setForm(EMPTY_PARTICIPANT_FORM);
@@ -113,6 +118,7 @@ export function LiveAddPlayer({
             autoComplete="off"
             maxLength={PERSON_NAME_MAX_LENGTH}
             value={form.firstName}
+            disabled={unresolved}
             onChange={(event) => edit("firstName", event.target.value)}
             className={TEXT_INPUT_CLASS_NAME}
             aria-invalid={fieldErrors.firstName ? true : undefined}
@@ -132,6 +138,7 @@ export function LiveAddPlayer({
             autoComplete="off"
             maxLength={PERSON_NAME_MAX_LENGTH}
             value={form.lastName}
+            disabled={unresolved}
             onChange={(event) => edit("lastName", event.target.value)}
             className={TEXT_INPUT_CLASS_NAME}
             aria-invalid={fieldErrors.lastName ? true : undefined}
@@ -144,6 +151,7 @@ export function LiveAddPlayer({
           <select
             id="live-add-gender"
             value={form.gender}
+            disabled={unresolved}
             onChange={(event) => edit("gender", event.target.value)}
             className={TEXT_INPUT_CLASS_NAME}
             aria-invalid={fieldErrors.gender ? true : undefined}
@@ -163,6 +171,7 @@ export function LiveAddPlayer({
           <select
             id="live-add-skill"
             value={form.skillLevel}
+            disabled={unresolved}
             onChange={(event) => edit("skillLevel", event.target.value)}
             className={TEXT_INPUT_CLASS_NAME}
             aria-invalid={fieldErrors.skillLevel ? true : undefined}
@@ -179,6 +188,12 @@ export function LiveAddPlayer({
           </select>
         </Field>
       </div>
+      {unresolved && (
+        <p className="mt-3 text-[13px] text-muted">
+          Not confirmed yet. Retrying checks this same add, so it cannot add
+          them twice. The details are locked until it settles.
+        </p>
+      )}
       {failure && (
         <div className="mt-3">
           <AttentionMessage>{failure}</AttentionMessage>
@@ -196,18 +211,20 @@ export function LiveAddPlayer({
               ? "Retry add player"
               : "Add to waiting list"}
         </button>
-        <button
-          type="button"
-          className={OUTLINE_BUTTON_CLASS_NAME}
-          disabled={saving}
-          onClick={() => {
-            setOpen(false);
-            setFailure(null);
-            eventId.current = null;
-          }}
-        >
-          Cancel
-        </button>
+        {!unresolved && (
+          <button
+            type="button"
+            className={OUTLINE_BUTTON_CLASS_NAME}
+            disabled={saving}
+            onClick={() => {
+              setOpen(false);
+              setFailure(null);
+              eventId.current = null;
+            }}
+          >
+            Cancel
+          </button>
+        )}
       </div>
     </form>
   );
