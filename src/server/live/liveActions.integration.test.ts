@@ -232,6 +232,14 @@ describe.skipIf(!localStack)("simple live host controls", () => {
       command,
     });
   }
+  /** Courts are prepared automatically. Releasing a prepared group holds the court, so a test can call its own teams. */
+  async function clearCourt() {
+    const prepared = (await view(false)).courts[0].called;
+    if (prepared)
+      expect(
+        await write({ kind: "release", calledEventId: prepared.calledEventId }),
+      ).toMatchObject({ ok: true });
+  }
   it("authorizes every read/write and rejects cross-social and stale changes", async () => {
     for (const client of [signedOut, nonHost, otherHost]) {
       actingClient = client;
@@ -250,34 +258,26 @@ describe.skipIf(!localStack)("simple live host controls", () => {
     expect(
       await write({ kind: "rest", participantId: participantIds[0] }, 999),
     ).toMatchObject({ ok: false, outcome: "conflict" });
-    expect((await view()).lastSeq).toBe(1);
+    // The first read prepared Court 1 automatically (seq 2); nothing else landed.
+    expect((await view()).lastSeq).toBe(2);
   });
   it("calls, starts, finishes separately, keeps retries idempotent and enforces hard teams", async () => {
     actingClient = host;
     const current = await view();
-    expect(current.courts[0].suggestion).not.toBeNull();
+    // Court 1 was prepared automatically, with four distinct players.
+    const prepared = current.courts[0].called!;
+    expect(prepared).not.toBeNull();
+    expect(new Set([...prepared.teamA, ...prepared.teamB]).size).toBe(4);
+    // Hard teams still apply to a correction.
     expect(
       await write({
-        kind: "call",
-        courtId,
+        kind: "change",
+        calledEventId: prepared.calledEventId,
         teamA: [participantIds[0], participantIds[1]],
         teamB: [participantIds[2], participantIds[4]],
       }),
     ).toMatchObject({ ok: false });
-    const suggestion = current.courts[0].suggestion!;
-    const callId = randomUUID();
-    expect(
-      await write(
-        {
-          kind: "call",
-          courtId,
-          teamA: suggestion.teamA as string[],
-          teamB: suggestion.teamB as string[],
-        },
-        1,
-        callId,
-      ),
-    ).toMatchObject({ ok: true });
+    const callId = prepared.calledEventId;
     const called = await view();
     expect(
       called.players.filter((player) => player.status === "waiting"),
@@ -495,6 +495,7 @@ describe.skipIf(!localStack)("simple live host controls", () => {
       teamB: [participantIds[1], participantIds[5]],
     };
     async function startGame() {
+      await clearCourt();
       const callId = randomUUID();
       expect(
         await write({ kind: "call", courtId, ...teams }, undefined, callId),
@@ -590,11 +591,13 @@ describe.skipIf(!localStack)("simple live host controls", () => {
     expect(outgoing.to).not.toBeNull();
     expect(outgoing.countGameForOut).toBe(false);
     expect(incoming.team).toBe(outgoing.team);
-    expect(
-      await write({ kind: "finish", matchId: first.matchId }),
-    ).toMatchObject({ ok: true });
+    const finishWrite = await write({ kind: "finish", matchId: first.matchId });
+    expect(finishWrite).toMatchObject({ ok: true });
+    // The court is prepared again straight after the finish, so the finish is
+    // not the last event any more.
+    const finishSeq = finishWrite.ok ? finishWrite.seq : -1;
     const finished = await view();
-    const finishSeq = finished.lastSeq;
+    expect(finished.lastSeq).toBeGreaterThanOrEqual(finishSeq);
     const metrics = playerMetrics(await state(), Date.now());
     expect(
       metrics.find((player) => player.participantId === participantIds[0])!
@@ -907,6 +910,7 @@ describe.skipIf(!localStack)("simple live host controls", () => {
         (candidate) => candidate.participantId === player,
       )?.status,
     ).toBe("waiting");
+    await clearCourt();
     const suggestion = (await view()).courts[0].suggestion!;
     const callId = randomUUID();
     expect(

@@ -95,18 +95,19 @@ test("a host runs a game, returns its four players to waiting and rests one", as
   expect(checkInsTop!).toBeLessThan(waitingTop!);
   expect(qrTop!).toBeLessThan(waitingTop!);
   expect(waitingTop!).toBeLessThan(courtsTop!);
-  await expect(court.getByText("Court free", { exact: true })).toBeVisible();
-  await court.getByRole("button", { name: "Prepare next four" }).click();
-  await court.getByRole("button", { name: "Call these four" }).click();
+  // Starting the session prepared Court 1 by itself: no preparation step.
   await expect(
-    court.getByRole("heading", { name: "Up next · Called" }),
+    court.getByText("Group prepared", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    court.getByRole("heading", { name: "Ready to start" }),
   ).toBeVisible();
   await expect(restButtons).toHaveCount(4);
   await expect(
     court.getByRole("button", { name: "Game finished" }),
   ).toHaveCount(0);
 
-  await court.getByRole("button", { name: "Start these four" }).click();
+  await court.getByRole("button", { name: "Start game" }).click();
   await expect(court.getByText(/Playing ·/)).toBeVisible();
   await expect(restButtons).toHaveCount(0);
   for (const firstName of FIRST_NAMES)
@@ -114,14 +115,20 @@ test("a host runs a game, returns its four players to waiting and rests one", as
       court.getByText(`${firstName} Journey`, { exact: true }),
     ).toBeVisible();
   await court.getByRole("button", { name: "Game finished" }).click();
-  await expect(court.getByText("Court free", { exact: true })).toBeVisible();
+  // The four are back in waiting and, by the wait-first rule, prepared again
+  // (they are the only players); nothing starts until Start game.
+  await expect(
+    court.getByText("Group prepared", { exact: true }),
+  ).toBeVisible();
   await expect(restButtons).toHaveCount(4);
   await expect(
     court.getByRole("button", { name: "Game finished" }),
   ).toHaveCount(0);
   await page.reload();
   await expect(restButtons).toHaveCount(4);
-  await expect(court.getByText("Court free", { exact: true })).toBeVisible();
+  await expect(
+    court.getByText("Group prepared", { exact: true }),
+  ).toBeVisible();
 
   await waiting
     .getByRole("button", { name: "Rest Alex Journey", exact: true })
@@ -150,10 +157,11 @@ test("a host runs a game, returns its four players to waiting and rests one", as
     "NextGroupCalled",
     "MatchStarted",
     "MatchCompleted",
+    "NextGroupCalled",
     "PlayerSkipped",
     "PlayerUnskipped",
   ]);
-  expect(events?.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6]);
+  expect(events?.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   const { data: matches, error: matchesError } = await adminClient
     .from("matches")
     .select("status, team_a, team_b, ended_at")
@@ -206,8 +214,10 @@ test("a host runs a game, returns its four players to waiting and rests one", as
     .eq("session_id", nextDraft.id)
     .order("seq");
   if (nextEventsError) throw nextEventsError;
+  // The new session was prepared by itself, and only its own log was written.
   expect(nextEvents?.map((event) => event.type)).toEqual([
     "SessionStarted",
+    "NextGroupCalled",
     "PlayerSkipped",
   ]);
   const { data: endedEvents, error: endedEventsError } = await adminClient
@@ -216,7 +226,7 @@ test("a host runs a game, returns its four players to waiting and rests one", as
     .eq("session_id", draft.id)
     .order("seq");
   if (endedEventsError) throw endedEventsError;
-  expect(endedEvents).toHaveLength(7);
+  expect(endedEvents).toHaveLength(8);
   expect(endedEvents?.at(-1)?.type).toBe("SessionEnded");
 });
 
@@ -265,19 +275,26 @@ test("a host safely undoes start/finish, replaces a player and ends an interrupt
   const court = page.getByRole("article", { name: "Court 1", exact: true });
   const waiting = page.getByRole("region", { name: /^Waiting/ });
   const restButtons = waiting.getByRole("button", { name: /^Rest / });
-  await court.getByRole("button", { name: "Prepare next four" }).click();
-  await court.getByRole("button", { name: "Call these four" }).click();
-  await court.getByRole("button", { name: "Start these four" }).click();
+  await expect(
+    court.getByText("Group prepared", { exact: true }),
+  ).toBeVisible();
+  await court.getByRole("button", { name: "Start game" }).click();
   await expect(restButtons).toHaveCount(1);
   await court.getByText("Court options", { exact: true }).click();
   await court.getByRole("button", { name: "Undo game start" }).click();
   await expect(restButtons).toHaveCount(5);
   await expect(
-    court.getByRole("heading", { name: "Up next · Called" }),
+    court.getByRole("heading", { name: "Ready to start" }),
   ).toBeVisible();
-  await court.getByRole("button", { name: "Start these four" }).click();
+  await court.getByRole("button", { name: "Start game" }).click();
   await court.getByRole("button", { name: "Game finished" }).click();
   await expect(restButtons).toHaveCount(5);
+  // With five players the next group reserves some of the four who just
+  // finished, so Undo needs that group released first (the engine says so).
+  await expect(court.getByText("Court options", { exact: true })).toHaveCount(
+    0,
+  );
+  await court.getByRole("button", { name: "Release group" }).click();
   await court.getByText("Court options", { exact: true }).click();
   await court.getByRole("button", { name: "Undo game finish" }).click();
   await expect(restButtons).toHaveCount(1);
@@ -338,7 +355,10 @@ test("a host safely undoes start/finish, replaces a player and ends an interrupt
     .getByRole("button", { name: "Confirm interrupted game", exact: true })
     .click();
   await expect(restButtons).toHaveCount(4);
-  await expect(court.getByText("Court free", { exact: true })).toBeVisible();
+  // The freed court is prepared again from the four who are left.
+  await expect(
+    court.getByText("Group prepared", { exact: true }),
+  ).toBeVisible();
   await expect(
     waiting.getByText("Nobody resting.", { exact: true }),
   ).toBeVisible();
@@ -356,10 +376,13 @@ test("a host safely undoes start/finish, replaces a player and ends an interrupt
     "MatchStartReverted",
     "MatchStarted",
     "MatchCompleted",
+    "NextGroupCalled",
+    "NextGroupReleased",
     "MatchCompletionReverted",
     "PlayerReplaced",
     "PlayerLeft",
     "MatchAbandoned",
+    "NextGroupCalled",
   ]);
   expect(
     events?.find((event) => event.type === "PlayerReplaced")?.payload,
@@ -594,10 +617,11 @@ test("a stale live approval shows a conflict, stays pending and approves exactly
     if (eventsError) throw eventsError;
     expect(events?.map((event) => event.type)).toEqual([
       "SessionStarted",
+      "NextGroupCalled",
       "PlayerSkipped",
       "PlayerJoined",
     ]);
-    expect(events?.map((event) => event.seq)).toEqual([1, 2, 3]);
+    expect(events?.map((event) => event.seq)).toEqual([1, 2, 3, 4]);
     const { data: approved, error: approvedError } = await adminClient
       .from("checkin_requests")
       .select("status")

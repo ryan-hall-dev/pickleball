@@ -223,7 +223,7 @@ test("a committed start with a lost response retries the same action exactly onc
     committedEventId = committed[0].event_id;
     await route.abort("failed");
   });
-  await court(page).getByRole("button", { name: "Start these four" }).click();
+  await court(page).getByRole("button", { name: "Start game" }).click();
   const retry = page.getByRole("button", { name: "Retry last action" });
   await expect(retry).toBeEnabled({ timeout: 20_000 });
   await expect(
@@ -300,9 +300,12 @@ test("ten-minute rest expires while no host page is open, preserving earned wait
   await expect(
     waiting(reopened).getByRole("button", { name: /^Ready now/ }),
   ).toHaveCount(0);
+  // Once the rest ended, the freed player completed a group and the server
+  // prepared it (no page had to be open at the moment the rest expired).
   expect((await fixture.readEvents()).map((event) => event.type)).toEqual([
     "SessionStarted",
     "PlayerSkipped",
+    "NextGroupCalled",
   ]);
 });
 
@@ -338,7 +341,7 @@ for (const absence of ["rest", "leave"] as const) {
       next.getByText("Replacement needed", { exact: true }),
     ).toBeVisible();
     await expect(
-      next.getByRole("button", { name: "Start these four" }),
+      next.getByRole("button", { name: "Start game" }),
     ).toBeDisabled();
     for (const number of [2, 3, 4])
       await expect(
@@ -353,7 +356,7 @@ for (const absence of ["rest", "leave"] as const) {
     await expect(
       next.getByText("Replacement needed", { exact: true }),
     ).toHaveCount(0);
-    await next.getByRole("button", { name: "Start these four" }).click();
+    await next.getByRole("button", { name: "Start game" }).click();
     await expect(
       court(page).getByRole("button", { name: "Game finished" }),
     ).toBeEnabled();
@@ -409,9 +412,7 @@ test("the deadline blocks called starts and new calls but lets active games fini
   await expect(
     page.getByText("Session time is up", { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Start these four" }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Start game" })).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: /Prepare next four|Call these four/ }),
   ).toHaveCount(0);
@@ -507,4 +508,57 @@ test("a host adds players without a phone, including two with the same name, eac
       ),
     ).size,
   ).toBe(2);
+});
+
+test("courts are prepared automatically: start, arrivals, game finish, reload", async ({
+  page,
+}) => {
+  const fixture = await liveFixture(page, { courts: 2, players: 9 });
+  await fixture.persist();
+  await page.goto("/live");
+  const prepared = (number: number) =>
+    court(page, number).getByText("Group prepared", { exact: true });
+  const countOf = async (type: string) =>
+    (await fixture.readEvents()).filter((event) => event.type === type).length;
+  // Start session: two courts, nine players -> two groups, one waiting.
+  await expect(prepared(1)).toBeVisible();
+  await expect(prepared(2)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start game" })).toHaveCount(2);
+  await expect(waiting(page)).toContainText("Waiting (9)");
+  expect(await countOf("NextGroupCalled")).toBe(2);
+  // Reloading and polling prepare nothing more.
+  await page.reload();
+  await expect(prepared(2)).toBeVisible();
+  await page.waitForTimeout(6_000); // one 5 s poll
+  expect(await countOf("NextGroupCalled")).toBe(2);
+  const court2Group =
+    (await court(page, 2)
+      .getByRole("region", { name: "Up next for Court 2" })
+      .textContent()) ?? "";
+
+  // Only Start game starts play, and it leaves the other court's group alone.
+  await court(page, 1).getByRole("button", { name: "Start game" }).click();
+  await expect(court(page, 1).getByText(/Playing ·/)).toBeVisible();
+  await expect(
+    court(page, 2).getByRole("region", { name: "Up next for Court 2" }),
+  ).toHaveText(court2Group);
+
+  // An arrival while both courts are busy or prepared just waits.
+  await page.getByRole("button", { name: "Add player", exact: true }).click();
+  const form = page.getByRole("form", { name: "Add player" });
+  await form.getByLabel("First name").fill("Late");
+  await form.getByLabel("Last name").fill("Arrival");
+  await form.getByLabel("Gender").selectOption("male");
+  await form.getByLabel("Level").selectOption("beginner");
+  await form.getByRole("button", { name: "Add to waiting list" }).click();
+  await expect(form).toHaveCount(0);
+  await expect(waiting(page)).toContainText("Late Arrival");
+  expect(await countOf("NextGroupCalled")).toBe(2);
+
+  // Game finished: no preparation step; the next four are ready for Court 1.
+  await court(page, 1).getByRole("button", { name: "Game finished" }).click();
+  await expect(prepared(1)).toBeVisible();
+  expect(await countOf("NextGroupCalled")).toBe(3);
+  expect(await countOf("MatchStarted")).toBe(1);
+  await expect(page.getByRole("button", { name: "Start game" })).toHaveCount(2);
 });

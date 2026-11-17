@@ -18,6 +18,7 @@ import {
   type NewSessionAction,
   type SubmitSessionActionInput,
 } from "@/server/submitSessionAction";
+import { autoPrepareCourts, reloadSessionState } from "./autoPrepare";
 import { liveProjection } from "./liveProjection";
 import {
   liveWriteSchema,
@@ -67,17 +68,26 @@ export async function readLiveSession(
       throw new Error(`Log replay failed at ${result.failedSeq}.`);
     if (!isSimpleSocial(result.state.config))
       return { ok: true, status: "legacy" };
-    const now = Math.max(Date.now(), result.state.lastAt ?? 0);
+    let state = result.state;
+    const now = Math.max(Date.now(), state.lastAt ?? 0);
+    // Normal rotation: free courts are prepared here, on the server, from the
+    // log. Repeated polls and several hosts send the same event ids, so a
+    // group is never prepared twice. A failure only leaves the log as it is.
+    if (
+      state.phase === "live" &&
+      (await autoPrepareCourts(client, row.id, state, now))
+    )
+      state = (await reloadSessionState(client, row.id)) ?? state;
     return {
       ok: true,
       status: "session",
       session: liveProjection(
         row.id,
         row.name,
-        result.state,
+        state,
         now,
         {
-          seq: result.state.lastSeq + 1,
+          seq: state.lastSeq + 1,
           at: now,
           eventId: randomUUID(),
           actorId: authorization.host.userId,

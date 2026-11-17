@@ -696,3 +696,47 @@ describe("LiveSession add player", () => {
     expect(screen.queryByRole("form", { name: "Add player" })).toBeNull();
   });
 });
+
+describe("LiveSession prepared courts", () => {
+  const courtId = "c0000000-0000-4000-8000-000000000001";
+  const [ana, ben] = [
+    "p0000000-0000-4000-8000-000000000001",
+    "p0000000-0000-4000-8000-000000000002",
+  ];
+
+  it("shows a prepared group with its teams and a Start game button, and nobody is playing yet", async () => {
+    const session = sessionView(7);
+    session.courts[0].called = {
+      calledEventId: "e0000000-0000-4000-8000-000000000001",
+      teamA: [ana, "p0000000-0000-4000-8000-000000000003"],
+      teamB: [ben, "p0000000-0000-4000-8000-000000000004"],
+    };
+    const response = { ok: true, status: "session", session } as const;
+    readMock.mockResolvedValue(response);
+    writeMock.mockResolvedValue(SAVED);
+    render(<LiveSession initialResult={response} />);
+    await settle();
+    const card = screen.getByRole("article", { name: "Court 1" });
+    expect(card).toHaveTextContent("Group prepared");
+    expect(card).toHaveTextContent("Nobody is playing yet");
+    expect(within(card).getByText("Ana Brown")).toBeVisible();
+    fireEvent.click(within(card).getByRole("button", { name: "Start game" }));
+    await settle();
+    expect(writeInputs()[0].command).toMatchObject({
+      kind: "start",
+      courtId,
+      calledEventId: "e0000000-0000-4000-8000-000000000001",
+    });
+    expect(
+      within(card).queryByRole("button", { name: "Call these four" }),
+    ).toBeNull();
+  });
+
+  it("explains a free court that is waiting for enough players", async () => {
+    await renderLive();
+    const card = screen.getByRole("article", { name: "Court 1" });
+    expect(card).toHaveTextContent("Court free");
+    expect(card).toHaveTextContent("Waiting for four available players");
+    expect(card).toHaveTextContent("prepared here automatically");
+  });
+});

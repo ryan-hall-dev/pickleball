@@ -48,5 +48,6 @@ Web app for pickleball clubs. Hosts run social sessions (setup, live court rotat
 - IDs are UUIDs. Never use names or list positions as identifiers. Snapshot names into session data (`session_participants`, `config_snapshot`, `matches`)
 - Sessions are independent: scheduling uses only the current session's data, with no cross-session state
 - Simple-policy selection prioritises the oldest feasible waiting players; variety cannot displace them outside the approved waiting bound. Valid doubles are four men, four women, or mixed teams with one of each. These rules apply to manual assignments too. Earlier weighted objectives and legacy events remain compatible with old logs
+- Free courts are prepared automatically on the server (`src/server/live/autoPrepare.ts`, run from `readLiveSession`): ordinary `NextGroupCalled` events with deterministic event ids, so polling, reloads and several hosts never duplicate them. Only Start game starts play; a host release holds that court until a game next starts or finishes there
 - Polling (5 s), not Realtime
 - Secrets never in client bundles. Dev and prod use separate Supabase projects; CI uses a local Supabase stack, never a hosted one

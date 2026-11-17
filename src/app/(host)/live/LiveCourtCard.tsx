@@ -94,7 +94,9 @@ export function LiveCourtCard({
         >
           {court.activeMatch
             ? `Playing · ${Math.max(0, Math.floor((now - court.activeMatch.startedAt) / 60_000))} min`
-            : "Court free"}
+            : court.called
+              ? "Group prepared"
+              : "Court free"}
         </span>
       </header>
       {court.activeMatch ? (
@@ -113,7 +115,9 @@ export function LiveCourtCard({
         </>
       ) : (
         <p className="mt-3 text-sm text-muted">
-          Start the next group when all four are on court.
+          {court.called
+            ? "Press Start game when all four are on court. Nobody is playing yet."
+            : "No game on this court."}
         </p>
       )}
       <CourtRecovery
@@ -129,7 +133,8 @@ export function LiveCourtCard({
         className="mt-5 rounded-[20px] border border-blue-edge bg-blue-surface p-4"
       >
         <h4 className="font-bold text-blue-soft">
-          Up next {court.called ? "· Called" : ""}
+          {court.called && !court.activeMatch ? "Ready to start" : "Up next"}
+          {court.called && court.activeMatch ? " · Prepared" : ""}
         </h4>
         {timeIsUp ? (
           <p className="mt-2 text-sm text-muted">
@@ -167,7 +172,7 @@ export function LiveCourtCard({
                     })
                   }
                 >
-                  Start these four
+                  Start game
                 </button>
               ) : (
                 <button
@@ -237,9 +242,11 @@ export function LiveCourtCard({
         ) : (
           <>
             <p className="mt-2 text-sm text-muted">
-              {selected
-                ? "Not enough available players for four men, four women, or valid mixed teams. Playing and resting players are unavailable."
-                : "Choose this court to prepare its next group. Court numbers do not set player priority."}
+              {court.activeMatch
+                ? selected
+                  ? "Not enough available players for four men, four women, or valid mixed teams. Playing and resting players are unavailable."
+                  : "Choose this court to prepare its next group. Court numbers do not set player priority."
+                : "Waiting for four available players (four men, four women, or mixed teams). Players who are playing, resting or prepared on another court don't count. A group is prepared here automatically; use Prepare next four only after a host released this court's group."}
             </p>
             <button
               type="button"
