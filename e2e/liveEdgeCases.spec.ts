@@ -531,6 +531,20 @@ test("courts are prepared automatically: start, arrivals, game finish, reload", 
   await expect(prepared(2)).toBeVisible();
   await page.waitForTimeout(6_000); // one 5 s poll
   expect(await countOf("NextGroupCalled")).toBe(2);
+  // Phone layout: a waiting player's name keeps its own line (it was once
+  // squeezed into one letter per line) and nothing overflows sideways.
+  const firstName = await waiting(page)
+    .getByText(/^1\. Edge/)
+    .boundingBox();
+  expect(firstName!.width).toBeGreaterThan(100);
+  expect(firstName!.height).toBeLessThan(30);
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    ),
+  ).toBeLessThanOrEqual(0);
   const court2Group =
     (await court(page, 2)
       .getByRole("region", { name: "Up next for Court 2" })

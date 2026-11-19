@@ -113,12 +113,8 @@ export function LiveCourtCard({
             Game finished
           </button>
         </>
-      ) : (
-        <p className="mt-3 text-sm text-muted">
-          {court.called
-            ? "Press Start game when all four are on court. Nobody is playing yet."
-            : "No game on this court."}
-        </p>
+      ) : court.called ? null : (
+        <p className="mt-2 text-xs text-muted">No game on this court.</p>
       )}
       <CourtRecovery
         key={court.activeMatch?.matchId ?? "idle"}
@@ -137,17 +133,16 @@ export function LiveCourtCard({
           {court.called && court.activeMatch ? " · Prepared" : ""}
         </h4>
         {timeIsUp ? (
-          <p className="mt-2 text-sm text-muted">
-            Session time is up, so no new groups can be called and no game can
-            start. Finish active games, then end the session.
+          <p className="mt-2 text-xs text-muted">
+            Time is up: no new groups or games.
           </p>
         ) : group ? (
           <>
             <Teams teams={group} players={players} />
-            <p className="mt-2 text-sm text-blue-soft">
+            <p className="mt-2 text-xs text-blue-soft">
               {court.called
-                ? "Fixed for co-hosts. Waiting continues until the game starts."
-                : "Longest eligible waits. Call to fix this group."}
+                ? "Fixed. Waiting continues until the game starts."
+                : "Longest waits first."}
             </p>
             {vacancy && (
               <div className="mt-2">
@@ -244,9 +239,9 @@ export function LiveCourtCard({
             <p className="mt-2 text-sm text-muted">
               {court.activeMatch
                 ? selected
-                  ? "Not enough available players for four men, four women, or valid mixed teams. Playing and resting players are unavailable."
-                  : "Choose this court to prepare its next group. Court numbers do not set player priority."
-                : "Waiting for four available players (four men, four women, or mixed teams). Players who are playing, resting or prepared on another court don't count. A group is prepared here automatically; use Prepare next four only after a host released this court's group."}
+                  ? "Not enough available players for a valid group."
+                  : "Choose this court to prepare its next group."
+                : "Waiting for four available players."}
             </p>
             <button
               type="button"

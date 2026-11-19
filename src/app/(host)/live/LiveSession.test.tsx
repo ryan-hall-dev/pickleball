@@ -514,7 +514,7 @@ describe("LiveSession scheduled end", () => {
       screen.getByRole("region", { name: /Session time is up/ }),
     ).toBeVisible();
     expect(
-      screen.getByText(/no new groups can be called and no game can start/),
+      screen.getByText("Time is up: no new groups or games."),
     ).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "Call these four" }),
@@ -718,7 +718,7 @@ describe("LiveSession prepared courts", () => {
     await settle();
     const card = screen.getByRole("article", { name: "Court 1" });
     expect(card).toHaveTextContent("Group prepared");
-    expect(card).toHaveTextContent("Nobody is playing yet");
+    expect(card).not.toHaveTextContent("No game on this court");
     expect(within(card).getByText("Ana Brown")).toBeVisible();
     fireEvent.click(within(card).getByRole("button", { name: "Start game" }));
     await settle();
@@ -737,6 +737,5 @@ describe("LiveSession prepared courts", () => {
     const card = screen.getByRole("article", { name: "Court 1" });
     expect(card).toHaveTextContent("Court free");
     expect(card).toHaveTextContent("Waiting for four available players");
-    expect(card).toHaveTextContent("prepared here automatically");
   });
 });
