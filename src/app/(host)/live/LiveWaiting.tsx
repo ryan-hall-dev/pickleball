@@ -1,11 +1,40 @@
 "use client";
 
+import { useState } from "react";
 import {
   CARD_CLASS_NAME,
   OUTLINE_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
 import { SkillChip } from "@/components/SkillChip";
 import type { LiveCommand, LivePlayer } from "@/server/live/liveTypes";
+
+const VISIBLE_WHEN_FOLDED = 3;
+
+function FoldButton({
+  expanded,
+  hiddenCount,
+  label,
+  onToggle,
+}: {
+  expanded: boolean;
+  hiddenCount: number;
+  label: string;
+  onToggle: () => void;
+}) {
+  if (hiddenCount <= 0 && !expanded) return null;
+  return (
+    <button
+      type="button"
+      className={`${OUTLINE_BUTTON_CLASS_NAME} mt-3 w-full`}
+      aria-expanded={expanded}
+      onClick={onToggle}
+    >
+      {expanded
+        ? `Show fewer ${label}`
+        : `Show all ${hiddenCount + VISIBLE_WHEN_FOLDED} ${label}`}
+    </button>
+  );
+}
 
 export function LiveWaiting({
   players,
@@ -20,6 +49,15 @@ export function LiveWaiting({
 }) {
   const waiting = players.filter((player) => player.status === "waiting");
   const resting = players.filter((player) => player.status === "skipped");
+  // Kept in state so the 5 s refresh never folds a list the host opened.
+  const [waitingExpanded, setWaitingExpanded] = useState(false);
+  const [restingExpanded, setRestingExpanded] = useState(false);
+  const shownWaiting = waitingExpanded
+    ? waiting
+    : waiting.slice(0, VISIBLE_WHEN_FOLDED);
+  const shownResting = restingExpanded
+    ? resting
+    : resting.slice(0, VISIBLE_WHEN_FOLDED);
   return (
     <section
       id="waiting"
@@ -32,7 +70,7 @@ export function LiveWaiting({
       <p className="mt-1 text-xs text-muted">Longest wait first.</p>
       {waiting.length ? (
         <ul className="mt-4 flex flex-col gap-2">
-          {waiting.map((player, index) => (
+          {shownWaiting.map((player, index) => (
             <li
               className="rounded-[18px] border border-inner-border bg-inner p-3"
               key={player.participantId}
@@ -91,6 +129,12 @@ export function LiveWaiting({
       ) : (
         <p className="mt-4 text-muted">No players waiting.</p>
       )}
+      <FoldButton
+        expanded={waitingExpanded}
+        hiddenCount={waiting.length - VISIBLE_WHEN_FOLDED}
+        label="waiting"
+        onToggle={() => setWaitingExpanded((open) => !open)}
+      />
       <h3 className="mt-5 text-lg font-bold">
         Resting <span className="text-muted">({resting.length})</span>
       </h3>
@@ -99,7 +143,7 @@ export function LiveWaiting({
       </p>
       {resting.length ? (
         <ul className="mt-3 flex flex-col gap-2">
-          {resting.map((player) => (
+          {shownResting.map((player) => (
             <li
               key={player.participantId}
               className="rounded-[18px] border border-inner-border bg-inner p-3"
@@ -149,6 +193,12 @@ export function LiveWaiting({
       ) : (
         <p className="mt-3 text-muted">Nobody resting.</p>
       )}
+      <FoldButton
+        expanded={restingExpanded}
+        hiddenCount={resting.length - VISIBLE_WHEN_FOLDED}
+        label="resting"
+        onToggle={() => setRestingExpanded((open) => !open)}
+      />
     </section>
   );
 }

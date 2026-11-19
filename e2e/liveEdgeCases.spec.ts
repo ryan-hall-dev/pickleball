@@ -17,6 +17,7 @@ import {
   signInAsNewManager,
   useRandomClientIp,
 } from "./support/localHostSession";
+import { showEveryWaitingPlayer } from "./support/liveFolds";
 
 test.afterAll(deleteCreatedLogins);
 test.beforeEach(async ({ page }) => {
@@ -195,6 +196,7 @@ test("a committed start with a lost response retries the same action exactly onc
   );
   await fixture.persist();
   await page.goto("/live");
+  await showEveryWaitingPlayer(page);
   let loseResponse = true;
   const startRequests: string[] = [];
   let committedEventId: string | undefined;
@@ -287,6 +289,7 @@ test("ten-minute rest expires while no host page is open, preserving earned wait
   await fixture.persist();
   const reopened = await context.newPage();
   await reopened.goto("/live");
+  await showEveryWaitingPlayer(reopened);
   const row = waiting(reopened)
     .getByRole("listitem")
     .filter({
@@ -325,6 +328,7 @@ for (const absence of ["rest", "leave"] as const) {
     );
     await fixture.persist();
     await page.goto("/live");
+    await showEveryWaitingPlayer(page);
     await waiting(page)
       .getByRole("button", {
         name:
@@ -409,6 +413,7 @@ test("the deadline blocks called starts and new calls but lets active games fini
   );
   await fixture.persist();
   await page.goto("/live");
+  await showEveryWaitingPlayer(page);
   await expect(
     page.getByText("Session time is up", { exact: true }),
   ).toBeVisible();
@@ -471,6 +476,7 @@ test("a host adds players without a phone, including two with the same name, eac
   const fixture = await liveFixture(page, { players: 5 });
   await fixture.persist();
   await page.goto("/live");
+  await showEveryWaitingPlayer(page);
   await expect(waiting(page)).toContainText("Waiting (5)");
   await page.getByRole("button", { name: "Add player", exact: true }).click();
   const form = page.getByRole("form", { name: "Add player" });
@@ -483,6 +489,7 @@ test("a host adds players without a phone, including two with the same name, eac
   await expect(waiting(page)).toContainText("Waiting (6)");
   await expect(waiting(page)).toContainText("Walk In");
   await page.reload();
+  await showEveryWaitingPlayer(page);
   await expect(waiting(page)).toContainText("Waiting (6)");
   // A second, different person with the same name is a separate player.
   await page.getByRole("button", { name: "Add player", exact: true }).click();
@@ -494,6 +501,7 @@ test("a host adds players without a phone, including two with the same name, eac
   await expect(form).toHaveCount(0);
   await expect(waiting(page)).toContainText("Waiting (7)");
   await page.reload();
+  await showEveryWaitingPlayer(page);
   await expect(waiting(page)).toContainText("Waiting (7)");
   const joined = (await fixture.readEvents()).filter(
     (event) => event.type === "PlayerJoined",
@@ -516,6 +524,7 @@ test("courts are prepared automatically: start, arrivals, game finish, reload", 
   const fixture = await liveFixture(page, { courts: 2, players: 9 });
   await fixture.persist();
   await page.goto("/live");
+  await showEveryWaitingPlayer(page);
   const prepared = (number: number) =>
     court(page, number).getByText("Group prepared", { exact: true });
   const countOf = async (type: string) =>
@@ -528,6 +537,7 @@ test("courts are prepared automatically: start, arrivals, game finish, reload", 
   expect(await countOf("NextGroupCalled")).toBe(2);
   // Reloading and polling prepare nothing more.
   await page.reload();
+  await showEveryWaitingPlayer(page);
   await expect(prepared(2)).toBeVisible();
   await page.waitForTimeout(6_000); // one 5 s poll
   expect(await countOf("NextGroupCalled")).toBe(2);

@@ -20,6 +20,10 @@ import {
   // Not a React hook (a Playwright helper): renamed for the hooks lint rule.
   useRandomClientIp as giveRandomClientIp,
 } from "./support/localHostSession";
+import {
+  expectRestButtonCount,
+  showEveryWaitingPlayer,
+} from "./support/liveFolds";
 
 test.afterAll(deleteCreatedLogins);
 
@@ -77,7 +81,7 @@ test("a host runs a game, returns its four players to waiting and rests one", as
   const court = page.getByRole("article", { name: "Court 1", exact: true });
   const waiting = page.getByRole("region", { name: /^Waiting/ });
   const restButtons = waiting.getByRole("button", { name: /^Rest / });
-  await expect(restButtons).toHaveCount(4);
+  await expectRestButtonCount(page, restButtons, 4);
   // Order on the page: check-ins and the QR link, then waiting players, then
   // courts (desktop and the 390 px phone project).
   const checkInsTop = (
@@ -102,14 +106,14 @@ test("a host runs a game, returns its four players to waiting and rests one", as
   await expect(
     court.getByRole("heading", { name: "Ready to start" }),
   ).toBeVisible();
-  await expect(restButtons).toHaveCount(4);
+  await expectRestButtonCount(page, restButtons, 4);
   await expect(
     court.getByRole("button", { name: "Game finished" }),
   ).toHaveCount(0);
 
   await court.getByRole("button", { name: "Start game" }).click();
   await expect(court.getByText(/Playing ·/)).toBeVisible();
-  await expect(restButtons).toHaveCount(0);
+  await expectRestButtonCount(page, restButtons, 0);
   for (const firstName of FIRST_NAMES)
     await expect(
       court.getByText(`${firstName} Journey`, { exact: true }),
@@ -120,12 +124,13 @@ test("a host runs a game, returns its four players to waiting and rests one", as
   await expect(
     court.getByText("Group prepared", { exact: true }),
   ).toBeVisible();
-  await expect(restButtons).toHaveCount(4);
+  await expectRestButtonCount(page, restButtons, 4);
   await expect(
     court.getByRole("button", { name: "Game finished" }),
   ).toHaveCount(0);
   await page.reload();
-  await expect(restButtons).toHaveCount(4);
+  await showEveryWaitingPlayer(page);
+  await expectRestButtonCount(page, restButtons, 4);
   await expect(
     court.getByText("Group prepared", { exact: true }),
   ).toBeVisible();
@@ -133,11 +138,11 @@ test("a host runs a game, returns its four players to waiting and rests one", as
   await waiting
     .getByRole("button", { name: "Rest Alex Journey", exact: true })
     .click();
-  await expect(restButtons).toHaveCount(3);
+  await expectRestButtonCount(page, restButtons, 3);
   await waiting
     .getByRole("button", { name: "Ready now Alex Journey", exact: true })
     .click();
-  await expect(restButtons).toHaveCount(4);
+  await expectRestButtonCount(page, restButtons, 4);
   expect(
     await page.evaluate(
       () =>
@@ -202,12 +207,12 @@ test("a host runs a game, returns its four players to waiting and rests one", as
   await expect(
     page.getByRole("heading", { level: 1, name: "Next browser journey" }),
   ).toBeVisible({ timeout: 10_000 });
-  await expect(restButtons).toHaveCount(4);
+  await expectRestButtonCount(page, restButtons, 4);
   await expect(waiting.getByText(/Journey/)).toHaveCount(0);
   await waiting
     .getByRole("button", { name: "Rest Alex Encore", exact: true })
     .click();
-  await expect(restButtons).toHaveCount(3);
+  await expectRestButtonCount(page, restButtons, 3);
   const { data: nextEvents, error: nextEventsError } = await adminClient
     .from("session_events")
     .select("type")
@@ -279,16 +284,16 @@ test("a host safely undoes start/finish, replaces a player and ends an interrupt
     court.getByText("Group prepared", { exact: true }),
   ).toBeVisible();
   await court.getByRole("button", { name: "Start game" }).click();
-  await expect(restButtons).toHaveCount(1);
+  await expectRestButtonCount(page, restButtons, 1);
   await court.getByText("Court options", { exact: true }).click();
   await court.getByRole("button", { name: "Undo game start" }).click();
-  await expect(restButtons).toHaveCount(5);
+  await expectRestButtonCount(page, restButtons, 5);
   await expect(
     court.getByRole("heading", { name: "Ready to start" }),
   ).toBeVisible();
   await court.getByRole("button", { name: "Start game" }).click();
   await court.getByRole("button", { name: "Game finished" }).click();
-  await expect(restButtons).toHaveCount(5);
+  await expectRestButtonCount(page, restButtons, 5);
   // With five players the next group reserves some of the four who just
   // finished, so Undo needs that group released first (the engine says so).
   await expect(court.getByText("Court options", { exact: true })).toHaveCount(
@@ -297,7 +302,7 @@ test("a host safely undoes start/finish, replaces a player and ends an interrupt
   await court.getByRole("button", { name: "Release group" }).click();
   await court.getByText("Court options", { exact: true }).click();
   await court.getByRole("button", { name: "Undo game finish" }).click();
-  await expect(restButtons).toHaveCount(1);
+  await expectRestButtonCount(page, restButtons, 1);
   await expect(
     court.getByRole("button", { name: "Game finished" }),
   ).toBeVisible();
@@ -334,7 +339,7 @@ test("a host safely undoes start/finish, replaces a player and ends an interrupt
       exact: true,
     })
     .click();
-  await expect(restButtons).toHaveCount(0);
+  await expectRestButtonCount(page, restButtons, 0);
   await court
     .getByRole("button", { name: "Replace player", exact: true })
     .click();
@@ -354,7 +359,7 @@ test("a host safely undoes start/finish, replaces a player and ends an interrupt
   await interrupted
     .getByRole("button", { name: "Confirm interrupted game", exact: true })
     .click();
-  await expect(restButtons).toHaveCount(4);
+  await expectRestButtonCount(page, restButtons, 4);
   // The freed court is prepared again from the four who are left.
   await expect(
     court.getByText("Group prepared", { exact: true }),
@@ -472,20 +477,24 @@ test("a stale live approval shows a conflict, stays pending and approves exactly
       .getByRole("button", { name: "Confirm start" })
       .click();
     await expect(hostPage).toHaveURL(/\/live$/);
+    await showEveryWaitingPlayer(hostPage);
 
     // 1. Both hosts see the same live session.
     const coHostPage = await newHostContext(browser, contexts);
     await signIn(coHostPage, coHostEmail);
     await coHostPage.goto("/live");
+    await showEveryWaitingPlayer(coHostPage);
     for (const page of [hostPage, coHostPage]) {
       await expect(
         page.getByRole("heading", { level: 1, name: "Conflict social" }),
       ).toBeVisible();
-      await expect(
+      await expectRestButtonCount(
+        page,
         page
           .getByRole("region", { name: /^Waiting/ })
           .getByRole("button", { name: /^Rest / }),
-      ).toHaveCount(5);
+        5,
+      );
     }
 
     // 2. A player submits a real check-in; both hosts' trays list it.
@@ -595,12 +604,14 @@ test("a stale live approval shows a conflict, stays pending and approves exactly
     // 5. Approving again succeeds exactly once.
     await hostPage.getByRole("button", { name: "Approve Zoe Park" }).click();
     await expect(trayRow(hostPage)).toContainText("Added to Who's playing");
+    await showEveryWaitingPlayer(hostPage);
     await expect(
       hostWaiting.getByRole("button", { name: "Rest Zoe Park", exact: true }),
     ).toBeVisible();
 
     // 6. Both hosts (and the phone) see the player; the database has one
     // participant and one PlayerJoined event.
+    await showEveryWaitingPlayer(coHostPage);
     await expect(
       coHostWaiting.getByRole("button", { name: "Rest Zoe Park", exact: true }),
     ).toBeVisible({ timeout: 12_000 });
