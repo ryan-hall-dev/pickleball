@@ -355,7 +355,10 @@ for (const absence of ["rest", "leave"] as const) {
       0,
     );
     await next.getByRole("button", { name: "Change players" }).click();
-    await next.getByLabel("Team A · Player 1").selectOption(fixture.ids[4]);
+    await next
+      .getByRole("button", { name: /^Team A · Player 1: choose player/ })
+      .click();
+    await next.getByRole("button", { name: /Edge5 Player/ }).click();
     await next.getByRole("button", { name: "Confirm changed group" }).click();
     await expect(
       next.getByText("Replacement needed", { exact: true }),

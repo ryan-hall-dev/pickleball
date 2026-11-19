@@ -258,6 +258,28 @@ export function LiveCourtCard({
   );
 }
 
+const PICKER_VISIBLE_WHEN_FOLDED = 5;
+type Gender = NonNullable<LivePlayer["gender"]>;
+
+/** Can the four seats still become a valid doubles group? `null` = not chosen yet. */
+export function seatsCanBeValid(seats: ReadonlyArray<Gender | null>): boolean {
+  const open = seats.flatMap((gender, seat) => (gender ? [] : [seat]));
+  for (let mask = 0; mask < 1 << open.length; mask += 1) {
+    const filled = [...seats];
+    open.forEach((seat, bit) => {
+      filled[seat] = mask & (1 << bit) ? "male" : "female";
+    });
+    const men = filled.filter((gender) => gender === "male").length;
+    if (
+      men === 0 ||
+      men === 4 ||
+      (men === 2 && filled[0] !== filled[1] && filled[2] !== filled[3])
+    )
+      return true;
+  }
+  return false;
+}
+
 function GroupEditor({
   court,
   players,
@@ -274,51 +296,136 @@ function GroupEditor({
   const [ids, setIds] = useState(
     [...teams.teamA, ...teams.teamB].map((id) => id ?? ""),
   );
-  const options = players.filter(
-    (player) =>
-      player.status === "waiting" &&
-      (!player.calledCourtId || player.calledCourtId === court.courtId),
-  );
+  const [seat, setSeat] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  const byId = (id: string) =>
+    players.find((player) => player.participantId === id);
   const distinct = ids.every(Boolean) && new Set(ids).size === 4;
+  const seatGenders = (replacing: number) =>
+    ids.map((id, position) =>
+      position === replacing || !id ? null : (byId(id)?.gender ?? null),
+    );
+  const choices =
+    seat === null
+      ? []
+      : players
+          .filter(
+            (player) =>
+              player.status === "waiting" &&
+              (!player.calledCourtId ||
+                player.calledCourtId === court.courtId) &&
+              player.gender !== null &&
+              !ids.includes(player.participantId) &&
+              seatsCanBeValid(
+                seatGenders(seat).map((gender, position) =>
+                  position === seat ? player.gender : gender,
+                ),
+              ),
+          )
+          .sort(
+            (left, right) =>
+              (right.currentWaitMs ?? 0) - (left.currentWaitMs ?? 0),
+          );
+  const query = search.trim().toLowerCase();
+  const matching = query
+    ? choices.filter((player) => player.name.toLowerCase().includes(query))
+    : choices;
+  const shown =
+    showAll || query ? matching : matching.slice(0, PICKER_VISIBLE_WHEN_FOLDED);
   return (
     <div className="mt-4 border-t border-blue-edge pt-3">
       <p className="text-sm text-blue-soft">
-        Choose two per team. Mixed teams need one man and one woman on each
-        team.
+        Tap a player to replace them. Mixed teams need one man and one woman on
+        each team.
       </p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {ids.map((id, index) => (
-          <label key={index} className="text-sm text-muted">
-            Team {index < 2 ? "A" : "B"} · Player {(index % 2) + 1}
-            <select
-              className={`${TEXT_INPUT_CLASS_NAME} mt-1`}
-              value={id}
-              disabled={disabled}
-              onChange={(event) =>
-                setIds((current) =>
-                  current.map((value, position) =>
-                    position === index ? event.target.value : value,
-                  ),
-                )
-              }
-            >
-              <option value="">Choose player</option>
-              {options.map((player) => (
-                <option value={player.participantId} key={player.participantId}>
-                  {player.name} ·{" "}
-                  {player.gender
-                    ? GENDER_LABELS[player.gender]
-                    : "Gender missing"}{" "}
-                  ·{" "}
-                  {player.skill
-                    ? SKILL_LEVEL_LABELS[player.skill]
-                    : "Level missing"}
-                </option>
-              ))}
-            </select>
-          </label>
+          <button
+            key={index}
+            type="button"
+            disabled={disabled}
+            aria-pressed={seat === index}
+            aria-label={`Team ${index < 2 ? "A" : "B"} · Player ${(index % 2) + 1}: ${(id && byId(id)?.name) || "choose player"}`}
+            className={`${OUTLINE_BUTTON_CLASS_NAME} h-auto min-h-11 flex-col items-start py-2 text-left ${seat === index ? "border-2 border-link" : ""}`}
+            onClick={() => {
+              setSeat(seat === index ? null : index);
+              setSearch("");
+              setShowAll(false);
+            }}
+          >
+            <span className="text-xs font-normal text-muted">
+              Team {index < 2 ? "A" : "B"} · Player {(index % 2) + 1}
+            </span>
+            <span className="break-words">
+              {(id && byId(id)?.name) || "Choose player"}
+            </span>
+          </button>
         ))}
       </div>
+      {seat !== null && (
+        <div className="mt-3 rounded-2xl border border-inner-border bg-inner p-3">
+          <label className="text-sm text-muted">
+            Search players
+            <input
+              type="search"
+              className={`${TEXT_INPUT_CLASS_NAME} mt-1`}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Type a name"
+            />
+          </label>
+          {matching.length ? (
+            <ul className="mt-3 flex flex-col gap-2">
+              {shown.map((player) => (
+                <li key={player.participantId}>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    className={`${OUTLINE_BUTTON_CLASS_NAME} h-auto min-h-11 w-full flex-col items-start py-2 text-left`}
+                    onClick={() => {
+                      setIds((current) =>
+                        current.map((value, position) =>
+                          position === seat ? player.participantId : value,
+                        ),
+                      );
+                      setSeat(null);
+                      setSearch("");
+                    }}
+                  >
+                    <span className="break-words">{player.name}</span>
+                    <span className="text-xs font-normal text-muted">
+                      {Math.floor((player.currentWaitMs ?? 0) / 60_000)} min ·{" "}
+                      {GENDER_LABELS[player.gender!]} ·{" "}
+                      {player.skill
+                        ? SKILL_LEVEL_LABELS[player.skill]
+                        : "Level missing"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-muted">
+              {query
+                ? "No one by that name keeps the teams valid."
+                : "No one available keeps the teams valid."}
+            </p>
+          )}
+          {!query && matching.length > PICKER_VISIBLE_WHEN_FOLDED && (
+            <button
+              type="button"
+              className={`${OUTLINE_BUTTON_CLASS_NAME} mt-3 w-full`}
+              aria-expanded={showAll}
+              onClick={() => setShowAll((open) => !open)}
+            >
+              {showAll
+                ? "Show fewer players"
+                : `Show all ${matching.length} players`}
+            </button>
+          )}
+        </div>
+      )}
       <button
         type="button"
         className={`${SECONDARY_BUTTON_CLASS_NAME} mt-3`}
