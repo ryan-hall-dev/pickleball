@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { connection } from "next/server";
+import { getLocale } from "@/i18n/getLocale";
+import { LocaleProvider } from "@/i18n/LocaleProvider";
+import { MESSAGES } from "@/i18n/messages";
 import { loadCheckinPage } from "@/server/checkin/checkinPage";
 import { CheckinApp } from "./CheckinApp";
 
@@ -9,10 +12,13 @@ import { CheckinApp } from "./CheckinApp";
 // proxy.ts skips /t/ entirely. Its only server code is the check-in reads and
 // actions in src/server/checkin (acceptance criteria 16-18).
 
-export const metadata: Metadata = {
-  title: "Check in · Pickleball Social Manager",
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const messages = MESSAGES[await getLocale()];
+  return {
+    title: `${messages.checkin.pageTitle} · ${messages.appName}`,
+    robots: { index: false, follow: false },
+  };
+}
 
 // Lets the pinned button sit above the phone's home indicator (safe-area insets).
 export const viewport: Viewport = { viewportFit: "cover" };
@@ -23,8 +29,9 @@ export default function CheckinPage({ params }: PageProps<"/t/[tag]">) {
       {/* The read depends on this phone's cookie, so it streams in (cacheComponents). */}
       <Suspense
         fallback={
+          // Before the language is known: both, briefly.
           <p className="text-muted" aria-live="polite">
-            Loading check-in…
+            Loading… · <span lang="vi">Đang tải…</span>
           </p>
         }
       >
@@ -42,6 +49,13 @@ async function CheckinPageContent({
   // Resolve the current session at request time, before the first database read.
   await connection();
   const { tag } = await params;
-  const initialPageRead = await loadCheckinPage(tag);
-  return <CheckinApp checkinTag={tag} initialPageRead={initialPageRead} />;
+  const [initialPageRead, locale] = await Promise.all([
+    loadCheckinPage(tag),
+    getLocale(),
+  ]);
+  return (
+    <LocaleProvider initialLocale={locale}>
+      <CheckinApp checkinTag={tag} initialPageRead={initialPageRead} />
+    </LocaleProvider>
+  );
 }

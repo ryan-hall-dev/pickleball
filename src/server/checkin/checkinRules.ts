@@ -4,6 +4,7 @@ import {
   type Gender,
   personNameSchema,
 } from "@/server/participantRules";
+import { en } from "@/i18n/messages/en";
 import { SKILL_LEVELS, type SkillLevel } from "@/server/skillLevels";
 
 // Pure input rules for the public check-in page (/t/<tag>). Shared by the
@@ -13,12 +14,14 @@ import { SKILL_LEVELS, type SkillLevel } from "@/server/skillLevels";
 /** Same pattern as `socials.checkin_tag`; anything else is an inactive link. */
 export const checkinTagSchema = z.string().regex(/^[a-z0-9_-]{16,64}$/);
 
-const skillLevelSchema = z.enum(SKILL_LEVELS, { error: "Choose your level" });
+const skillLevelSchema = z.enum(SKILL_LEVELS, {
+  error: en.validation.levelRequired,
+});
 
 /** Every participant: all four fields required (acceptance criterion 6). */
 export const participantCheckinInputSchema = z.object({
-  firstName: personNameSchema("Enter your first name"),
-  lastName: personNameSchema("Enter your last name"),
+  firstName: personNameSchema(en.validation.firstNameRequired),
+  lastName: personNameSchema(en.validation.lastNameRequired),
   skillLevel: skillLevelSchema,
   gender: genderSchema,
 });

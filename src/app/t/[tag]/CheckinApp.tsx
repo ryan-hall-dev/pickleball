@@ -19,7 +19,7 @@ import type {
   SubmitCheckinResult,
 } from "@/server/checkin/checkinResults";
 import { type CheckinSubmitInput } from "@/server/checkin/checkinRules";
-import { APP_NAME } from "./CheckinParts";
+import { useMessages } from "@/i18n/LocaleProvider";
 import {
   AlreadyCheckedInScreen,
   ApprovedScreen,
@@ -83,10 +83,11 @@ export function CheckinApp({
     () => true,
     () => false,
   );
+  const messages = useMessages();
   if (!isInBrowser) {
     return (
       <p className="text-muted" aria-live="polite">
-        Loading check-in…
+        {messages.loading.checkin}
       </p>
     );
   }
@@ -262,8 +263,9 @@ function CheckinScreenView({
   onRefresh: () => void;
   onSubmit: (input: CheckinSubmitInput) => void;
 }) {
+  const messages = useMessages();
   const { screen, openPage, requester } = state;
-  const brandName = state.socialName ?? APP_NAME;
+  const brandName = state.socialName ?? messages.appName;
 
   switch (screen) {
     case "inactive":

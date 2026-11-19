@@ -54,7 +54,7 @@ Other: avatar fills, playing `#2B3A12` on `#E3FA7A` text; next `#1D3550` on `#CF
 
 ## Typography
 
-Family: **Outfit** (400, 500, 600, 700, 800), fallback `system-ui, sans-serif`. Base 15px / line-height 1.4.
+Family: **Outfit** (400, 500, 600, 700, 800), fallback `system-ui, sans-serif`. Base 15px / line-height 1.4. Vietnamese interface text uses **Be Vietnam Pro** (same weights): Outfit has no Vietnamese tone marks (decided 2026-11-19, `docs/plans/bilingual-ui.md`; confirm with Ryan).
 
 | Role                             | Size / weight                                 |
 | -------------------------------- | --------------------------------------------- |

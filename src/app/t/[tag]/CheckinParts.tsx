@@ -1,25 +1,25 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { useMessages } from "@/i18n/LocaleProvider";
 import { ClubLogo } from "@/components/ClubLogo";
-import {
-  SKILL_LEVEL_LABELS,
-  SKILL_LEVELS,
-  type SkillLevel,
-} from "@/server/skillLevels";
+import { LanguageSwitch } from "@/components/LanguageSwitch";
+import { SKILL_LEVELS, type SkillLevel } from "@/server/skillLevels";
 import {
   INFO_NOTICE_CLASS_NAME,
   SELECTED_LEVEL_OPTION_CLASS_NAME,
   UNSELECTED_LEVEL_OPTION_CLASS_NAME,
 } from "./checkinStyles";
 
-/** P11 shows the app's name: an inactive link reveals no social. */
-export const APP_NAME = "Pickleball Social Manager";
-
-/** Logo plus the social's name (or the app's name on P11). */
+/** Logo plus the social's name (or the app's name on P11), and the language switch. */
 export function BrandLine({ name }: { name: string }) {
   return (
     <div className="flex min-h-11 items-center gap-3">
       <ClubLogo />
-      <span className="min-w-0 text-[17px] font-bold break-words">{name}</span>
+      <span className="min-w-0 flex-1 text-[17px] font-bold break-words">
+        {name}
+      </span>
+      <LanguageSwitch />
     </div>
   );
 }
@@ -47,9 +47,6 @@ export function InfoNotice({
   );
 }
 
-export const HOST_APPROVES_NOTE =
-  "A host approves each check-in before you're added to today's players.";
-
 /**
  * Beginner / Intermediate / Advanced as pressable buttons (aria-pressed),
  * three across. `isInvalid` adds the 2px orange outline (form).
@@ -71,6 +68,7 @@ export function SkillLevelOptions({
   isInvalid?: boolean;
   isDisabled?: boolean;
 }) {
+  const messages = useMessages();
   return (
     <div
       id={id}
@@ -96,7 +94,7 @@ export function SkillLevelOptions({
                 : UNSELECTED_LEVEL_OPTION_CLASS_NAME
             }
           >
-            {SKILL_LEVEL_LABELS[skillLevel]}
+            {messages.levels[skillLevel]}
           </button>
         );
       })}

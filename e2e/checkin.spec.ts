@@ -344,7 +344,9 @@ test("an unknown link and a social with nothing open each get their own screen",
   await expect(
     page.getByRole("heading", { name: "This check-in link isn't active" }),
   ).toBeVisible();
-  await expect(page.getByText("Pickleball Social Manager")).toBeVisible();
+  await expect(
+    page.getByText("Pickleball Social Manager", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByText("Ask a host at the courts for the current QR code."),
   ).toBeVisible();
@@ -371,4 +373,78 @@ test("an unknown link and a social with nothing open each get their own screen",
   // No host chrome on the public page.
   await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
   await expect(page.getByRole("navigation")).toHaveCount(0);
+});
+
+test.describe("in Vietnamese", () => {
+  // A phone set to Vietnamese sends Accept-Language: vi-VN.
+  test.use({ locale: "vi-VN" });
+
+  test("a Vietnamese phone checks in in Vietnamese, and the choice to switch is remembered", async ({
+    page,
+  }) => {
+    const social = await createSocialWithOpenSession("checkin-vi");
+    await page.goto(`/t/${social.checkinTag}`);
+    await expect(
+      page.getByRole("heading", {
+        name: `Chào mừng bạn đến với ${social.socialName}`,
+      }),
+    ).toBeVisible();
+    await expect(page.locator('[lang="vi"]').first()).toBeAttached();
+    await expect(page.locator("html")).toHaveAttribute("lang", "vi");
+    await expect(page.getByText("Buổi chơi 120 phút")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Tiếng Việt" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    // Errors from the shared rules, in Vietnamese.
+    await page.getByRole("button", { name: "Điểm danh", exact: true }).click();
+    await expect(page.getByText("Nhập tên của bạn")).toBeVisible();
+    await expect(page.getByText("Chọn nam hoặc nữ.")).toBeVisible();
+    await page.getByRole("button", { name: "Nam", exact: true }).click();
+    await page.getByRole("textbox", { name: "Tên", exact: true }).fill("Linh");
+    await page.getByRole("textbox", { name: "Họ", exact: true }).fill("Trần");
+    await page
+      .getByRole("group", { name: "Trình độ của bạn" })
+      .getByRole("button", { name: "Trung bình" })
+      .click();
+    await expectNoHorizontalScroll(page);
+    await page.getByRole("button", { name: "Điểm danh", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "Đang chờ người tổ chức duyệt" }),
+    ).toBeVisible();
+    const { error } = await adminClient.rpc("approve_checkin", {
+      p_actor_user_id: social.managerUserId,
+      p_checkin_request_id: await pendingRequestId(social),
+      p_session_participant_id: randomUUID(),
+    });
+    if (error) throw error;
+    await expect(
+      page.getByRole("heading", { name: "Bạn đã vào danh sách, Linh" }),
+    ).toBeVisible({ timeout: POLL_TIMEOUT_MS });
+    await expectNoHorizontalScroll(page);
+
+    // Switching to English is remembered by this browser across reloads,
+    // although it still asks for Vietnamese.
+    await page.getByRole("button", { name: "English" }).click();
+    await expect(
+      page.getByRole("heading", { name: "You're in, Linh" }),
+    ).toBeVisible();
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "You're in, Linh" }),
+    ).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(page.getByRole("button", { name: "English" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  test("an inactive link reads in Vietnamese too", async ({ page }) => {
+    await page.goto(`/t/${randomUUID().replace(/-/g, "")}`);
+    await expect(
+      page.getByRole("heading", {
+        name: "Đường link điểm danh này không còn hoạt động",
+      }),
+    ).toBeVisible();
+  });
 });

@@ -1,7 +1,11 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render as renderPlain, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { OpenCheckinPage } from "@/server/checkin/checkinResults";
 import { LiveSessionCard } from "./LiveSessionCard";
+import type { ReactElement } from "react";
+import { withLocale } from "@/i18n/testing";
+
+const render = (ui: ReactElement) => renderPlain(withLocale(ui));
 
 afterEach(cleanup);
 

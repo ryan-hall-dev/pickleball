@@ -1,5 +1,10 @@
-import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState, type ReactElement } from "react";
+import {
+  cleanup,
+  fireEvent,
+  render as renderPlain,
+  screen,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenCheckinPage } from "@/server/checkin/checkinResults";
 import type {
@@ -7,6 +12,10 @@ import type {
   CheckinFormValues,
 } from "@/server/checkin/checkinRules";
 import { ParticipantCheckinForm } from "./ParticipantCheckinForm";
+import { withLocale } from "@/i18n/testing";
+
+const render = (ui: ReactElement) => renderPlain(withLocale(ui));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 afterEach(cleanup);
 const page: OpenCheckinPage = {
   status: "open",
@@ -116,4 +125,26 @@ it("starts with no gender selected and requires a choice", () => {
     screen.getByRole("group", { name: "Gender" }),
   ).toHaveAccessibleDescription("Choose male or female.");
   expect(submit).not.toHaveBeenCalled();
+});
+
+it("switches to Vietnamese and back, keeping what the player typed", () => {
+  const document = renderPlain(withLocale(<Form onCheckIn={vi.fn()} />, "en"));
+  fireEvent.change(screen.getByLabelText("First name"), {
+    target: { value: "Linh" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Tiếng Việt" }));
+  expect(screen.getByRole("button", { name: "Tiếng Việt" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  expect(screen.getByLabelText("Tên")).toHaveValue("Linh");
+  expect(screen.getByRole("heading", { name: /Chào mừng/ })).toBeVisible();
+  expect(globalThis.document.cookie).toContain("pickleball_locale=vi");
+  expect(document.container.querySelector('[lang="vi"]')).not.toBeNull();
+  // Errors from the shared English rules show in Vietnamese.
+  fireEvent.click(screen.getByRole("button", { name: /Điểm danh/ }));
+  expect(screen.getByText("Nhập họ của bạn")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "English" }));
+  expect(screen.getByLabelText("First name")).toHaveValue("Linh");
+  expect(screen.getByText("Enter your last name")).toBeVisible();
 });

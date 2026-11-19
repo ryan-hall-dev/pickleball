@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { en } from "@/i18n/messages/en";
 
 /** Mirrors the `person_name` domain: trimmed, 1-50 characters, no control characters. */
 export const PERSON_NAME_MAX_LENGTH = 50;
@@ -17,10 +18,10 @@ export function personNameSchema(emptyMessage: string) {
           .string()
           .min(1, { error: emptyMessage })
           .max(PERSON_NAME_MAX_LENGTH, {
-            error: `Use at most ${PERSON_NAME_MAX_LENGTH} characters.`,
+            error: en.validation.nameTooLong(PERSON_NAME_MAX_LENGTH),
           })
           .refine((name) => !CONTROL_CHARACTERS.test(name), {
-            error: "Remove special characters.",
+            error: en.validation.nameHasControlCharacters,
           }),
       )
   );
@@ -33,5 +34,5 @@ export const GENDER_LABELS: Record<Gender, string> = {
   female: "Female",
 };
 export const genderSchema = z.enum(GENDERS, {
-  error: "Choose male or female.",
+  error: en.validation.genderRequired,
 });

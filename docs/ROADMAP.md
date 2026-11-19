@@ -13,3 +13,5 @@ Status: draft | planned | in-progress | blocked | done
 | Simple social pilot | [plans/simple-social-pilot.md](plans/simple-social-pilot.md) | prepared; social/host/date/environment and field observation pending | feature/session-manager-mvp |
 
 | First social launch | [plans/social-launch.md](plans/social-launch.md) | empty pilot DB created; CLI sign-ins, SMTP, schema/deploy approval and phone rehearsal pending | feature/session-manager-mvp |
+
+| English / Tiếng Việt switch | [plans/bilingual-ui.md](plans/bilingual-ui.md) | in-progress; phase 1 (check-in) built locally, awaiting Vietnamese review | feature/session-manager-mvp |

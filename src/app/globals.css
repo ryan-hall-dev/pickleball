@@ -55,6 +55,9 @@
 /* `inline` so the utility resolves the next/font variable set on <html> at runtime. */
 @theme inline {
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  /* Outfit has no Vietnamese tone marks: Vietnamese text uses Be Vietnam Pro. */
+  --font-vietnamese:
+    var(--font-be-vietnam-pro), ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {

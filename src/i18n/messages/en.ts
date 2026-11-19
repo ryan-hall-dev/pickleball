@@ -1,0 +1,118 @@
+// English interface text: the source of truth. `vi.ts` must have exactly the
+// same shape (typed as `Messages`), so a missing translation fails typecheck.
+// Values are plain strings, or functions where a name or number is inserted.
+// Names, social names, session names and links are inserted as entered.
+
+export const en = {
+  languageSwitch: {
+    label: "Language",
+  },
+  loading: {
+    checkin: "Loading check-in…",
+  },
+  appName: "Pickleball Social Manager",
+  levels: {
+    beginner: "Beginner",
+    intermediate: "Intermediate",
+    advanced: "Advanced",
+  },
+  genders: {
+    male: "Male",
+    female: "Female",
+  },
+  /** Field errors; the input rules use these English values as their messages. */
+  validation: {
+    firstNameRequired: "Enter your first name",
+    lastNameRequired: "Enter your last name",
+    levelRequired: "Choose your level",
+    genderRequired: "Choose male or female.",
+    nameTooLong: (maxLength: number) => `Use at most ${maxLength} characters.`,
+    nameHasControlCharacters: "Remove special characters.",
+  },
+  time: {
+    minutesLeft: (minutes: number) => `${minutes} min left`,
+    sessionMinutes: (minutes: number) => `${minutes} min session`,
+    minutes: (minutes: number) => `${minutes} min`,
+    durationUnavailable: "Duration unavailable",
+    startTimeUnavailable: "Start time unavailable",
+    startedEndUnavailable: (startTime: string) =>
+      `Started ${startTime} · end time unavailable`,
+    sessionTimeIsUp: "Session time is up",
+  },
+  checkin: {
+    pageTitle: "Check in",
+    welcomeHeading: (socialName: string) => `Welcome to ${socialName}`,
+    welcomeIntro: "Please enter your details to check in.",
+    formLabel: "Check in",
+    firstName: "First name",
+    lastName: "Last name",
+    yourLevel: "Your level",
+    gender: "Gender",
+    checkIn: "Check in",
+    hostApprovesNote:
+      "A host approves each check-in before you're added to today's players.",
+    sessionCard: {
+      notStarted: "Session not started",
+      liveNow: "Live now",
+      courts: "courts",
+      checkedIn: "checked in",
+      duration: "duration",
+      unavailable: "Unavailable",
+    },
+    pill: {
+      waiting: "Waiting",
+      checkedIn: "Checked in",
+    },
+    waiting: {
+      title: "Waiting for the host to approve",
+      sent: (sessionName: string) =>
+        `Your check-in for ${sessionName} has been sent.`,
+      updatesItself: "This page updates by itself every few seconds.",
+      whileYouWait: "While you wait",
+      keepOpen:
+        "Keep this page open, or come back to the same link later. Your request stays here.",
+      takingAWhile: "Taking a while? Let a host know you've arrived.",
+    },
+    approved: {
+      title: (firstName: string) => `You're in, ${firstName}`,
+      checkedInTo: (sessionName: string) =>
+        `You're checked in to ${sessionName}.`,
+      whatNext: "What happens next",
+      courtWhenTurn: "The hosts put you on a court when it's your turn.",
+      stayNear: "Stay near the courts and listen for your name.",
+      canClose: "You can close this page.",
+    },
+    alreadyCheckedIn: {
+      title: (sessionName: string) =>
+        `You're already checked in to ${sessionName}`,
+      nothingMore: (firstName: string) =>
+        `Nothing more to do, ${firstName}. Stay near the courts and listen for your name.`,
+    },
+    rejected: {
+      title: "Check-in not approved",
+      text: "The host didn't approve this check-in. Please speak to the host.",
+    },
+    rateLimited: {
+      title: "Too many attempts",
+      text: "Too many attempts. Wait a few minutes and try again.",
+    },
+    inactive: {
+      title: "This check-in link isn't active",
+      text: "Ask a host at the courts for the current QR code.",
+    },
+    noOpenSession: {
+      title: "No social open right now",
+      text: "Check back when your host opens the session.",
+      checkAgain: "Check again",
+    },
+    unavailable: {
+      title: "Something went wrong",
+      text: "We couldn't reach the check-in. Check your connection and try again.",
+      noDoubleSend:
+        "If you'd already pressed Check in, trying again won't send a second request.",
+    },
+    tryAgain: "Try again",
+  },
+};
+
+export type Messages = typeof en;

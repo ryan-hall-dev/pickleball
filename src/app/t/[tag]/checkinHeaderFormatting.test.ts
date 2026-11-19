@@ -1,10 +1,16 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import {
-  formatCheckinHeaderWhen,
-  formatCheckinSessionWhen,
-  formatTimeLeft,
-} from "./checkinHeaderFormatting";
+import { MESSAGES } from "@/i18n/messages";
+import * as formatting from "./checkinHeaderFormatting";
+
+type Timing = Parameters<typeof formatting.formatCheckinSessionWhen>[0];
+const english = MESSAGES.en;
+const formatTimeLeft = (endsAt: string, now: string) =>
+  formatting.formatTimeLeft(endsAt, now, english);
+const formatCheckinSessionWhen = (session: Timing) =>
+  formatting.formatCheckinSessionWhen(session, english, "en");
+const formatCheckinHeaderWhen = (session: Timing, now: string) =>
+  formatting.formatCheckinHeaderWhen(session, now, english, "en");
 
 function localIso(hours: number, minutes: number, seconds = 0): string {
   return new Date(2026, 10, 7, hours, minutes, seconds).toISOString();
@@ -76,5 +82,15 @@ describe("check-in session timing", () => {
         localIso(18, 40),
       ),
     ).toBe("Start time unavailable");
+  });
+  it("speaks Vietnamese, with Vietnamese dates, when chosen", () => {
+    expect(
+      formatting.formatCheckinHeaderWhen(
+        live,
+        localIso(18, 40),
+        MESSAGES.vi,
+        "vi",
+      ),
+    ).toBe("Thứ 7, 7 thg 11 · 18:00 – 20:00 · Còn 80 phút");
   });
 });

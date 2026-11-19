@@ -1,7 +1,9 @@
 "use client";
 
 import { useRef, useState, type FormEvent, type RefObject } from "react";
-import { GENDERS, GENDER_LABELS } from "@/server/participantRules";
+import { useLocale } from "@/i18n/LocaleProvider";
+import { translateValidationMessage } from "@/i18n/messages";
+import { GENDERS } from "@/server/participantRules";
 import {
   SELECTED_LEVEL_OPTION_CLASS_NAME,
   UNSELECTED_LEVEL_OPTION_CLASS_NAME,
@@ -20,12 +22,7 @@ import {
   type CheckinFormValues,
 } from "@/server/checkin/checkinRules";
 import { CheckMarkIcon } from "./CheckinIcons";
-import {
-  BrandLine,
-  HOST_APPROVES_NOTE,
-  InfoNotice,
-  SkillLevelOptions,
-} from "./CheckinParts";
+import { BrandLine, InfoNotice, SkillLevelOptions } from "./CheckinParts";
 import { LiveSessionCard } from "./LiveSessionCard";
 import { BOTTOM_ACTION_BAR_CLASS_NAME } from "./checkinStyles";
 
@@ -69,13 +66,22 @@ export function ParticipantCheckinForm({
   const genderGroupRef = useRef<HTMLDivElement>(null);
   const skillGroupRef = useRef<HTMLDivElement>(null);
 
+  const { messages } = useLocale();
+  const copy = messages.checkin;
   const validation = validateCheckinForm(values);
   const browserFieldErrors =
     hasPressedCheckIn && !validation.isValid ? validation.fieldErrors : {};
-  const fieldErrors =
-    Object.keys(browserFieldErrors).length > 0
-      ? browserFieldErrors
-      : serverFieldErrors;
+  // The rules (browser and server) speak English: show them in the chosen language.
+  const fieldErrors = Object.fromEntries(
+    Object.entries(
+      Object.keys(browserFieldErrors).length > 0
+        ? browserFieldErrors
+        : serverFieldErrors,
+    ).map(([field, message]) => [
+      field,
+      message && translateValidationMessage(message, messages),
+    ]),
+  ) as CheckinFormFieldErrors;
   const hasFieldErrors = Object.values(fieldErrors).some(Boolean);
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -99,23 +105,21 @@ export function ParticipantCheckinForm({
       <BrandLine name={page.socialName} />
       <div>
         <h1 className="text-[26px] leading-[1.15] font-extrabold">
-          Welcome to {page.socialName}
+          {copy.welcomeHeading(page.socialName)}
         </h1>
-        <p className="mt-1 text-sm text-muted">
-          Please enter your details to check in.
-        </p>
+        <p className="mt-1 text-sm text-muted">{copy.welcomeIntro}</p>
       </div>
       <LiveSessionCard page={page} />
       <form
         id={FORM_ID}
         noValidate
         onSubmit={submit}
-        aria-label="Check in"
+        aria-label={copy.formLabel}
         className="flex flex-col gap-4 rounded-card border border-card-border bg-card p-[18px]"
       >
         <NameField
           field="firstName"
-          label="First name"
+          label={copy.firstName}
           autoComplete="given-name"
           inputRef={firstNameInputRef}
           value={values.firstName}
@@ -125,7 +129,7 @@ export function ParticipantCheckinForm({
         />
         <NameField
           field="lastName"
-          label="Last name"
+          label={copy.lastName}
           autoComplete="family-name"
           inputRef={lastNameInputRef}
           value={values.lastName}
@@ -135,7 +139,7 @@ export function ParticipantCheckinForm({
         />
         <div ref={skillGroupRef} className="flex flex-col gap-1.5">
           <span id={SKILL_LABEL_ID} className={FIELD_LABEL_CLASS_NAME}>
-            Your level
+            {copy.yourLevel}
           </span>
           <SkillLevelOptions
             id={FIELD_IDS.skillLevel}
@@ -160,7 +164,7 @@ export function ParticipantCheckinForm({
         </div>
         <div ref={genderGroupRef} className="flex flex-col gap-1.5">
           <span id="checkin-gender-label" className={FIELD_LABEL_CLASS_NAME}>
-            Gender
+            {copy.gender}
           </span>
           <div
             role="group"
@@ -183,7 +187,7 @@ export function ParticipantCheckinForm({
                     : UNSELECTED_LEVEL_OPTION_CLASS_NAME
                 }
               >
-                {GENDER_LABELS[gender]}
+                {messages.genders[gender]}
               </button>
             ))}
           </div>
@@ -194,7 +198,7 @@ export function ParticipantCheckinForm({
           )}
         </div>
       </form>
-      {!hasFieldErrors && <InfoNotice>{HOST_APPROVES_NOTE}</InfoNotice>}
+      {!hasFieldErrors && <InfoNotice>{copy.hostApprovesNote}</InfoNotice>}
       <div className={BOTTOM_ACTION_BAR_CLASS_NAME}>
         <button
           type="submit"
@@ -204,7 +208,7 @@ export function ParticipantCheckinForm({
           className={`${PRIMARY_BUTTON_CLASS_NAME} gap-2.5`}
         >
           <CheckMarkIcon sizePx={20} />
-          Check in
+          {copy.checkIn}
         </button>
       </div>
     </>

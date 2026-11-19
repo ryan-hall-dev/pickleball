@@ -14,7 +14,8 @@ import {
   PersonIcon,
   RefreshIcon,
 } from "./CheckinIcons";
-import { APP_NAME, BrandLine } from "./CheckinParts";
+import { useLocale, useMessages } from "@/i18n/LocaleProvider";
+import { BrandLine } from "./CheckinParts";
 import { formatCheckinSessionWhen } from "./checkinHeaderFormatting";
 import {
   BOTTOM_ACTION_BAR_CLASS_NAME,
@@ -94,15 +95,16 @@ function StateText({ children }: { children: ReactNode }) {
 type PillTone = "waiting" | "checkedIn";
 
 function StatusPill({ tone }: { tone: PillTone }) {
+  const copy = useMessages().checkin.pill;
   return tone === "waiting" ? (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-blue-edge bg-blue-surface px-2.5 py-1 text-xs font-bold text-blue-soft">
       <PendingIcon />
-      Waiting
+      {copy.waiting}
     </span>
   ) : (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-lime-edge bg-lime-surface px-2.5 py-1 text-xs font-bold text-lime-soft">
       <CheckMarkIcon sizePx={12} />
-      Checked in
+      {copy.checkedIn}
     </span>
   );
 }
@@ -156,12 +158,13 @@ export function WaitingScreen({
   session: CheckinSessionHeader;
   requester: Requester;
 }) {
+  const copy = useMessages().checkin.waiting;
   return (
     <StateScreen
       brandName={socialName}
       iconTone="blue"
       icon={<ClockIcon sizePx={34} />}
-      title="Waiting for the host to approve"
+      title={copy.title}
       afterState={
         <>
           <div className={STATE_PANEL_CLASS_NAME}>
@@ -175,20 +178,17 @@ export function WaitingScreen({
               className="flex items-center gap-2 text-[13px] font-semibold text-link"
             >
               <RefreshIcon />
-              This page updates by itself every few seconds.
+              {copy.updatesItself}
             </p>
           </div>
           <BulletPanel
-            title="While you wait"
-            items={[
-              "Keep this page open, or come back to the same link later. Your request stays here.",
-              "Taking a while? Let a host know you've arrived.",
-            ]}
+            title={copy.whileYouWait}
+            items={[copy.keepOpen, copy.takingAWhile]}
           />
         </>
       }
     >
-      <StateText>Your check-in for {session.name} has been sent.</StateText>
+      <StateText>{copy.sent(session.name)}</StateText>
     </StateScreen>
   );
 }
@@ -203,34 +203,32 @@ export function ApprovedScreen({
   session: CheckinSessionHeader;
   requester: Requester;
 }) {
+  const { locale, messages } = useLocale();
+  const copy = messages.checkin.approved;
   return (
     <StateScreen
       brandName={socialName}
       iconTone="lime"
       icon={<CheckMarkIcon sizePx={36} />}
       role="status"
-      title={`You're in, ${requester.firstName}`}
+      title={copy.title(requester.firstName)}
       afterState={
         <>
           <div className={STATE_PANEL_CLASS_NAME}>
             <OwnRequestRow
               displayName={requester.displayName}
-              caption={formatCheckinSessionWhen(session)}
+              caption={formatCheckinSessionWhen(session, messages, locale)}
               pillTone="checkedIn"
             />
           </div>
           <BulletPanel
-            title="What happens next"
-            items={[
-              "The hosts put you on a court when it's your turn.",
-              "Stay near the courts and listen for your name.",
-              "You can close this page.",
-            ]}
+            title={copy.whatNext}
+            items={[copy.courtWhenTurn, copy.stayNear, copy.canClose]}
           />
         </>
       }
     >
-      <StateText>You&apos;re checked in to {session.name}.</StateText>
+      <StateText>{copy.checkedInTo(session.name)}</StateText>
     </StateScreen>
   );
 }
@@ -245,26 +243,26 @@ export function AlreadyCheckedInScreen({
   session: CheckinSessionHeader;
   requester: Requester;
 }) {
+  const { locale, messages } = useLocale();
+  const copy = messages.checkin.alreadyCheckedIn;
   return (
     <StateScreen
       brandName={socialName}
       iconTone="lime"
       icon={<CheckMarkIcon sizePx={36} />}
       role="status"
-      title={`You're already checked in to ${session.name}`}
+      title={copy.title(session.name)}
       afterState={
         <div className={STATE_PANEL_CLASS_NAME}>
           <OwnRequestRow
             displayName={requester.displayName}
-            caption={formatCheckinSessionWhen(session)}
+            caption={formatCheckinSessionWhen(session, messages, locale)}
             pillTone="checkedIn"
           />
         </div>
       }
     >
-      <StateText>
-        {`Nothing more to do, ${requester.firstName}. Stay near the courts and listen for your name.`}
-      </StateText>
+      <StateText>{copy.nothingMore(requester.firstName)}</StateText>
     </StateScreen>
   );
 }
@@ -277,26 +275,25 @@ export function RejectedScreen({
   socialName: string;
   onTryAgain: () => void;
 }) {
+  const messages = useMessages();
   return (
     <StateScreen
       brandName={socialName}
       iconTone="neutral"
       icon={<PersonIcon />}
       role="status"
-      title="Check-in not approved"
+      title={messages.checkin.rejected.title}
       action={
         <button
           type="button"
           onClick={onTryAgain}
           className={FULL_WIDTH_OUTLINE_BUTTON_CLASS_NAME}
         >
-          Try again
+          {messages.checkin.tryAgain}
         </button>
       }
     >
-      <StateText>
-        The host didn&apos;t approve this check-in. Please speak to the host.
-      </StateText>
+      <StateText>{messages.checkin.rejected.text}</StateText>
     </StateScreen>
   );
 }
@@ -311,13 +308,14 @@ export function RateLimitedScreen({
   isBusy: boolean;
   onTryAgain: () => void;
 }) {
+  const messages = useMessages();
   return (
     <StateScreen
       brandName={brandName}
       iconTone="orange"
       icon={<span className="text-[34px] leading-none font-extrabold">!</span>}
       role="alert"
-      title="Too many attempts"
+      title={messages.checkin.rateLimited.title}
       action={
         <button
           type="button"
@@ -325,27 +323,26 @@ export function RateLimitedScreen({
           disabled={isBusy}
           className={FULL_WIDTH_OUTLINE_BUTTON_CLASS_NAME}
         >
-          Try again
+          {messages.checkin.tryAgain}
         </button>
       }
     >
-      <StateText>
-        Too many attempts. Wait a few minutes and try again.
-      </StateText>
+      <StateText>{messages.checkin.rateLimited.text}</StateText>
     </StateScreen>
   );
 }
 
 /** P11: the app's name, nothing about any social, host or session. */
 export function InactiveLinkScreen() {
+  const messages = useMessages();
   return (
     <StateScreen
-      brandName={APP_NAME}
+      brandName={messages.appName}
       iconTone="neutral"
       icon={<BrokenLinkIcon />}
-      title="This check-in link isn't active"
+      title={messages.checkin.inactive.title}
     >
-      <StateText>Ask a host at the courts for the current QR code.</StateText>
+      <StateText>{messages.checkin.inactive.text}</StateText>
     </StateScreen>
   );
 }
@@ -360,12 +357,13 @@ export function NoOpenSessionScreen({
   isBusy: boolean;
   onCheckAgain: () => void;
 }) {
+  const copy = useMessages().checkin.noOpenSession;
   return (
     <StateScreen
       brandName={socialName}
       iconTone="neutral"
       icon={<CalendarIcon />}
-      title="No social open right now"
+      title={copy.title}
       action={
         <button
           type="button"
@@ -373,11 +371,11 @@ export function NoOpenSessionScreen({
           disabled={isBusy}
           className={FULL_WIDTH_OUTLINE_BUTTON_CLASS_NAME}
         >
-          Check again
+          {copy.checkAgain}
         </button>
       }
     >
-      <StateText>Check back when your host opens the session.</StateText>
+      <StateText>{copy.text}</StateText>
     </StateScreen>
   );
 }
@@ -392,13 +390,15 @@ export function UnavailableScreen({
   isBusy: boolean;
   onTryAgain: () => void;
 }) {
+  const messages = useMessages();
+  const copy = messages.checkin.unavailable;
   return (
     <StateScreen
       brandName={brandName}
       iconTone="orange"
       icon={<NoConnectionIcon />}
       role="alert"
-      title="Something went wrong"
+      title={copy.title}
       action={
         <button
           type="button"
@@ -407,18 +407,12 @@ export function UnavailableScreen({
           aria-busy={isBusy}
           className={PRIMARY_BUTTON_CLASS_NAME}
         >
-          Try again
+          {messages.checkin.tryAgain}
         </button>
       }
     >
-      <StateText>
-        We couldn&apos;t reach the check-in. Check your connection and try
-        again.
-      </StateText>
-      <p className="text-sm text-muted">
-        If you&apos;d already pressed Check in, trying again won&apos;t send a
-        second request.
-      </p>
+      <StateText>{copy.text}</StateText>
+      <p className="text-sm text-muted">{copy.noDoubleSend}</p>
     </StateScreen>
   );
 }

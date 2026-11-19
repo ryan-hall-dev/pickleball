@@ -1,13 +1,19 @@
+import type { Locale } from "@/i18n/locales";
+import type { Messages } from "@/i18n/messages";
 import { formatLocalClockTime, formatSessionWhen } from "@/lib/sessionTime";
 import type { CheckinSessionHeader } from "@/server/checkin/checkinResults";
 
 const MS_PER_MINUTE = 60_000;
 
 /** Whole minutes remaining according to the database clock, rounded up. */
-export function formatTimeLeft(endsAt: string, now: string): string | null {
+export function formatTimeLeft(
+  endsAt: string,
+  now: string,
+  messages: Messages,
+): string | null {
   const minutesLeft = (Date.parse(endsAt) - Date.parse(now)) / MS_PER_MINUTE;
   if (!Number.isFinite(minutesLeft) || minutesLeft <= 0) return null;
-  return `${Math.ceil(minutesLeft)} min left`;
+  return messages.time.minutesLeft(Math.ceil(minutesLeft));
 }
 
 type SessionTiming = Pick<
@@ -16,29 +22,38 @@ type SessionTiming = Pick<
 >;
 
 /** Drafts promise a duration, never a scheduled first-game time. */
-export function formatCheckinSessionWhen(session: SessionTiming): string {
+export function formatCheckinSessionWhen(
+  session: SessionTiming,
+  messages: Messages,
+  locale: Locale,
+): string {
   if (session.status === "draft")
     return session.durationMinutes === null
-      ? "Duration unavailable"
-      : `${session.durationMinutes} min session`;
-  if (session.startedAt === null) return "Start time unavailable";
+      ? messages.time.durationUnavailable
+      : messages.time.sessionMinutes(session.durationMinutes);
+  if (session.startedAt === null) return messages.time.startTimeUnavailable;
   if (session.endsAt === null) {
     // The actual start is recorded but the saved duration is unusable: say
     // when it started and nothing about when it ends.
-    return `Started ${formatLocalClockTime(new Date(session.startedAt))} · end time unavailable`;
+    return messages.time.startedEndUnavailable(
+      formatLocalClockTime(new Date(session.startedAt)),
+    );
   }
   return formatSessionWhen(
     new Date(session.startedAt),
     new Date(session.endsAt),
+    locale,
   );
 }
 
 export function formatCheckinHeaderWhen(
   session: SessionTiming,
   now: string,
+  messages: Messages,
+  locale: Locale,
 ): string {
-  const when = formatCheckinSessionWhen(session);
+  const when = formatCheckinSessionWhen(session, messages, locale);
   if (session.status === "draft" || session.endsAt === null) return when;
-  const timeLeft = formatTimeLeft(session.endsAt, now);
-  return `${when} · ${timeLeft ?? "Session time is up"}`;
+  const timeLeft = formatTimeLeft(session.endsAt, now, messages);
+  return `${when} · ${timeLeft ?? messages.time.sessionTimeIsUp}`;
 }

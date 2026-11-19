@@ -1,0 +1,44 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useLocale } from "@/i18n/LocaleProvider";
+import { LOCALES, type Locale } from "@/i18n/locales";
+
+const LOCALE_NAMES: Record<Locale, { short: string; full: string }> = {
+  en: { short: "EN", full: "English" },
+  vi: { short: "VI", full: "Tiếng Việt" },
+};
+
+/** EN | VI: two 44px pressable buttons; each names its language in that language. */
+export function LanguageSwitch() {
+  const { locale, messages, setLocale } = useLocale();
+  const router = useRouter();
+  return (
+    <div
+      role="group"
+      aria-label={messages.languageSwitch.label}
+      className="inline-flex shrink-0 rounded-[14px] border border-inner-border bg-inner p-0.5"
+    >
+      {LOCALES.map((option) => (
+        <button
+          key={option}
+          type="button"
+          lang={option}
+          aria-label={LOCALE_NAMES[option].full}
+          aria-pressed={locale === option}
+          onClick={() => {
+            if (option === locale) return;
+            setLocale(option);
+            // Server-rendered text follows on the next render.
+            router.refresh();
+          }}
+          className={`h-11 min-w-11 rounded-xl px-3 text-sm font-bold ${
+            locale === option ? "bg-text text-bg" : "text-muted"
+          }`}
+        >
+          {LOCALE_NAMES[option].short}
+        </button>
+      ))}
+    </div>
+  );
+}

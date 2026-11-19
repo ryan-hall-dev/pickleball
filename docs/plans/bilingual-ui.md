@@ -1,0 +1,72 @@
+# English / Tiếng Việt switch
+
+Status: approved 2026-11-19. Phase 1 built locally (not deployed; awaiting the Vietnamese review). Phase 2 not started.
+
+## Goal
+
+Hosts and players can switch the interface between English and Vietnamese without signing in. Each browser remembers its own choice. Buttons, instructions, errors and messages, and dates and times follow the chosen language. Player names, social names, QR codes and links stay exactly as entered.
+
+## Decisions
+
+- **Languages:** `en` and `vi` only.
+- **First visit:** `vi` when the browser's `Accept-Language` prefers Vietnamese, otherwise `en`.
+- **Remembered choice:** the cookie `pickleball_locale` (`en` | `vi`), one year, `SameSite=Lax`, not HttpOnly. It holds no personal data and doesn't depend on signing in. Using a cookie rather than localStorage lets the server render the right language and `<html lang>` on the first paint.
+- **No i18n library.** `src/i18n/en.ts` is the source of truth. `src/i18n/vi.ts` is typed as the same message tree, so a missing or extra key fails `pnpm typecheck`. A small `t(key, values)` handles `{name}` placeholders. English plurals use explicit `one`/`other` keys; Vietnamese has no plural forms.
+- **Access:**
+  - Server components call `getMessages()`, which reads the cookie.
+  - Client components get the messages through a `LocaleProvider` set in the root layout.
+  - Switching writes the cookie in the browser (no server action), re-renders client text at once, then calls `router.refresh()` for server-rendered text. State held in client components (typed fields, host drafts) is kept.
+- **Server messages:** server actions read the locale and translate where the message is produced. Engine `sessionError` codes are mapped to translated text in the app layer, and the engine stays pure with its English text as the fallback. Check-in results are already code-based.
+- **Dates and times:** `src/lib/sessionTime.ts` takes the locale and uses `vi-VN` or `en-GB` (24-hour clock in both).
+- **Switch:** an "EN | VI" pair, each a 44px button with `aria-pressed`, labelled "Language" / "Ngôn ngữ". It goes at the top of the public check-in page, in the host header and on the sign-in page.
+- **Tone:** player-facing Vietnamese uses "bạn". The reviewer can change it.
+- **Review:** Claude drafts `vi.ts` and generates a side-by-side English | Vietnamese review page. A native speaker reviews it before each phase is deployed.
+
+## Out of scope
+
+- The Supabase sign-in email template. It is hosted Auth config and needs separate approval.
+- A host final report or History screen. It isn't in the simple workflow; the end-of-session summary and time-up notice on Live are translated.
+- Server logs and Sentry, which stay in English.
+- Data stored in the database: event payloads and snapshots are never translated.
+
+## Phases
+
+### Phase 1: language setup and public check-in
+
+1. `src/i18n/` holds `locales.ts` (types, `pickLocale(acceptLanguage, cookie)`), `en.ts`, `vi.ts`, `t()`, `getLocale()`/`getMessages()` (server) and `LocaleProvider`/`useMessages()` (client).
+2. The root layout uses `<html lang={locale}>`, and `global-error.tsx` falls back to `en`.
+3. Add the `LanguageSwitch` component (it saves the cookie in the browser).
+4. Translate everything under `src/app/t/[tag]/` and the check-in server messages (`checkinResults`, `checkinActions`). Dates in the check-in header follow the locale.
+5. Tests:
+   - Unit tests for `pickLocale` and `t()`.
+   - A component test showing the switch changes the text and keeps typed input.
+   - The `vi` keys must match `en` (typecheck, plus one runtime test for the placeholders).
+   - An e2e check-in journey in Vietnamese, starting from a browser with a Vietnamese `Accept-Language`.
+6. Generate the review page for the check-in strings, then fix any wording the review turns up.
+
+### Phase 2: host screens
+
+The host screens are sign-in, the host header and nav, Setup (with the pending check-in tray), Live (courts, waiting, add player, seat picker, recovery, time-up, end), Hosts, Sticker and QR, and the print page. Translate them with their server action messages and the engine error-code map. Tests: the existing English suites stay as they are, plus a Vietnamese live smoke e2e at 390px. Phone layout check: Vietnamese text is often longer, so every button must still fit.
+
+## Verification
+
+Each phase runs lint, typecheck, format check, Vitest with local Supabase, pgTAP (it shouldn't change) and the full Playwright suite. No migration is expected. Each deploy needs its own approval.
+
+## Phase 1 as built (2026-11-19)
+
+- **Files:**
+  - `src/i18n/locales.ts` (`pickLocale`, `localeFromAcceptLanguage`).
+  - `src/i18n/messages/{en,vi,index}.ts`.
+  - `src/i18n/getLocale.ts` (server).
+  - `src/i18n/LocaleProvider.tsx` (client: `useLocale`, `useMessages`).
+  - `src/components/LanguageSwitch.tsx` (in the check-in brand line on every check-in screen).
+- **First paint:** the check-in page reads the locale inside its Suspense boundary and wraps the page in `LocaleProvider`. `<html lang>` stays `en` in the static shell (`cacheComponents`), and the provider wraps its children in a `lang` element (correct from the first paint), then updates `<html lang>` after hydration. The Suspense fallback shows "Loading… · Đang tải…". The page title follows the locale (`generateMetadata`).
+- **Font:** Outfit has no Vietnamese tone marks (Google subsets `latin`, `latin-ext` only). Vietnamese text uses Be Vietnam Pro (`--font-vietnamese`, weights 400-800, not preloaded), applied by the provider when the locale is `vi`. English keeps Outfit.
+- **Validation:** the shared input rules keep their English messages, which now come from `en.validation`. `translateValidationMessage` shows them in the chosen language, so the server's field errors are translated too. Check-in failures were already codes.
+- **Dates:** `formatSessionWhen(start, end, locale)` uses `en-GB` or `vi-VN` ("Thứ 7, 7 thg 11 · 18:00 – 20:00"). Host callers still default to English until phase 2.
+- **Review:** `pnpm i18n-review-rows` prints every line as `{key, en, vi}` JSON. The private review page (claude.ai artifact `G6GKdttwi7Cti1ghBfxDP6`) stores the reviewer's ticks and wordings in its `suggestions` collection, which Claude reads back and applies.
+- **Tests:**
+  - `src/i18n/locales.test.ts`.
+  - The Vietnamese date case in `checkinHeaderFormatting.test.ts`.
+  - The switch keeping typed input and translating errors (`ParticipantCheckinForm.test.tsx`).
+  - The e2e "in Vietnamese" describe in `e2e/checkin.spec.ts`: a `vi-VN` browser checks in in Vietnamese at 390px, gets approved, switches to English, and the choice survives a reload; plus the inactive link in Vietnamese.
