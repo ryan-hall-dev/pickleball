@@ -6,10 +6,10 @@ import { LOCALES, type Locale } from "@/i18n/locales";
 
 const LOCALE_NAMES: Record<Locale, { short: string; full: string }> = {
   en: { short: "EN", full: "English" },
-  vi: { short: "VI", full: "Tiếng Việt" },
+  vi: { short: "VN", full: "Tiếng Việt" },
 };
 
-/** EN | VI: two 44px pressable buttons; each names its language in that language. */
+/** EN | VN (the label most Vietnamese sites use; the language code stays `vi`): two 44px pressable buttons; each names its language in that language. */
 export function LanguageSwitch() {
   const { locale, messages, setLocale } = useLocale();
   const router = useRouter();

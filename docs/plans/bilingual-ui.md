@@ -18,7 +18,7 @@ Hosts and players can switch the interface between English and Vietnamese withou
   - Switching writes the cookie in the browser (no server action), re-renders client text at once, then calls `router.refresh()` for server-rendered text. State held in client components (typed fields, host drafts) is kept.
 - **Server messages:** server actions read the locale and translate where the message is produced. Engine `sessionError` codes are mapped to translated text in the app layer, and the engine stays pure with its English text as the fallback. Check-in results are already code-based.
 - **Dates and times:** `src/lib/sessionTime.ts` takes the locale and uses `vi-VN` or `en-GB` (24-hour clock in both).
-- **Switch:** an "EN | VI" pair, each a 44px button with `aria-pressed`, labelled "Language" / "Ngôn ngữ". It goes at the top of the public check-in page, in the host header and on the sign-in page.
+- **Switch:** an "EN | VN" pair (VN chosen by Ryan 2026-11-20 as the familiar label; the language code stays `vi`), each a 44px button with `aria-pressed`, labelled "Language" / "Ngôn ngữ". It goes at the top of the public check-in page, in the host header and on the sign-in page.
 - **Tone:** player-facing Vietnamese uses "bạn". The reviewer can change it.
 - **Review:** Claude drafts `vi.ts` and generates a side-by-side English | Vietnamese review page. A native speaker reviews it before each phase is deployed.
 
