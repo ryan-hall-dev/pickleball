@@ -1,6 +1,6 @@
 # English / Tiếng Việt switch
 
-Status: approved 2026-11-19. Phase 1 deployed 2026-11-20 (review passed, no changes). Phase 2 (host screens) built locally 2026-11-20, awaiting its Vietnamese review; not deployed.
+Status: approved 2026-11-19. Phase 1 deployed 2026-11-20 (review passed, no changes). Phase 2 (host screens) built 2026-11-20; Vietnamese review passed the same day (all 435 lines approved, no changes); not deployed.
 
 ## Goal
 
