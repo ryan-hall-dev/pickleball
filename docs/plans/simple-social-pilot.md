@@ -6,7 +6,7 @@ Status: **prepared; not run**. Ryan must choose the social, host, date and appro
 
 Observe whether one host can run a real social from a phone with less guessing and no extra operating burden. Passing automated checks does not answer this question.
 
-Existing implementation and decisions: [Simple social MVP](simple-social-mvp.md), [handoff](simple-social-handoff.md), ADR0004/0005 and DESIGN.md.
+Existing implementation and decisions: [Simple social MVP](simple-social-mvp.md), ADR0004/0005 and DESIGN.md.
 
 ## Before inviting real players
 
