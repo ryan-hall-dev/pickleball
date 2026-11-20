@@ -16,12 +16,17 @@ function isCurrentSection(pathname: string, href: string): boolean {
   return pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
 }
 
-export function HostNav() {
+/** `column`: the phone ☰ menu, one full-width link per row. */
+export function HostNav({ layout = "row" }: { layout?: "row" | "column" }) {
   const pathname = usePathname();
   const text = useMessages().host.header;
   return (
     <nav aria-label={text.navLabel}>
-      <ul className="flex flex-wrap gap-1">
+      <ul
+        className={
+          layout === "row" ? "flex flex-wrap gap-1" : "flex flex-col gap-1"
+        }
+      >
         {HOST_NAV_ITEMS.map(({ href, labelKey }) => {
           const isInCurrentSection = isCurrentSection(pathname, href);
           return (
@@ -35,7 +40,7 @@ export function HostNav() {
                       ? "true"
                       : undefined
                 }
-                className={`inline-flex min-h-11 items-center rounded-xl px-4 text-[15px] ${
+                className={`${layout === "row" ? "inline-flex" : "flex"} min-h-11 items-center rounded-xl px-4 text-[15px] ${
                   isInCurrentSection
                     ? "bg-nav-active font-semibold text-text"
                     : "font-medium text-muted hover:text-text"

@@ -33,11 +33,11 @@ export function CourtRecovery({
   const match = court.activeMatch;
   if (!match && undoOptions.length === 0) return null;
   return (
-    <details className="mt-3 rounded-[14px] border border-outline p-3">
+    <details className="mt-3 rounded-[14px] border border-outline p-3 max-sm:rounded-xl max-sm:px-2.5 max-sm:py-0.5">
       <summary className="flex min-h-11 cursor-pointer items-center font-semibold">
         {text.courtOptions}
       </summary>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-2 flex flex-wrap gap-2 max-sm:mt-0 max-sm:mb-2 max-sm:gap-1.5">
         {match && (
           <>
             <button

@@ -166,8 +166,20 @@ export async function signIn(page: Page, email: string) {
 }
 
 export async function signOut(page: Page) {
+  // Phones keep Sign out in the ☰ menu.
+  await openHostMenuOnPhones(page);
   await page.getByRole("button", { name: "Sign out" }).click();
   await page.waitForURL("**/login");
+}
+
+/** Phones (under 640px) keep the host nav and Sign out in the ☰ menu. */
+export async function openHostMenuOnPhones(page: Page) {
+  const menuButton = page.getByRole("button", { name: "Menu", exact: true });
+  if (
+    (await menuButton.isVisible()) &&
+    (await menuButton.getAttribute("aria-expanded")) !== "true"
+  )
+    await menuButton.click();
 }
 
 /**

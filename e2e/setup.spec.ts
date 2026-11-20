@@ -11,6 +11,7 @@ import {
   findUserIdByEmail,
   signInAsNewManager,
   useRandomClientIp,
+  openHostMenuOnPhones,
 } from "./support/localHostSession";
 
 const testHostUserIds: string[] = [];
@@ -157,8 +158,10 @@ test("a stale tab can't overwrite newer settings: it says so, and saves again af
 
   // A client-side trip away and back loads the newest revision too.
   const nav = tabB.getByRole("navigation", { name: "Host" });
+  await openHostMenuOnPhones(tabB);
   await nav.getByRole("link", { name: "Hosts" }).click();
   await expect(tabB).toHaveURL(/\/hosts$/);
+  await openHostMenuOnPhones(tabB);
   await nav.getByRole("link", { name: "Session setup" }).click();
   await tabB.getByLabel("Session name").fill("After navigating");
   await expectSaved(tabB);
@@ -203,9 +206,11 @@ test("coming back while the save made on leaving is still on its way: it lands, 
   // An edit, then away within the autosave delay, and straight back.
   await page.getByLabel("Session name").fill("Saved on the way out");
   const nav = page.getByRole("navigation", { name: "Host" });
+  await openHostMenuOnPhones(page);
   await nav.getByRole("link", { name: "Hosts" }).click();
   await saveIsHeld;
   await expect(page).toHaveURL(/\/hosts$/);
+  await openHostMenuOnPhones(page);
   await nav.getByRole("link", { name: "Session setup" }).click();
   await expect(page).toHaveURL(/\/setup$/);
   await expect(saveStatus(page)).toHaveText("Saving…");

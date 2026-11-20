@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Live courts — Pickle Ball Social</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0f1419;
+        --bar: #121a21;
+        --card: #182028;
+        --inner: #1c2630;
+        --line: #24303b;
+        --line-2: #3a4856;
+        --text: #f1f5f9;
+        --muted: #9aa8b6;
+        --lime: #d4f23a;
+        --lime-ink: #18200a;
+        --blue: #5aa9ff;
+        --blue-ink: #06182b;
+        --blue-bg: #13263c;
+        --blue-line: #2f5e8f;
+        --blue-text: #8cc4ff;
+        --orange-text: #ffb877;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+      }
+      body {
+        font-family: Outfit, system-ui, sans-serif;
+        font-size: 14px;
+        line-height: 1.35;
+        -webkit-text-size-adjust: 100%;
+      }
+      button {
+        font-family: inherit;
+        cursor: pointer;
+        color: inherit;
+      }
+      a {
+        color: var(--blue-text);
+      }
+      .app {
+        max-width: 480px;
+        margin: 0 auto;
+        min-height: 100vh;
+      }
+
+      /* Top bar */
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        height: 52px;
+        padding: 0 8px 0 14px;
+        padding-top: env(safe-area-inset-top);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 1px solid var(--line);
+        background: var(--bar);
+      }
+      .brand {
+        flex: 1;
+        font-size: 16px;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .lang {
+        display: flex;
+        background: var(--inner);
+        border-radius: 10px;
+        padding: 2px;
+      }
+      .lang button {
+        height: 32px;
+        padding: 0 9px;
+        border-radius: 8px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 12px;
+      }
+      .lang button[aria-pressed="true"] {
+        background: var(--text);
+        color: var(--bg);
+        font-weight: 700;
+      }
+      .icon-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        border: 0;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .content {
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+      }
+
+      /* Session strip */
+      .session {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 10px 10px 14px;
+      }
+      .eyebrow {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        color: var(--lime);
+      }
+      .session h1 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+      .sub {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .btn {
+        height: 44px;
+        padding: 0 12px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 13px;
+        border: 1px solid var(--line-2);
+        background: transparent;
+        white-space: nowrap;
+      }
+      .btn-blue {
+        border: 0;
+        background: var(--blue);
+        color: var(--blue-ink);
+        font-weight: 700;
+      }
+      .btn-sm {
+        height: 40px;
+      }
+
+      /* Jump bar */
+      .jumprow {
+        display: flex;
+        gap: 8px;
+      }
+      .jump {
+        flex: 1;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        padding: 3px;
+        border-radius: 14px;
+      }
+      .jump a {
+        height: 38px;
+        border-radius: 11px;
+        color: #c3cdd8;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+      }
+      .jump a[aria-current="true"] {
+        background: #2a3642;
+        color: var(--text);
+      }
+      .jump a span {
+        color: var(--muted);
+      }
+      .add {
+        width: 46px;
+        height: 46px;
+        flex: none;
+        border-radius: 14px;
+        border: 0;
+        background: var(--lime);
+        color: var(--lime-ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .section-label {
+        margin: 4px 2px 0;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--muted);
+        letter-spacing: 0.08em;
+      }
+      section {
+        scroll-margin-top: 64px;
+      }
+
+      /* Courts */
+      .court-ready {
+        background: var(--blue-bg);
+        border: 1px solid var(--blue-line);
+        border-radius: 16px;
+        padding: 12px;
+      }
+      .court-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .court-head h3,
+      .court-free h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .pill {
+        font-size: 12px;
+        font-weight: 700;
+        padding: 3px 9px;
+        border-radius: 999px;
+        background: var(--blue);
+        color: var(--blue-ink);
+      }
+      .pill-free {
+        font-weight: 600;
+        padding: 2px 8px;
+        background: #2a3642;
+        color: #d5dee7;
+      }
+      .teams {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .teams .vs {
+        font-size: 11px;
+        color: var(--blue-text);
+        font-weight: 700;
+      }
+      .teams .right {
+        text-align: right;
+      }
+      .note {
+        margin: 6px 0 10px;
+        font-size: 12px;
+        color: #9fb8d4;
+      }
+      .actions {
+        display: flex;
+        gap: 6px;
+      }
+      .actions .grow {
+        flex: 1;
+      }
+      .actions .btn {
+        border-color: var(--blue-line);
+      }
+      .court-free {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 10px 10px 12px;
+      }
+      .court-free .info {
+        flex: 1;
+        min-width: 0;
+      }
+      .court-free .title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* Waiting */
+      .list-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 10px 12px 6px;
+      }
+      .list-head h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .count {
+        color: var(--muted);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 8px 8px 12px;
+        border-top: 1px solid var(--line);
+      }
+      .row .who {
+        flex: 1;
+        min-width: 0;
+      }
+      .row .name {
+        font-weight: 600;
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .row .wait {
+        font-weight: 700;
+        color: var(--orange-text);
+        margin-left: 4px;
+      }
+      .row .meta {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .called {
+        color: var(--blue-text);
+      }
+      .row .btn {
+        padding: 0 10px;
+        border-radius: 11px;
+      }
+
+      /* Check-ins */
+      .checkins {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 10px 10px 12px;
+      }
+      .checkins h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .checkins .info {
+        flex: 1;
+        min-width: 0;
+      }
+      .with-icon {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <svg width="28" height="28" viewBox="0 0 52 52" aria-hidden="true">
+          <circle cx="26" cy="26" r="24" fill="#D4F23A" />
+          <circle cx="18" cy="18" r="3.5" fill="#0F1419" />
+          <circle cx="30" cy="15" r="3.5" fill="#0F1419" />
+          <circle cx="36" cy="27" r="3.5" fill="#0F1419" />
+          <circle cx="25" cy="34" r="3.5" fill="#0F1419" />
+          <circle cx="15" cy="29" r="3.5" fill="#0F1419" />
+        </svg>
+        <span class="brand">Pickle Ball Social</span>
+        <div class="lang" role="group" aria-label="Language">
+          <button aria-pressed="true">EN</button>
+          <button aria-pressed="false">VN</button>
+        </div>
+        <button
+          class="icon-btn"
+          aria-label="Menu: Session setup, Hosts, Host 1, Sign out"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        </button>
+      </header>
+
+      <div class="content">
+        <section class="card session" aria-label="Live session">
+          <div style="flex: 1; min-width: 0">
+            <div class="eyebrow">LIVE · HOST 1</div>
+            <h1>Friday social</h1>
+            <div class="sub">80 min left · updates every 5 s</div>
+          </div>
+          <button class="btn btn-sm">End</button>
+        </section>
+
+        <div class="jumprow">
+          <nav class="card jump" aria-label="Jump to section">
+            <a href="#courts" aria-current="true">Courts <span>3</span></a>
+            <a href="#waiting">Waiting <span>5</span></a>
+            <a href="#checkins">Check-ins <span>0</span></a>
+          </nav>
+          <button class="add" aria-label="Add player">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.6"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
+
+        <section
+          id="courts"
+          aria-labelledby="courts-h"
+          style="display: flex; flex-direction: column; gap: 8px"
+        >
+          <h2 id="courts-h" class="section-label">COURTS &amp; UP NEXT</h2>
+
+          <article class="court-ready">
+            <div class="court-head">
+              <h3>Court 1</h3>
+              <span class="pill">Ready to start</span>
+            </div>
+            <div class="teams">
+              <div>Kea Mac<br />Wee Long</div>
+              <span class="vs">VS</span>
+              <div class="right">Ngyen Wee<br />Jack Welong</div>
+            </div>
+            <p class="note">
+              Group fixed. Wait time keeps counting until the game starts.
+            </p>
+            <div class="actions">
+              <button class="btn btn-blue grow">Start game</button>
+              <button class="btn">Change</button>
+              <button class="btn">Release</button>
+            </div>
+          </article>
+
+          <article class="card court-free">
+            <div class="info">
+              <div class="title">
+                <h3>Court 2</h3>
+                <span class="pill pill-free">Free</span>
+              </div>
+              <div class="sub">Waiting for 4 available players</div>
+            </div>
+            <button class="btn btn-blue">Prepare next 4</button>
+          </article>
+
+          <article class="card court-free">
+            <div class="info">
+              <div class="title">
+                <h3>Court 3</h3>
+                <span class="pill pill-free">Free</span>
+              </div>
+              <div class="sub">Waiting for 4 available players</div>
+            </div>
+            <button class="btn btn-blue">Prepare next 4</button>
+          </article>
+        </section>
+
+        <section
+          id="waiting"
+          class="card"
+          aria-labelledby="waiting-h"
+          style="overflow: hidden"
+        >
+          <div class="list-head">
+            <h2 id="waiting-h">Waiting <span class="count">(5)</span></h2>
+            <span class="sub">Longest wait first</span>
+          </div>
+
+          <div class="row">
+            <div class="who">
+              <div class="name">
+                1. Kea Mac <span class="wait">40 min</span>
+              </div>
+              <div class="meta">
+                Intermediate · <span class="called">Called · Court 1</span>
+              </div>
+            </div>
+            <button class="btn">Rest 10</button>
+            <button class="btn">Left</button>
+          </div>
+          <div class="row">
+            <div class="who">
+              <div class="name">
+                2. Ryan Haa <span class="wait">40 min</span>
+              </div>
+              <div class="meta">Intermediate · Waiting</div>
+            </div>
+            <button class="btn">Rest 10</button>
+            <button class="btn">Left</button>
+          </div>
+          <div class="row">
+            <div class="who">
+              <div class="name">
+                3. Wee Long <span class="wait">40 min</span>
+              </div>
+              <div class="meta">
+                Intermediate · <span class="called">Called · Court 1</span>
+              </div>
+            </div>
+            <button class="btn">Rest 10</button>
+            <button class="btn">Left</button>
+          </div>
+          <div class="row">
+            <div class="who">
+              <div class="name">
+                4. Ngyen Wee <span class="wait">38 min</span>
+              </div>
+              <div class="meta">
+                Intermediate · <span class="called">Called · Court 1</span>
+              </div>
+            </div>
+            <button class="btn">Rest 10</button>
+            <button class="btn">Left</button>
+          </div>
+          <div class="row">
+            <div class="who">
+              <div class="name">
+                5. Jack Welong <span class="wait">35 min</span>
+              </div>
+              <div class="meta">
+                Beginner · <span class="called">Called · Court 1</span>
+              </div>
+            </div>
+            <button class="btn">Rest 10</button>
+            <button class="btn">Left</button>
+          </div>
+        </section>
+
+        <section
+          id="checkins"
+          class="card checkins"
+          aria-labelledby="checkins-h"
+        >
+          <div class="info">
+            <h2 id="checkins-h">Check-ins <span class="count">(0)</span></h2>
+            <div class="sub">Players scan the QR code or tap the sticker</div>
+          </div>
+          <button class="btn with-icon">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <path d="M14 14h3v3M21 14v7h-7" />
+            </svg>
+            QR
+          </button>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>

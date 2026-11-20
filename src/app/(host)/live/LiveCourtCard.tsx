@@ -34,22 +34,24 @@ function Teams({
       : (players.find((player) => player.participantId === id)?.name ??
         text.playerUnavailable);
   return (
-    <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+    <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3 max-sm:mt-0 max-sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] max-sm:gap-2">
       <div>
         {teams.teamA.map((id, index) => (
           <p
-            className="py-1 font-semibold break-words"
+            className="py-1 font-semibold break-words max-sm:py-0"
             key={id ?? `vacant-${index}`}
           >
             {name(id)}
           </p>
         ))}
       </div>
-      <span className="text-xs text-muted">{text.versus}</span>
-      <div>
+      <span className="text-xs text-muted max-sm:text-[11px] max-sm:font-bold max-sm:text-link max-sm:uppercase">
+        {text.versus}
+      </span>
+      <div className="max-sm:text-right">
         {teams.teamB.map((id, index) => (
           <p
-            className="py-1 font-semibold break-words"
+            className="py-1 font-semibold break-words max-sm:py-0"
             key={id ?? `vacant-${index}`}
           >
             {name(id)}
@@ -89,12 +91,26 @@ export function LiveCourtCard({
   const vacancy =
     court.called &&
     [...court.called.teamA, ...court.called.teamB].some((id) => id === null);
+  const phoneLayout = phoneCourtLayout(court, group, timeIsUp);
   return (
-    <article className={CARD_CLASS_NAME} aria-label={shownCourtName}>
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-lg font-bold">{shownCourtName}</h3>
+    <article
+      className={`${CARD_CLASS_NAME} ${PHONE_ARTICLE_CLASS_NAMES[phoneLayout]}`}
+      aria-label={shownCourtName}
+    >
+      <header
+        className={`flex flex-wrap items-center justify-between gap-2 ${
+          phoneLayout === "playing"
+            ? ""
+            : `max-sm:col-span-1! max-sm:col-start-1 max-sm:row-start-1 max-sm:justify-start ${phoneLayout === "group" ? "max-sm:mb-2" : ""}`
+        }`}
+      >
+        <h3 className="text-lg font-bold max-sm:text-base">{shownCourtName}</h3>
         <span
-          className={`text-sm font-semibold ${court.activeMatch ? "text-lime-soft" : "text-muted"}`}
+          className={`text-sm font-semibold max-sm:rounded-full max-sm:px-2 max-sm:py-0.5 max-sm:text-xs ${
+            court.activeMatch
+              ? "text-lime-soft max-sm:border max-sm:border-lime-edge max-sm:bg-lime-surface max-sm:font-bold"
+              : "text-muted max-sm:bg-inner-border max-sm:text-text-soft"
+          } ${phoneLayout === "group" ? "max-sm:hidden" : ""}`}
         >
           {court.activeMatch
             ? text.playingMinutes(
@@ -112,7 +128,7 @@ export function LiveCourtCard({
         <>
           <Teams teams={court.activeMatch} players={players} />
           <button
-            className={`${PRIMARY_BUTTON_CLASS_NAME} mt-4`}
+            className={`${PRIMARY_BUTTON_CLASS_NAME} mt-4 max-sm:mt-3`}
             type="button"
             disabled={disabled}
             onClick={() =>
@@ -123,7 +139,7 @@ export function LiveCourtCard({
           </button>
         </>
       ) : court.called ? null : (
-        <p className="mt-2 text-xs text-muted">{text.noGame}</p>
+        <p className="mt-2 text-xs text-muted max-sm:hidden">{text.noGame}</p>
       )}
       <CourtRecovery
         key={court.activeMatch?.matchId ?? "idle"}
@@ -135,18 +151,28 @@ export function LiveCourtCard({
       />
       <section
         aria-label={text.upNextFor(shownCourtName)}
-        className="mt-5 rounded-[20px] border border-blue-edge bg-blue-surface p-4"
+        className={`mt-5 rounded-[20px] border border-blue-edge bg-blue-surface p-4 ${
+          phoneLayout === "playing"
+            ? "max-sm:mt-3 max-sm:rounded-[14px] max-sm:p-3"
+            : "max-sm:contents"
+        }`}
       >
-        <h4 className="font-bold text-blue-soft">
+        <h4
+          className={`font-bold text-blue-soft ${PHONE_UP_NEXT_HEADING_CLASS_NAMES[phoneLayout]}`}
+        >
           {court.called && !court.activeMatch ? text.readyToStart : text.upNext}
           {court.called && court.activeMatch ? text.prepared : ""}
         </h4>
         {timeIsUp ? (
-          <p className="mt-2 text-xs text-muted">{text.timeIsUp}</p>
+          <p
+            className={`mt-2 text-xs text-muted ${phoneLayout === "free" ? PHONE_FREE_CAPTION_CLASS_NAME : ""}`}
+          >
+            {text.timeIsUp}
+          </p>
         ) : group ? (
           <>
             <Teams teams={group} players={players} />
-            <p className="mt-2 text-xs text-blue-soft">
+            <p className="mt-2 text-xs text-blue-soft max-sm:mt-1.5">
               {court.called ? text.fixed : text.longestWaitsFirst}
             </p>
             {vacancy && (
@@ -156,11 +182,11 @@ export function LiveCourtCard({
                 </AttentionMessage>
               </div>
             )}
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-2 max-sm:mt-2.5 max-sm:gap-1.5">
               {court.called ? (
                 <button
                   type="button"
-                  className={SECONDARY_BUTTON_CLASS_NAME}
+                  className={`${SECONDARY_BUTTON_CLASS_NAME} max-sm:flex-1`}
                   disabled={disabled || !!court.activeMatch || !!vacancy}
                   onClick={() =>
                     onAction({
@@ -176,7 +202,7 @@ export function LiveCourtCard({
               ) : (
                 <button
                   type="button"
-                  className={SECONDARY_BUTTON_CLASS_NAME}
+                  className={`${SECONDARY_BUTTON_CLASS_NAME} max-sm:flex-1`}
                   disabled={disabled}
                   onClick={() =>
                     onAction({
@@ -240,7 +266,9 @@ export function LiveCourtCard({
           </>
         ) : (
           <>
-            <p className="mt-2 text-sm text-muted">
+            <p
+              className={`mt-2 text-sm text-muted ${phoneLayout === "free" ? PHONE_FREE_CAPTION_CLASS_NAME : "max-sm:text-xs"}`}
+            >
               {court.activeMatch
                 ? selected
                   ? text.notEnoughPlayers
@@ -249,7 +277,11 @@ export function LiveCourtCard({
             </p>
             <button
               type="button"
-              className={`${SECONDARY_BUTTON_CLASS_NAME} mt-3`}
+              className={`${SECONDARY_BUTTON_CLASS_NAME} mt-3 ${
+                phoneLayout === "free"
+                  ? "max-sm:col-start-2 max-sm:row-span-2 max-sm:row-start-1 max-sm:mt-0"
+                  : "max-sm:mt-2"
+              }`}
               disabled={disabled}
               onClick={onPrepare}
             >
@@ -261,6 +293,41 @@ export function LiveCourtCard({
     </article>
   );
 }
+
+/**
+ * Phones (Design A, docs/plans/mobile-compact-ui.md): a game in progress keeps
+ * its Up next box; a court with a group waiting to start (or a suggestion)
+ * becomes one card whose Up next title is the pill beside the court name; a
+ * free court is one row with its button on the right. The Up next box uses
+ * `display: contents` on phones so its parts join the card's grid.
+ */
+type PhoneCourtLayout = "playing" | "group" | "free";
+
+function phoneCourtLayout(
+  court: LiveCourt,
+  group: LiveTeams | null,
+  timeIsUp: boolean,
+): PhoneCourtLayout {
+  if (court.activeMatch) return "playing";
+  return group && !timeIsUp ? "group" : "free";
+}
+
+const PHONE_ARTICLE_CLASS_NAMES: Record<PhoneCourtLayout, string> = {
+  playing: "",
+  group:
+    "max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-2 max-sm:border-blue-edge max-sm:bg-blue-surface max-sm:[&>*]:col-span-2 max-sm:[&>section>*]:col-span-2",
+  free: "max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-2.5 max-sm:[&>*]:col-span-2",
+};
+
+const PHONE_UP_NEXT_HEADING_CLASS_NAMES: Record<PhoneCourtLayout, string> = {
+  playing: "",
+  group:
+    "max-sm:col-span-1! max-sm:col-start-2 max-sm:row-start-1 max-sm:justify-self-end max-sm:rounded-full max-sm:bg-blue max-sm:px-2.5 max-sm:py-0.5 max-sm:text-xs max-sm:text-on-blue",
+  free: "max-sm:sr-only",
+};
+
+const PHONE_FREE_CAPTION_CLASS_NAME =
+  "max-sm:col-span-1! max-sm:col-start-1 max-sm:row-start-2 max-sm:mt-0.5 max-sm:text-xs";
 
 const PICKER_VISIBLE_WHEN_FOLDED = 5;
 type Gender = NonNullable<LivePlayer["gender"]>;

@@ -79,7 +79,7 @@ export function QuickAddParticipantBox({
   }
 
   return (
-    <div className="mt-[18px] rounded-[20px] border border-inner-border bg-inner p-4">
+    <div className="mt-[18px] rounded-[20px] border border-inner-border bg-inner p-4 max-sm:mt-3 max-sm:rounded-2xl max-sm:p-3">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h3 id="quick-add-participant-heading" className="text-base font-bold">
           {text.heading}

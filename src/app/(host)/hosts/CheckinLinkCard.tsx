@@ -37,7 +37,10 @@ export function CheckinLinkCard({
       aria-labelledby="checkin-link-card-heading"
       className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
     >
-      <h2 id="checkin-link-card-heading" className="text-xl font-bold">
+      <h2
+        id="checkin-link-card-heading"
+        className="text-xl font-bold max-sm:text-base"
+      >
         {text.heading}
       </h2>
       <p className="text-sm text-muted">{text.intro}</p>

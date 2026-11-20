@@ -67,7 +67,7 @@ export function SessionSummary({
   return (
     <aside
       aria-label="Session summary and start"
-      className="flex min-w-0 flex-[1_1_360px] flex-col gap-[18px]"
+      className="flex min-w-0 flex-[1_1_360px] flex-col gap-[18px] max-sm:gap-2.5"
     >
       <SetupSection
         stepNumber={5}
@@ -132,7 +132,7 @@ export function SessionSummary({
 
       <section
         aria-label="Start session"
-        className="flex flex-col gap-2.5 rounded-card border border-card-border bg-card p-[18px]"
+        className="flex flex-col gap-2.5 rounded-card border border-card-border bg-card p-[18px] max-sm:rounded-2xl max-sm:p-3"
       >
         {/* Enabled by the same readiness as the stepper and checklist; the confirm step is M6. */}
         <button
@@ -140,7 +140,7 @@ export function SessionSummary({
           disabled={!readiness.isReadyToStart}
           onClick={() => setIsStartNoteShown(true)}
           aria-describedby="start-session-note"
-          className="flex h-16 w-full items-center justify-center gap-2 rounded-[18px] bg-lime px-2 text-[19px] font-extrabold tracking-[0.03em] text-on-lime uppercase disabled:cursor-not-allowed disabled:border disabled:border-inner-border disabled:bg-transparent disabled:text-placeholder"
+          className="flex h-16 w-full items-center justify-center gap-2 rounded-[18px] bg-lime px-2 text-[19px] font-extrabold tracking-[0.03em] text-on-lime uppercase disabled:cursor-not-allowed disabled:border disabled:border-inner-border disabled:bg-transparent disabled:text-placeholder max-sm:h-12 max-sm:rounded-xl max-sm:text-[15px]"
         >
           <svg
             aria-hidden="true"

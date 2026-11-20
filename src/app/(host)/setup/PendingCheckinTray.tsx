@@ -76,6 +76,7 @@ export function PendingCheckinTray({
   onParticipantApproved,
   onAttendanceChangedElsewhere,
   approveDecision = approveCheckin,
+  onWaitingCountChange,
 }: {
   onParticipantApproved: (participant: DraftParticipant | null) => void;
   onAttendanceChangedElsewhere: () => void;
@@ -84,6 +85,8 @@ export function PendingCheckinTray({
     requestId: string,
     missingGender?: Gender,
   ) => Promise<HostCheckinDecisionResult>;
+  /** Live shows the count on its Check-ins link. */
+  onWaitingCountChange?: (waitingCount: number) => void;
 }) {
   const text = useMessages().host.tray;
   const [state, dispatch] = useReducer(trayReducer, INITIAL_TRAY_STATE);
@@ -131,18 +134,21 @@ export function PendingCheckinTray({
 
   const waitingCount = waitingRequestCount(state.rows);
   const isWaiting = waitingCount > 0;
+  useEffect(() => {
+    onWaitingCountChange?.(waitingCount);
+  }, [waitingCount, onWaitingCountChange]);
 
   return (
     <section
       aria-labelledby={HEADING_ID}
-      className={`rounded-card border bg-card px-4 py-4 sm:px-[22px] sm:py-5 ${
+      className={`rounded-card border bg-card px-4 py-4 max-sm:rounded-2xl max-sm:p-3 sm:px-[22px] sm:py-5 ${
         isWaiting ? "border-blue-edge" : "border-card-border"
       }`}
     >
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 max-sm:flex-nowrap max-sm:gap-2.5">
         <span
           aria-hidden="true"
-          className={`flex size-8 shrink-0 items-center justify-center rounded-[10px] font-extrabold tabular-nums ${
+          className={`flex size-8 shrink-0 items-center justify-center rounded-[10px] font-extrabold tabular-nums max-sm:size-7 max-sm:text-sm ${
             isWaiting
               ? "bg-blue text-on-blue"
               : "bg-inner-border text-text-soft"
@@ -150,18 +156,20 @@ export function PendingCheckinTray({
         >
           {waitingCount}
         </span>
-        <div className="min-w-0 flex-[1_1_240px]">
-          <h2 id={HEADING_ID} className="text-xl font-bold">
+        <div className="min-w-0 flex-[1_1_240px] max-sm:flex-1">
+          <h2 id={HEADING_ID} className="text-xl font-bold max-sm:text-base">
             {text.heading} <span className="sr-only">({waitingCount})</span>
           </h2>
           {isWaiting && (
-            <p className="mt-0.5 text-[13px] text-muted">{text.intro}</p>
+            <p className="mt-0.5 text-[13px] text-muted max-sm:text-xs">
+              {text.intro}
+            </p>
           )}
         </div>
         {/* Always in the header, empty or not (decision #8, H02). */}
         <Link
           href={STICKER_AND_QR_PAGE_PATH}
-          className={`${OUTLINE_BUTTON_CLASS_NAME} gap-2 whitespace-nowrap`}
+          className={`${OUTLINE_BUTTON_CLASS_NAME} shrink-0 gap-2 whitespace-nowrap`}
         >
           <QrCodeIcon />
           {text.showQrCode}
@@ -178,7 +186,7 @@ export function PendingCheckinTray({
         <ul
           aria-live="polite"
           aria-relevant="additions"
-          className="mt-4 flex flex-col gap-2"
+          className="mt-4 flex flex-col gap-2 max-sm:mt-2.5"
         >
           {state.rows.map((row) => (
             <PendingCheckinRow
@@ -191,7 +199,7 @@ export function PendingCheckinTray({
           ))}
         </ul>
       ) : state.hasLoaded ? (
-        <div className="mt-3.5 flex items-center gap-3 rounded-[18px] border border-dashed border-outline px-4 py-3.5 text-sm text-text-soft">
+        <div className="mt-3.5 flex items-center gap-3 rounded-[18px] border border-dashed border-outline px-4 py-3.5 text-sm text-text-soft max-sm:mt-2.5 max-sm:rounded-xl max-sm:px-3 max-sm:py-2 max-sm:text-xs">
           <InfoBadge />
           <span>{text.empty}</span>
         </div>
@@ -317,7 +325,7 @@ function PendingCheckinRow({
   return (
     <li
       aria-busy={isWorking || undefined}
-      className={`flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-[18px] border px-3 py-2.5 ${
+      className={`flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-[18px] border px-3 py-2.5 max-sm:gap-x-2.5 max-sm:gap-y-2 max-sm:rounded-xl max-sm:py-2 ${
         ROW_SURFACE_CLASS_NAMES[view.surface]
       }`}
     >
@@ -325,7 +333,7 @@ function PendingCheckinRow({
         <InitialsAvatar name={name} tone={avatarTone} />
         <div className="min-w-0">
           <p
-            className={`truncate text-[15px] font-semibold ${
+            className={`text-[15px] font-semibold break-words max-sm:text-sm ${
               view.decidedOutcome === "decidedElsewhere" ? "text-muted" : ""
             }`}
           >

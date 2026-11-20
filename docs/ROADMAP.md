@@ -15,3 +15,5 @@ Status: draft | planned | in-progress | blocked | done
 | First social launch | internal notes (private) | empty pilot DB created; CLI sign-ins, SMTP, schema/deploy approval and phone rehearsal pending | feature/session-manager-mvp |
 
 | English / Tiếng Việt switch | [plans/bilingual-ui.md](plans/bilingual-ui.md) | in-progress; phase 1 (check-in) deployed 2026-11-20; phase 2 (host screens) built, review passed, not deployed | feature/bilingual-host-screens |
+
+| Compact phone layout | [plans/mobile-compact-ui.md](plans/mobile-compact-ui.md) | built 2026-11-20; screenshot review pending; not deployed | feature/mobile-compact-ui |

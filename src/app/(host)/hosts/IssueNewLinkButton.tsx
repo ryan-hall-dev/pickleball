@@ -120,11 +120,14 @@ export function IssueNewLinkButton({ socialName }: { socialName: string }) {
         onCancel={cancelWithEscape}
         onClose={() => setIsDialogOpen(false)}
         onClick={closeOnBackdropClick}
-        className="m-auto max-h-[calc(100%-32px)] w-[calc(100%-32px)] max-w-[600px] overflow-y-auto rounded-[28px] border border-inner-border bg-card p-0 text-text shadow-[0_24px_64px_rgba(0,0,0,0.5)] backdrop:bg-bg-backdrop/80"
+        className="m-auto max-h-[calc(100%-32px)] w-[calc(100%-32px)] max-w-[600px] overflow-y-auto rounded-[28px] border border-inner-border bg-card p-0 text-text shadow-[0_24px_64px_rgba(0,0,0,0.5)] backdrop:bg-bg-backdrop/80 max-sm:rounded-2xl"
       >
         <div className="flex flex-col gap-[18px] p-5 sm:p-7">
           <div>
-            <h2 id={titleId} className="text-[26px] font-extrabold">
+            <h2
+              id={titleId}
+              className="text-[26px] font-extrabold max-sm:text-xl"
+            >
               {text.title}
             </h2>
             <p className="mt-1 text-sm break-words text-muted">{socialName}</p>

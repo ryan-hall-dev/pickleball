@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AttentionMessage } from "@/components/AttentionMessage";
 import {
   FIELD_LABEL_CLASS_NAME,
@@ -29,11 +29,19 @@ export type AddPlayerOutcome =
  * "Add player" for someone whose phone is missing or flat. The same event id
  * is kept while the form stays open: a second tap or a retry after an
  * uncertain answer settles that one write, never a second player.
+ *
+ * Open state belongs to the Live screen: on phones the + button opens the
+ * form as a bottom sheet (docs/plans/mobile-compact-ui.md); larger screens
+ * show this component's own button and the form inline.
  */
 export function LiveAddPlayer({
+  open,
+  onOpenChange,
   disabled,
   onAdd,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   disabled: boolean;
   onAdd: (
     player: DraftParticipantInput,
@@ -42,7 +50,6 @@ export function LiveAddPlayer({
 }) {
   const messages = useMessages();
   const text = messages.host.live.addPlayer;
-  const [open, setOpen] = useState(false);
   const [form, setForm] = useState<ParticipantForm>(EMPTY_PARTICIPANT_FORM);
   const [fieldErrors, setFieldErrors] = useState<ParticipantFormErrors>({});
   const [failure, setFailure] = useState<ShownFailure | null>(null);
@@ -52,6 +59,18 @@ export function LiveAddPlayer({
   const [unresolved, setUnresolved] = useState(false);
   const eventId = useRef<string | null>(null);
   const inFlight = useRef(false);
+  const firstNameInput = useRef<HTMLInputElement>(null);
+
+  function close() {
+    onOpenChange(false);
+    setFailure(null);
+    eventId.current = null;
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    firstNameInput.current?.focus();
+  }, [open]);
 
   function edit(field: keyof ParticipantForm, value: string) {
     if (unresolved) return;
@@ -81,7 +100,7 @@ export function LiveAddPlayer({
     if (outcome.kind === "added") {
       eventId.current = null;
       setForm(EMPTY_PARTICIPANT_FORM);
-      setOpen(false);
+      onOpenChange(false);
     } else setFailure(outcome.failure);
   }
 
@@ -89,148 +108,162 @@ export function LiveAddPlayer({
     return (
       <button
         type="button"
-        className={OUTLINE_BUTTON_CLASS_NAME}
+        // Phones use the + beside the section links instead.
+        className={`${OUTLINE_BUTTON_CLASS_NAME} self-start max-sm:hidden`}
         disabled={disabled}
-        onClick={() => setOpen(true)}
+        onClick={() => onOpenChange(true)}
       >
         {text.button}
       </button>
     );
   return (
-    <form
-      onSubmit={(event) => void submit(event)}
-      aria-label={text.button}
-      noValidate
-      className="w-full rounded-[20px] border border-inner-border bg-inner p-4"
-    >
-      <h3 className="text-base font-bold">{text.button}</h3>
-      <p className="mt-1 text-[13px] text-muted">{text.intro}</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <Field
-          id="live-add-first-name"
-          label={text.firstName}
-          error={fieldErrors.firstName}
-        >
-          <input
+    <>
+      {/* Phones: a bottom sheet over a dimmed page; a tap outside closes it
+          unless an add is still unresolved. */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 z-30 bg-bg-backdrop/80 sm:hidden"
+        onClick={() => {
+          if (!unresolved && !saving) close();
+        }}
+      />
+      <form
+        onSubmit={(event) => void submit(event)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !unresolved && !saving) close();
+        }}
+        aria-label={text.button}
+        noValidate
+        className="w-full rounded-[20px] border border-inner-border bg-inner p-4 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-40 max-sm:max-h-[85dvh] max-sm:overflow-y-auto max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0 max-sm:bg-card max-sm:pb-[max(16px,env(safe-area-inset-bottom))]"
+      >
+        <h3 className="text-base font-bold">{text.button}</h3>
+        <p className="mt-1 text-[13px] text-muted">{text.intro}</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <Field
             id="live-add-first-name"
-            type="text"
-            autoComplete="off"
-            maxLength={PERSON_NAME_MAX_LENGTH}
-            value={form.firstName}
-            disabled={unresolved}
-            onChange={(event) => edit("firstName", event.target.value)}
-            className={TEXT_INPUT_CLASS_NAME}
-            aria-invalid={fieldErrors.firstName ? true : undefined}
-            aria-describedby={
-              fieldErrors.firstName ? "live-add-first-name-error" : undefined
-            }
-          />
-        </Field>
-        <Field
-          id="live-add-last-name"
-          label={text.lastName}
-          error={fieldErrors.lastName}
-        >
-          <input
+            label={text.firstName}
+            error={fieldErrors.firstName}
+          >
+            <input
+              ref={firstNameInput}
+              id="live-add-first-name"
+              type="text"
+              autoComplete="off"
+              maxLength={PERSON_NAME_MAX_LENGTH}
+              value={form.firstName}
+              disabled={unresolved}
+              onChange={(event) => edit("firstName", event.target.value)}
+              className={TEXT_INPUT_CLASS_NAME}
+              aria-invalid={fieldErrors.firstName ? true : undefined}
+              aria-describedby={
+                fieldErrors.firstName ? "live-add-first-name-error" : undefined
+              }
+            />
+          </Field>
+          <Field
             id="live-add-last-name"
-            type="text"
-            autoComplete="off"
-            maxLength={PERSON_NAME_MAX_LENGTH}
-            value={form.lastName}
-            disabled={unresolved}
-            onChange={(event) => edit("lastName", event.target.value)}
-            className={TEXT_INPUT_CLASS_NAME}
-            aria-invalid={fieldErrors.lastName ? true : undefined}
-            aria-describedby={
-              fieldErrors.lastName ? "live-add-last-name-error" : undefined
-            }
-          />
-        </Field>
-        <Field
-          id="live-add-gender"
-          label={text.gender}
-          error={fieldErrors.gender}
-        >
-          <select
+            label={text.lastName}
+            error={fieldErrors.lastName}
+          >
+            <input
+              id="live-add-last-name"
+              type="text"
+              autoComplete="off"
+              maxLength={PERSON_NAME_MAX_LENGTH}
+              value={form.lastName}
+              disabled={unresolved}
+              onChange={(event) => edit("lastName", event.target.value)}
+              className={TEXT_INPUT_CLASS_NAME}
+              aria-invalid={fieldErrors.lastName ? true : undefined}
+              aria-describedby={
+                fieldErrors.lastName ? "live-add-last-name-error" : undefined
+              }
+            />
+          </Field>
+          <Field
             id="live-add-gender"
-            value={form.gender}
-            disabled={unresolved}
-            onChange={(event) => edit("gender", event.target.value)}
-            className={TEXT_INPUT_CLASS_NAME}
-            aria-invalid={fieldErrors.gender ? true : undefined}
-            aria-describedby={
-              fieldErrors.gender ? "live-add-gender-error" : undefined
-            }
+            label={text.gender}
+            error={fieldErrors.gender}
           >
-            <option value="">{messages.host.common.choose}</option>
-            {GENDERS.map((gender) => (
-              <option key={gender} value={gender}>
-                {messages.genders[gender]}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field
-          id="live-add-skill"
-          label={text.level}
-          error={fieldErrors.skillLevel}
-        >
-          <select
+            <select
+              id="live-add-gender"
+              value={form.gender}
+              disabled={unresolved}
+              onChange={(event) => edit("gender", event.target.value)}
+              className={TEXT_INPUT_CLASS_NAME}
+              aria-invalid={fieldErrors.gender ? true : undefined}
+              aria-describedby={
+                fieldErrors.gender ? "live-add-gender-error" : undefined
+              }
+            >
+              <option value="">{messages.host.common.choose}</option>
+              {GENDERS.map((gender) => (
+                <option key={gender} value={gender}>
+                  {messages.genders[gender]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field
             id="live-add-skill"
-            value={form.skillLevel}
-            disabled={unresolved}
-            onChange={(event) => edit("skillLevel", event.target.value)}
-            className={TEXT_INPUT_CLASS_NAME}
-            aria-invalid={fieldErrors.skillLevel ? true : undefined}
-            aria-describedby={
-              fieldErrors.skillLevel ? "live-add-skill-error" : undefined
-            }
+            label={text.level}
+            error={fieldErrors.skillLevel}
           >
-            <option value="">{messages.host.common.choose}</option>
-            {SKILL_LEVELS.map((level) => (
-              <option key={level} value={level}>
-                {messages.levels[level]}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
-      {unresolved && (
-        <p className="mt-3 text-[13px] text-muted">{text.unresolved}</p>
-      )}
-      {failure && (
-        <div className="mt-3">
-          <AttentionMessage>{failureText(failure, messages)}</AttentionMessage>
+            <select
+              id="live-add-skill"
+              value={form.skillLevel}
+              disabled={unresolved}
+              onChange={(event) => edit("skillLevel", event.target.value)}
+              className={TEXT_INPUT_CLASS_NAME}
+              aria-invalid={fieldErrors.skillLevel ? true : undefined}
+              aria-describedby={
+                fieldErrors.skillLevel ? "live-add-skill-error" : undefined
+              }
+            >
+              <option value="">{messages.host.common.choose}</option>
+              {SKILL_LEVELS.map((level) => (
+                <option key={level} value={level}>
+                  {messages.levels[level]}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
-      )}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="submit"
-          className={SECONDARY_BUTTON_CLASS_NAME}
-          disabled={disabled || saving}
-        >
-          {saving
-            ? messages.host.common.saving
-            : failure
-              ? text.retry
-              : text.addToWaiting}
-        </button>
-        {!unresolved && (
-          <button
-            type="button"
-            className={OUTLINE_BUTTON_CLASS_NAME}
-            disabled={saving}
-            onClick={() => {
-              setOpen(false);
-              setFailure(null);
-              eventId.current = null;
-            }}
-          >
-            {messages.host.common.cancel}
-          </button>
+        {unresolved && (
+          <p className="mt-3 text-[13px] text-muted">{text.unresolved}</p>
         )}
-      </div>
-    </form>
+        {failure && (
+          <div className="mt-3">
+            <AttentionMessage>
+              {failureText(failure, messages)}
+            </AttentionMessage>
+          </div>
+        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="submit"
+            className={SECONDARY_BUTTON_CLASS_NAME}
+            disabled={disabled || saving}
+          >
+            {saving
+              ? messages.host.common.saving
+              : failure
+                ? text.retry
+                : text.addToWaiting}
+          </button>
+          {!unresolved && (
+            <button
+              type="button"
+              className={OUTLINE_BUTTON_CLASS_NAME}
+              disabled={saving}
+              onClick={close}
+            >
+              {messages.host.common.cancel}
+            </button>
+          )}
+        </div>
+      </form>
+    </>
   );
 }
 

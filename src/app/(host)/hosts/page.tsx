@@ -48,7 +48,10 @@ async function HostsManagement() {
         aria-labelledby="hosts-list-heading"
         className={`${CARD_CLASS_NAME} flex flex-[999_1_480px] flex-col gap-4`}
       >
-        <h2 id="hosts-list-heading" className="text-xl font-bold">
+        <h2
+          id="hosts-list-heading"
+          className="text-xl font-bold max-sm:text-base"
+        >
           {text.whoCanHost}
         </h2>
         <ul className="flex flex-col gap-2">
@@ -107,7 +110,10 @@ async function HostsManagement() {
               aria-labelledby="invite-host-heading"
               className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
             >
-              <h2 id="invite-host-heading" className="text-xl font-bold">
+              <h2
+                id="invite-host-heading"
+                className="text-xl font-bold max-sm:text-base"
+              >
                 {text.inviteHeading}
               </h2>
               <InviteHostForm />
@@ -116,7 +122,10 @@ async function HostsManagement() {
               aria-labelledby="social-name-heading"
               className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
             >
-              <h2 id="social-name-heading" className="text-xl font-bold">
+              <h2
+                id="social-name-heading"
+                className="text-xl font-bold max-sm:text-base"
+              >
                 {text.socialNameHeading}
               </h2>
               <SocialNameForm socialName={currentHost.socialName} />

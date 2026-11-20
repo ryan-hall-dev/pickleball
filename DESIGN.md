@@ -10,6 +10,10 @@ Tokens live in `src/app/globals.css` under `@theme`. Never hard-code hex values 
 
 The new host workflow follows `docs/designs/simple-social/phone-review.html` and `docs/plans/simple-social-mvp.md`. These supersede the older desktop-first Setup/live layouts for the simpler version. Keep the existing colour/typography tokens and 44 px touch targets. The host enters a court count; live views show Courts/Up next, Waiting/rest and Check-ins. No Rotation settings, saved-setup/reuse controls, game-count estimates, capacity diagram, Pause control, Singles selector or host History/report screen. Ten-minute rests preserve earned waiting; called groups stay fixed. Normal game turnover is Game finished, then Start these four, without repeated confirmation dialogs. Static mockup scenes illustrate layout, not a functioning scheduler.
 
+## Compact phone layout (approved 2026-11-20, `docs/plans/mobile-compact-ui.md`)
+
+Below 640 px (Tailwind `max-sm:`), host screens follow Ryan's Design A (`docs/designs/mobile-compact/mobile-live-compact-A.html`); 640 px and up keep the sizes below. Phones: 52 px sticky top bar (logo 28, social name 16/700, EN/VN, ☰ menu holding Session setup, Live courts, Hosts, the host and Sign out); page padding 12 px, 10 px gaps; cards 16 px radius, 12 px padding; page/session titles 17/700, section headings 16/700; body 14 px; buttons 44 px, 12 px radius, 13 px labels; primary CTA 48 px. Live order on phones is Courts, Waiting, Check-ins, with a jump bar (counts) and a lime + that opens Add player as a bottom sheet. A ready court is one blue card ("Ready to start" pill); a free court is one row with Prepare next four on the right; waiting rows are list rows divided by 1 px lines with their buttons on the right. Things drawn under 44 px (EN/VN 32, jump links 38, End 40) keep a 44 px tap area (`tap-area-44`). Wording is unchanged; long names wrap, never truncate.
+
 ## Principles
 
 - Dark, high-contrast, glanceable from a distance: hosts use this standing at the courts, often on a tablet.

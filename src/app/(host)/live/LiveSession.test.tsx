@@ -417,7 +417,7 @@ describe("LiveSession glanceable controls", () => {
 });
 
 describe("LiveSession layout", () => {
-  it("shows check-ins first, then waiting players, then courts", async () => {
+  it("lists courts, waiting players, then check-ins (phones); larger screens put check-ins first", async () => {
     await renderLive();
     const checkIns = screen.getByRole("region", { name: "Check-ins waiting" });
     const waiting = screen.getByRole("region", { name: /^Waiting/ });
@@ -427,15 +427,18 @@ describe("LiveSession layout", () => {
         earlier.compareDocumentPosition(later) &
         Node.DOCUMENT_POSITION_FOLLOWING,
       );
-    expect(follows(checkIns, waiting)).toBe(true);
-    expect(follows(waiting, courts)).toBe(true);
-    // The jump links follow the same order.
+    expect(follows(courts, waiting)).toBe(true);
+    expect(follows(waiting, checkIns)).toBe(true);
+    // From the sm breakpoint, CSS order puts check-ins first again.
+    expect(checkIns.closest("#checkins")).toHaveClass("sm:order-1");
+    expect(courts.closest("#courts")).toHaveClass("sm:order-3");
+    // The jump links follow the same order and count each section.
+    const sections = within(
+      screen.getByRole("navigation", { name: "Live sections" }),
+    );
     expect(
-      screen
-        .getAllByRole("link")
-        .map((link) => link.textContent)
-        .filter((text) => ["Check-ins", "Waiting", "Courts"].includes(text!)),
-    ).toEqual(["Check-ins", "Waiting", "Courts"]);
+      sections.getAllByRole("link").map((link) => link.textContent),
+    ).toEqual(["Courts 1", "Waiting 2", "Check-ins 0"]);
   });
 });
 
@@ -570,10 +573,19 @@ describe("LiveSession scheduled end", () => {
   });
 });
 
+// The + (phones) and the inline button (larger screens) both open the form.
+function openAddPlayer() {
+  const [plusButton, inlineButton] = screen.getAllByRole("button", {
+    name: "Add player",
+  });
+  expect(plusButton).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(inlineButton ?? plusButton);
+}
+
 describe("LiveSession add player", () => {
   async function openForm() {
     await renderLive();
-    fireEvent.click(screen.getByRole("button", { name: "Add player" }));
+    openAddPlayer();
     fireEvent.change(screen.getByLabelText("First name"), {
       target: { value: "Walk" },
     });
@@ -596,7 +608,7 @@ describe("LiveSession add player", () => {
 
   it("sits beside the check-ins and refuses an incomplete form without calling the server", async () => {
     await renderLive();
-    fireEvent.click(screen.getByRole("button", { name: "Add player" }));
+    openAddPlayer();
     submitForm();
     expect(addMock).not.toHaveBeenCalled();
     expect(screen.getByText("Enter a first name.")).toBeVisible();
@@ -650,7 +662,7 @@ describe("LiveSession add player", () => {
     await openForm();
     submitForm();
     await settle();
-    fireEvent.click(screen.getByRole("button", { name: "Add player" }));
+    openAddPlayer();
     fireEvent.change(screen.getByLabelText("First name"), {
       target: { value: "Walk" },
     });

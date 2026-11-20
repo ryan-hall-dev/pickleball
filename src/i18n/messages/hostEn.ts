@@ -30,6 +30,8 @@ export const hostEn = {
     socialManager: "Social manager",
     host: "Host",
     signOut: "Sign out",
+    /** The ☰ button on phones. */
+    menu: "Menu",
   },
   notAHost: {
     title: "You're not a host here",

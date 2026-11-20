@@ -729,7 +729,10 @@ function SessionSetupForm({
           aria-labelledby="short-setup-heading"
           className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
         >
-          <h2 id="short-setup-heading" className="text-xl font-bold">
+          <h2
+            id="short-setup-heading"
+            className="text-xl font-bold max-sm:text-base"
+          >
             {text.simpleStart}
           </h2>
           <p className="text-sm text-muted">{text.simpleStartIntro}</p>
@@ -851,9 +854,12 @@ function SessionSetupForm({
           event.preventDefault();
           closeStartDialog();
         }}
-        className="m-auto w-[calc(100%-32px)] max-w-[560px] rounded-[28px] border border-card-border bg-card p-6 text-text shadow-[0_24px_64px_rgba(0,0,0,0.5)] backdrop:bg-bg-backdrop/90"
+        className="m-auto w-[calc(100%-32px)] max-w-[560px] rounded-[28px] border border-card-border bg-card p-6 text-text shadow-[0_24px_64px_rgba(0,0,0,0.5)] backdrop:bg-bg-backdrop/90 max-sm:rounded-2xl max-sm:p-4"
       >
-        <h2 id="confirm-start-heading" className="text-[26px] font-extrabold">
+        <h2
+          id="confirm-start-heading"
+          className="text-[26px] font-extrabold max-sm:text-xl"
+        >
           {text.confirmTitle(form.name.trim())}
         </h2>
         <p className="mt-3 text-muted">

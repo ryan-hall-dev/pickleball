@@ -58,7 +58,7 @@ async function StickerAndQrContent() {
   return (
     <>
       <div>
-        <h1 className="text-[32px] font-extrabold tracking-[-0.01em]">
+        <h1 className="text-[32px] font-extrabold tracking-[-0.01em] max-sm:text-[17px] max-sm:font-bold max-sm:tracking-normal">
           {text.title}
         </h1>
         <p className="mt-1 max-w-[720px] text-muted">
@@ -70,7 +70,10 @@ async function StickerAndQrContent() {
           aria-labelledby="checkin-link-heading"
           className={`${CARD_CLASS_NAME} flex min-w-0 flex-[999_1_520px] flex-col gap-4`}
         >
-          <h2 id="checkin-link-heading" className="text-xl font-bold">
+          <h2
+            id="checkin-link-heading"
+            className="text-xl font-bold max-sm:text-base"
+          >
             {text.checkinLink}
           </h2>
           <CopyCheckinLinkField link={link} />
@@ -104,7 +107,10 @@ async function StickerAndQrContent() {
           aria-labelledby="qr-code-heading"
           className={`${CARD_CLASS_NAME} flex min-w-0 flex-[1_1_300px] flex-col items-center gap-4`}
         >
-          <h2 id="qr-code-heading" className="self-start text-xl font-bold">
+          <h2
+            id="qr-code-heading"
+            className="self-start text-xl font-bold max-sm:text-base"
+          >
             {text.qrCode}
           </h2>
           <div className="rounded-[20px] bg-white p-[18px]">

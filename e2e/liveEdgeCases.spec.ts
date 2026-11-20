@@ -529,7 +529,7 @@ test("courts are prepared automatically: start, arrivals, game finish, reload", 
   await page.goto("/live");
   await showEveryWaitingPlayer(page);
   const prepared = (number: number) =>
-    court(page, number).getByText("Group prepared", { exact: true });
+    court(page, number).getByRole("heading", { name: "Ready to start" });
   const countOf = async (type: string) =>
     (await fixture.readEvents()).filter((event) => event.type === type).length;
   // Start session: two courts, nine players -> two groups, one waiting.
@@ -549,7 +549,8 @@ test("courts are prepared automatically: start, arrivals, game finish, reload", 
   const firstName = await waiting(page)
     .getByText(/^1\. Edge/)
     .boundingBox();
-  expect(firstName!.width).toBeGreaterThan(100);
+  // "1. Edge …" on one line, sized to its text (the wait sits beside it).
+  expect(firstName!.width).toBeGreaterThan(60);
   expect(firstName!.height).toBeLessThan(30);
   expect(
     await page.evaluate(

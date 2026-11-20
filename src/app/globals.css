@@ -72,6 +72,28 @@ body {
   line-height: 1.4;
 }
 
+/* Compact phone layout (docs/plans/mobile-compact-ui.md): 14px base. */
+@media (width < 40rem) {
+  body {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+}
+
+/* Something drawn shorter than 44px (EN/VN, jump links, End on phones)
+   still answers a finger across a 44px-high area. */
+@utility tap-area-44 {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 50%;
+    height: max(100%, 44px);
+    transform: translateY(-50%);
+  }
+}
+
 /* Visible focus ring on every interactive element (DESIGN.md States: decision to confirm). */
 :focus-visible {
   outline: 2px solid var(--color-lime);

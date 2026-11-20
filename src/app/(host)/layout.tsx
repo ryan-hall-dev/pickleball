@@ -13,6 +13,7 @@ import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { getLocale } from "@/i18n/getLocale";
 import { LocaleProvider } from "@/i18n/LocaleProvider";
 import { MESSAGES, type Messages } from "@/i18n/messages";
+import { HostMenu } from "./HostMenu";
 import { HostNav } from "./HostNav";
 
 /**
@@ -58,39 +59,82 @@ async function HostGate({ children }: { children: ReactNode }) {
 
   return (
     <LocaleProvider initialLocale={locale}>
-      <header className="border-b border-card-border bg-bg-header">
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-6 gap-y-3 px-7 py-3">
+      {/* Phones: a 52px sticky bar with the ☰ menu (docs/plans/mobile-compact-ui.md). */}
+      <header className="border-b border-card-border bg-bg-header max-sm:sticky max-sm:top-0 max-sm:z-20">
+        <div className="relative mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-6 gap-y-3 px-7 py-3 max-sm:h-[52px] max-sm:flex-nowrap max-sm:gap-2 max-sm:py-0 max-sm:pr-2 max-sm:pl-3.5">
           <Link
             href="/setup"
-            className="flex min-h-11 items-center gap-3 rounded-xl"
+            className="flex min-h-11 min-w-0 items-center gap-3 rounded-xl max-sm:flex-1 max-sm:gap-2.5"
           >
-            <ClubLogo />
+            <ClubLogo className="max-sm:size-7" />
             {/* The social's own name (decision D1); the app name stays on
                 /login and in tab titles. */}
-            <span className="text-[19px] font-bold">{host.socialName}</span>
-          </Link>
-          <HostNav />
-          <div className="ml-auto flex flex-wrap items-center gap-3">
-            <LanguageSwitch />
-            <InitialsAvatar name={host.displayName} />
-            <span className="text-sm text-muted">
-              {host.role === "manager" ? text.socialManager : text.host} ·{" "}
-              <span className="font-semibold text-text">
-                {host.displayName}
-              </span>
+            <span className="text-[19px] font-bold max-sm:truncate max-sm:text-base">
+              {host.socialName}
             </span>
-            <form action={signOut}>
-              <button type="submit" className={OUTLINE_BUTTON_CLASS_NAME}>
-                {text.signOut}
-              </button>
-            </form>
+          </Link>
+          <div className="max-sm:hidden">
+            <HostNav />
+          </div>
+          <div className="ml-auto flex flex-wrap items-center gap-3 max-sm:flex-nowrap max-sm:gap-1">
+            <LanguageSwitch compactOnPhones />
+            <div className="contents max-sm:hidden">
+              <HostIdentity
+                displayName={host.displayName}
+                roleLabel={
+                  host.role === "manager" ? text.socialManager : text.host
+                }
+              />
+              <form action={signOut}>
+                <button type="submit" className={OUTLINE_BUTTON_CLASS_NAME}>
+                  {text.signOut}
+                </button>
+              </form>
+            </div>
+            <HostMenu>
+              <HostNav layout="column" />
+              <div className="flex items-center gap-3 border-t border-card-border px-1 pt-3">
+                <HostIdentity
+                  displayName={host.displayName}
+                  roleLabel={
+                    host.role === "manager" ? text.socialManager : text.host
+                  }
+                />
+              </div>
+              <form action={signOut}>
+                <button
+                  type="submit"
+                  className={`${OUTLINE_BUTTON_CLASS_NAME} w-full`}
+                >
+                  {text.signOut}
+                </button>
+              </form>
+            </HostMenu>
           </div>
         </div>
       </header>
-      <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-4 px-7 pt-6 pb-12">
+      <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-4 px-7 pt-6 pb-12 max-sm:gap-2.5 max-sm:px-3 max-sm:pt-3 max-sm:pb-8">
         {children}
       </main>
     </LocaleProvider>
+  );
+}
+
+function HostIdentity({
+  displayName,
+  roleLabel,
+}: {
+  displayName: string;
+  roleLabel: string;
+}) {
+  return (
+    <>
+      <InitialsAvatar name={displayName} />
+      <span className="text-sm text-muted">
+        {roleLabel} ·{" "}
+        <span className="font-semibold text-text">{displayName}</span>
+      </span>
+    </>
   );
 }
 
@@ -111,7 +155,7 @@ function NotAHostNotice({
         <ClubLogo />
         <h1
           id="not-a-host-heading"
-          className="text-[32px] font-extrabold tracking-[-0.01em]"
+          className="text-[32px] font-extrabold tracking-[-0.01em] max-sm:text-[17px] max-sm:font-bold max-sm:tracking-normal"
         >
           {text.title}
         </h1>

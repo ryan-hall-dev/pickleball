@@ -82,8 +82,8 @@ test("a host runs a game, returns its four players to waiting and rests one", as
   const waiting = page.getByRole("region", { name: /^Waiting/ });
   const restButtons = waiting.getByRole("button", { name: /^Rest / });
   await expectRestButtonCount(page, restButtons, 4);
-  // Order on the page: check-ins and the QR link, then waiting players, then
-  // courts (desktop and the 390 px phone project).
+  // Order on the page. Desktop: check-ins and the QR link, then waiting
+  // players, then courts. Phones (390 px): courts, waiting, then check-ins.
   const checkInsTop = (
     await page.getByRole("region", { name: /^Check-ins waiting/ }).boundingBox()
   )?.y;
@@ -96,12 +96,18 @@ test("a host runs a game, returns its four players to waiting and rests one", as
   )?.y;
   expect(checkInsTop).toBeDefined();
   expect(qrTop).toBeDefined();
-  expect(checkInsTop!).toBeLessThan(waitingTop!);
-  expect(qrTop!).toBeLessThan(waitingTop!);
-  expect(waitingTop!).toBeLessThan(courtsTop!);
+  if (testInfo.project.name === "mobile") {
+    expect(courtsTop!).toBeLessThan(waitingTop!);
+    expect(waitingTop!).toBeLessThan(checkInsTop!);
+    expect(waitingTop!).toBeLessThan(qrTop!);
+  } else {
+    expect(checkInsTop!).toBeLessThan(waitingTop!);
+    expect(qrTop!).toBeLessThan(waitingTop!);
+    expect(waitingTop!).toBeLessThan(courtsTop!);
+  }
   // Starting the session prepared Court 1 by itself: no preparation step.
   await expect(
-    court.getByText("Group prepared", { exact: true }),
+    court.getByRole("heading", { name: "Ready to start" }),
   ).toBeVisible();
   await expect(
     court.getByRole("heading", { name: "Ready to start" }),
@@ -122,7 +128,7 @@ test("a host runs a game, returns its four players to waiting and rests one", as
   // The four are back in waiting and, by the wait-first rule, prepared again
   // (they are the only players); nothing starts until Start game.
   await expect(
-    court.getByText("Group prepared", { exact: true }),
+    court.getByRole("heading", { name: "Ready to start" }),
   ).toBeVisible();
   await expectRestButtonCount(page, restButtons, 4);
   await expect(
@@ -132,7 +138,7 @@ test("a host runs a game, returns its four players to waiting and rests one", as
   await showEveryWaitingPlayer(page);
   await expectRestButtonCount(page, restButtons, 4);
   await expect(
-    court.getByText("Group prepared", { exact: true }),
+    court.getByRole("heading", { name: "Ready to start" }),
   ).toBeVisible();
 
   await waiting
@@ -281,7 +287,7 @@ test("a host safely undoes start/finish, replaces a player and ends an interrupt
   const waiting = page.getByRole("region", { name: /^Waiting/ });
   const restButtons = waiting.getByRole("button", { name: /^Rest / });
   await expect(
-    court.getByText("Group prepared", { exact: true }),
+    court.getByRole("heading", { name: "Ready to start" }),
   ).toBeVisible();
   await court.getByRole("button", { name: "Start game" }).click();
   await expectRestButtonCount(page, restButtons, 1);
@@ -362,7 +368,7 @@ test("a host safely undoes start/finish, replaces a player and ends an interrupt
   await expectRestButtonCount(page, restButtons, 4);
   // The freed court is prepared again from the four who are left.
   await expect(
-    court.getByText("Group prepared", { exact: true }),
+    court.getByRole("heading", { name: "Ready to start" }),
   ).toBeVisible();
   await expect(
     waiting.getByText("Nobody resting.", { exact: true }),

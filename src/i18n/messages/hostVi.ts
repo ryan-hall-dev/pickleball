@@ -31,6 +31,8 @@ export const hostVi: typeof hostEn = {
     socialManager: "Quản lý nhóm",
     host: "Người tổ chức",
     signOut: "Đăng xuất",
+    /** The ☰ button on phones. */
+    menu: "Menu",
   },
   notAHost: {
     title: "Bạn không phải người tổ chức ở đây",

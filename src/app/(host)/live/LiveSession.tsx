@@ -35,6 +35,12 @@ import { LiveCourtCard } from "./LiveCourtCard";
 import { LiveWaiting } from "./LiveWaiting";
 
 const TIMEOUT_MS = 15_000;
+/** Phones show the DOM order (courts first); larger screens put check-ins first. */
+const SECTION_ORDER_ON_LARGER_SCREENS = {
+  checkins: "sm:order-1",
+  waiting: "sm:order-2",
+  courts: "sm:order-3",
+} as const;
 // English like every server message; shown through translateMessage.
 const READ_FAILURE: ReadLiveResult = {
   ok: false,
@@ -64,6 +70,8 @@ export function LiveSession({
   const [receivedAt, setReceivedAt] = useState<number | null>(null);
   const [wallNow, setWallNow] = useState<number | null>(null);
   const [endConfirmation, setEndConfirmation] = useState(false);
+  const [addPlayerOpen, setAddPlayerOpen] = useState(false);
+  const [pendingCheckinCount, setPendingCheckinCount] = useState(0);
   const endDialog = useRef<HTMLDialogElement>(null);
   const latestSession = useRef<LiveSessionView | null>(
     initialResult.ok && initialResult.status === "session"
@@ -271,7 +279,9 @@ export function LiveSession({
   if (!session)
     return (
       <section className={CARD_CLASS_NAME}>
-        <h1 className="text-[32px] font-extrabold">{text.title}</h1>
+        <h1 className="text-[32px] font-extrabold max-sm:text-[17px] max-sm:font-bold">
+          {text.title}
+        </h1>
         <p className="mt-3 text-muted">
           {!result.ok
             ? translateMessage(result.message, messages)
@@ -296,23 +306,27 @@ export function LiveSession({
     (court) => court.activeMatch,
   ).length;
   const disabled = isWorking || !!failedWrite || ended;
+  const waitingCount = session.players.filter(
+    (player) => player.status === "waiting",
+  ).length;
   return (
     <>
+      {/* Phones: one slim strip with End beside the name (Design A). */}
       <section
-        className={`${CARD_CLASS_NAME} flex flex-wrap items-center justify-between gap-4`}
+        className={`${CARD_CLASS_NAME} flex flex-wrap items-center justify-between gap-4 max-sm:gap-x-2.5 max-sm:gap-y-1 max-sm:py-2.5 max-sm:pl-3.5`}
       >
-        <div className="min-w-0">
-          <p className="text-xs font-bold tracking-widest text-lime uppercase">
+        <div className="min-w-0 max-sm:flex-1">
+          <p className="text-xs font-bold tracking-widest text-lime uppercase max-sm:text-[11px]">
             {ended
               ? text.sessionEnded
               : timeIsUp
                 ? text.sessionTimeIsUp
                 : text.liveSession}
           </p>
-          <h1 className="mt-1 text-[32px] font-extrabold break-words">
+          <h1 className="text-[32px] font-extrabold break-words max-sm:text-[17px] max-sm:leading-tight max-sm:font-bold sm:mt-1">
             {session.name}
           </h1>
-          <p className="mt-1 text-muted tabular-nums">
+          <p className="mt-1 text-muted tabular-nums max-sm:mt-0 max-sm:text-xs">
             {ended
               ? text.thanks
               : timeIsUp
@@ -321,20 +335,26 @@ export function LiveSession({
                     Math.max(0, Math.ceil((session.deadline - now) / 60_000)),
                   )}
           </p>
+          <p
+            role="status"
+            className="mt-1 text-sm text-muted max-sm:mt-0 max-sm:text-xs"
+          >
+            {isWorking ? messages.host.common.saving : text.updatesEvery}
+          </p>
         </div>
         {ended ? (
           <Link href="/setup" className={SECONDARY_BUTTON_CLASS_NAME}>
             {text.setUpNew}
           </Link>
         ) : (
-          <div>
+          <div className="max-sm:contents">
             <button
               type="button"
               disabled={disabled || activeGames > 0}
               aria-describedby={
                 activeGames > 0 ? "end-session-disabled-reason" : undefined
               }
-              className={OUTLINE_BUTTON_CLASS_NAME}
+              className={`${OUTLINE_BUTTON_CLASS_NAME} max-sm:tap-area-44 max-sm:h-10`}
               onClick={() => setEndConfirmation(true)}
             >
               {text.endSession}
@@ -342,7 +362,7 @@ export function LiveSession({
             {activeGames > 0 && (
               <p
                 id="end-session-disabled-reason"
-                className="mt-2 text-sm text-muted"
+                className="mt-2 text-sm text-muted max-sm:order-last max-sm:mt-0 max-sm:basis-full max-sm:text-xs"
               >
                 {text.finishBeforeEnd}
               </p>
@@ -372,74 +392,130 @@ export function LiveSession({
           {text.retryLastAction}
         </button>
       )}
-      <p role="status" className="text-sm text-muted">
-        {isWorking ? messages.host.common.saving : text.updatesEvery}
-      </p>
       {!ended && (
         <>
-          <nav aria-label={text.sectionsLabel} className="flex flex-wrap gap-2">
-            <a className={OUTLINE_BUTTON_CLASS_NAME} href="#checkins">
-              {text.checkins}
-            </a>
-            <a className={OUTLINE_BUTTON_CLASS_NAME} href="#waiting">
-              {text.waiting}
-            </a>
-            <a className={OUTLINE_BUTTON_CLASS_NAME} href="#courts">
-              {text.courts}
-            </a>
-          </nav>
-          {/* Hosts approve arrivals and show the QR code most in the first
-              hour, so check-ins come first, then waiting players, then courts. */}
-          <div id="checkins" className="flex flex-col gap-3">
-            <LiveAddPlayer disabled={disabled} onAdd={addPlayer} />
-            <PendingCheckinTray
-              approveDecision={approve}
-              onParticipantApproved={() => void refresh()}
-              onAttendanceChangedElsewhere={() => void refresh()}
-            />
-          </div>
-          <LiveWaiting
-            players={session.players}
-            now={now}
-            disabled={disabled}
-            onAction={act}
-          />
-          <section id="courts" aria-labelledby="courts-heading">
-            <h2 id="courts-heading" className="mb-3 text-xl font-bold">
-              {text.courtsAndUpNext}
-            </h2>
-            <div className="grid gap-4 lg:grid-cols-2">
-              {session.courts.map((court) => (
-                <LiveCourtCard
-                  key={court.courtId}
-                  court={court}
-                  players={session.players}
-                  now={now}
-                  timeIsUp={timeIsUp}
-                  disabled={disabled}
-                  selected={prepareCourtId === court.courtId}
-                  onPrepare={() => {
-                    if (prepareCourtId === court.courtId) void refresh();
-                    else setPrepareCourtId(court.courtId);
-                  }}
-                  onAction={act}
-                  undoOptions={session.undoOptions.filter(
-                    (option) => option.courtId === court.courtId,
-                  )}
-                />
+          <div className="flex gap-2">
+            <nav
+              aria-label={text.sectionsLabel}
+              className="flex flex-wrap gap-2 max-sm:grid max-sm:flex-1 max-sm:grid-cols-3 max-sm:gap-0 max-sm:rounded-[14px] max-sm:border max-sm:border-card-border max-sm:bg-card max-sm:p-[3px]"
+            >
+              {(
+                [
+                  ["courts", text.courts, session.courts.length],
+                  ["waiting", text.waiting, waitingCount],
+                  ["checkins", text.checkins, pendingCheckinCount],
+                ] as const
+              ).map(([sectionId, label, count]) => (
+                <a
+                  key={sectionId}
+                  href={`#${sectionId}`}
+                  className={`${OUTLINE_BUTTON_CLASS_NAME} gap-1.5 whitespace-nowrap max-sm:tap-area-44 max-sm:h-[38px] max-sm:gap-1 max-sm:rounded-[11px] max-sm:border-0 max-sm:px-1 max-sm:text-text-soft ${SECTION_ORDER_ON_LARGER_SCREENS[sectionId]}`}
+                >
+                  {label}{" "}
+                  <span className="font-normal text-muted tabular-nums">
+                    {count}
+                  </span>
+                </a>
               ))}
+            </nav>
+            <button
+              type="button"
+              aria-label={text.addPlayer.button}
+              aria-expanded={addPlayerOpen}
+              disabled={disabled}
+              onClick={() => setAddPlayerOpen(true)}
+              className="flex size-[46px] shrink-0 items-center justify-center rounded-[14px] bg-lime text-on-lime disabled:bg-inner-border disabled:text-placeholder sm:hidden"
+            >
+              <svg
+                aria-hidden="true"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </div>
+          {/* Phones: courts, waiting, check-ins (Design A). Larger screens keep
+              check-ins first: hosts approve arrivals and show the QR code most
+              in the first hour. */}
+          <div className="flex flex-col gap-4 max-sm:gap-2.5">
+            <section
+              id="courts"
+              aria-labelledby="courts-heading"
+              className={`scroll-mt-16 ${SECTION_ORDER_ON_LARGER_SCREENS.courts}`}
+            >
+              <h2
+                id="courts-heading"
+                className="mb-3 text-xl font-bold max-sm:mx-0.5 max-sm:mb-2 max-sm:text-[13px] max-sm:tracking-[0.08em] max-sm:text-muted max-sm:uppercase"
+              >
+                {text.courtsAndUpNext}
+              </h2>
+              <div className="grid gap-4 max-sm:gap-2 lg:grid-cols-2">
+                {session.courts.map((court) => (
+                  <LiveCourtCard
+                    key={court.courtId}
+                    court={court}
+                    players={session.players}
+                    now={now}
+                    timeIsUp={timeIsUp}
+                    disabled={disabled}
+                    selected={prepareCourtId === court.courtId}
+                    onPrepare={() => {
+                      if (prepareCourtId === court.courtId) void refresh();
+                      else setPrepareCourtId(court.courtId);
+                    }}
+                    onAction={act}
+                    undoOptions={session.undoOptions.filter(
+                      (option) => option.courtId === court.courtId,
+                    )}
+                  />
+                ))}
+              </div>
+            </section>
+            <div className={SECTION_ORDER_ON_LARGER_SCREENS.waiting}>
+              <LiveWaiting
+                players={session.players}
+                now={now}
+                disabled={disabled}
+                onAction={act}
+              />
             </div>
-          </section>
+            <div
+              id="checkins"
+              className={`flex scroll-mt-16 flex-col gap-3 max-sm:gap-2.5 ${SECTION_ORDER_ON_LARGER_SCREENS.checkins}`}
+            >
+              <LiveAddPlayer
+                open={addPlayerOpen}
+                onOpenChange={setAddPlayerOpen}
+                disabled={disabled}
+                onAdd={addPlayer}
+              />
+              <PendingCheckinTray
+                approveDecision={approve}
+                onParticipantApproved={() => void refresh()}
+                onAttendanceChangedElsewhere={() => void refresh()}
+                onWaitingCountChange={setPendingCheckinCount}
+              />
+            </div>
+          </div>
         </>
       )}
       <dialog
         ref={endDialog}
         onCancel={() => setEndConfirmation(false)}
         onClose={() => setEndConfirmation(false)}
-        className="m-auto w-[440px] max-w-[calc(100%-32px)] rounded-[28px] border border-card-border bg-card p-6 text-text backdrop:bg-bg-backdrop/90"
+        className="m-auto w-[440px] max-w-[calc(100%-32px)] rounded-[28px] border border-card-border bg-card p-6 text-text backdrop:bg-bg-backdrop/90 max-sm:rounded-2xl max-sm:p-4"
         aria-labelledby="end-session-title"
       >
-        <h2 id="end-session-title" className="text-[26px] font-extrabold">
+        <h2
+          id="end-session-title"
+          className="text-[26px] font-extrabold max-sm:text-xl"
+        >
           {text.endDialog.title}
         </h2>
         <p className="mt-3 text-muted">{text.endDialog.text}</p>

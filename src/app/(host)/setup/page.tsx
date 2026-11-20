@@ -66,7 +66,10 @@ async function SessionSetupContent() {
       >
         {openSession.status === "live" ? (
           <>
-            <h2 id="no-draft-heading" className="text-xl font-bold">
+            <h2
+              id="no-draft-heading"
+              className="text-xl font-bold max-sm:text-base"
+            >
               {text.isLive(openSession.name)}
             </h2>
             <p className="text-muted">{text.setUpNextAfterEnd}</p>
@@ -79,7 +82,10 @@ async function SessionSetupContent() {
           </>
         ) : (
           <>
-            <h2 id="no-draft-heading" className="text-xl font-bold">
+            <h2
+              id="no-draft-heading"
+              className="text-xl font-bold max-sm:text-base"
+            >
               {text.noSession}
             </h2>
             <p className="text-muted">{text.noSessionText}</p>

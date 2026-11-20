@@ -9,15 +9,22 @@ const LOCALE_NAMES: Record<Locale, { short: string; full: string }> = {
   vi: { short: "VN", full: "Tiếng Việt" },
 };
 
-/** EN | VN (the label most Vietnamese sites use; the language code stays `vi`): two 44px pressable buttons; each names its language in that language. */
-export function LanguageSwitch() {
+/**
+ * EN | VN (the label most Vietnamese sites use; the language code stays `vi`): two 44px pressable buttons; each names its language in that language.
+ * `compactOnPhones` (host header): drawn 32px high on phones, still a 44px tap area.
+ */
+export function LanguageSwitch({
+  compactOnPhones = false,
+}: {
+  compactOnPhones?: boolean;
+}) {
   const { locale, messages, setLocale } = useLocale();
   const router = useRouter();
   return (
     <div
       role="group"
       aria-label={messages.languageSwitch.label}
-      className="inline-flex shrink-0 rounded-[14px] border border-inner-border bg-inner p-0.5"
+      className={`inline-flex shrink-0 rounded-[14px] border border-inner-border bg-inner p-0.5 ${compactOnPhones ? "max-sm:rounded-[10px]" : ""}`}
     >
       {LOCALES.map((option) => (
         <button
@@ -34,7 +41,7 @@ export function LanguageSwitch() {
           }}
           className={`h-11 min-w-11 rounded-xl px-3 text-sm font-bold ${
             locale === option ? "bg-text text-bg" : "text-muted"
-          }`}
+          } ${compactOnPhones ? "max-sm:tap-area-44 max-sm:h-8 max-sm:rounded-lg max-sm:px-2 max-sm:text-xs" : ""}`}
         >
           {LOCALE_NAMES[option].short}
         </button>

@@ -5,14 +5,20 @@ const DOT_POSITIONS = Array.from({ length: 6 }, (_, index) => {
 });
 
 /** The club logo. Decorative: always placed next to the club or app name. */
-export function ClubLogo({ sizePx = 40 }: { sizePx?: number }) {
+export function ClubLogo({
+  sizePx = 40,
+  className = "",
+}: {
+  sizePx?: number;
+  className?: string;
+}) {
   return (
     <svg
       aria-hidden="true"
       width={sizePx}
       height={sizePx}
       viewBox="0 0 40 40"
-      className="shrink-0"
+      className={`shrink-0 ${className}`}
     >
       <circle cx="20" cy="20" r="20" className="fill-lime" />
       {DOT_POSITIONS.map(({ cx, cy }) => (
