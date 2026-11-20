@@ -7,6 +7,7 @@ import {
 } from "@/components/controlStyles";
 import { FullScreenIcon } from "./CheckinLinkIcons";
 import { CheckinQrCode } from "./CheckinQrCode";
+import { useMessages } from "@/i18n/LocaleProvider";
 
 /**
  * "Show full screen" and the full-screen QR (S02): a host turns the screen
@@ -26,6 +27,7 @@ export function FullScreenQrButton({
   socialName: string;
   clubLogo: ReactNode;
 }) {
+  const text = useMessages().host.stickerAndQr;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -47,7 +49,7 @@ export function FullScreenQrButton({
         className={`${SECONDARY_BUTTON_CLASS_NAME} gap-2 whitespace-nowrap`}
       >
         <FullScreenIcon />
-        Show full screen
+        {text.showFullScreen}
       </button>
       <dialog
         ref={dialogRef}
@@ -58,7 +60,7 @@ export function FullScreenQrButton({
           <button
             ref={closeButtonRef}
             type="button"
-            aria-label="Close full screen"
+            aria-label={text.closeFullScreen}
             onClick={() => dialogRef.current?.close()}
             className={`${ICON_BUTTON_CLASS_NAME} absolute top-5 right-5`}
           >
@@ -72,12 +74,12 @@ export function FullScreenQrButton({
             id={titleId}
             className="text-[34px] font-extrabold tracking-[-0.01em] sm:text-[44px]"
           >
-            Scan to check in
+            {text.scanToCheckIn}
           </h2>
           <div className="rounded-[28px] bg-white p-4 sm:p-7">
             <CheckinQrCode
               qrCodeSvg={qrCodeSvg}
-              shortLink={shortLink}
+              label={text.qrCodeLabel(shortLink)}
               className="size-[max(160px,min(520px,calc(100dvh-340px),calc(100vw-80px)))]"
             />
           </div>

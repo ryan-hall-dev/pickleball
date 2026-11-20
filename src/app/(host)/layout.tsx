@@ -9,6 +9,10 @@ import {
 } from "@/components/controlStyles";
 import { readHostAccess } from "@/server/auth/currentHost";
 import { signOut } from "@/server/auth/loginActions";
+import { LanguageSwitch } from "@/components/LanguageSwitch";
+import { getLocale } from "@/i18n/getLocale";
+import { LocaleProvider } from "@/i18n/LocaleProvider";
+import { MESSAGES, type Messages } from "@/i18n/messages";
 import { HostNav } from "./HostNav";
 
 /**
@@ -26,8 +30,9 @@ export default function HostLayout({ children }: { children: ReactNode }) {
 function HostAreaLoading() {
   return (
     <main className="flex flex-1 items-center justify-center px-5 py-10">
+      {/* Before the language is known: both. */}
       <p className="text-muted" aria-live="polite">
-        Loading…
+        Loading… · <span lang="vi">Đang tải…</span>
       </p>
     </main>
   );
@@ -35,15 +40,24 @@ function HostAreaLoading() {
 
 /** The gate reads the session, so it sits behind Suspense (cacheComponents). */
 async function HostGate({ children }: { children: ReactNode }) {
-  const hostAccess = await readHostAccess();
+  const [hostAccess, locale] = await Promise.all([
+    readHostAccess(),
+    getLocale(),
+  ]);
   if (hostAccess.status === "signed_out") redirect("/login");
+  const messages = MESSAGES[locale];
   if (hostAccess.status === "not_a_host") {
-    return <NotAHostNotice email={hostAccess.email} />;
+    return (
+      <LocaleProvider initialLocale={locale}>
+        <NotAHostNotice email={hostAccess.email} messages={messages} />
+      </LocaleProvider>
+    );
   }
   const { host } = hostAccess;
+  const text = messages.host.header;
 
   return (
-    <>
+    <LocaleProvider initialLocale={locale}>
       <header className="border-b border-card-border bg-bg-header">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-6 gap-y-3 px-7 py-3">
           <Link
@@ -56,17 +70,18 @@ async function HostGate({ children }: { children: ReactNode }) {
             <span className="text-[19px] font-bold">{host.socialName}</span>
           </Link>
           <HostNav />
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex flex-wrap items-center gap-3">
+            <LanguageSwitch />
             <InitialsAvatar name={host.displayName} />
             <span className="text-sm text-muted">
-              {host.role === "manager" ? "Social manager" : "Host"} ·{" "}
+              {host.role === "manager" ? text.socialManager : text.host} ·{" "}
               <span className="font-semibold text-text">
                 {host.displayName}
               </span>
             </span>
             <form action={signOut}>
               <button type="submit" className={OUTLINE_BUTTON_CLASS_NAME}>
-                Sign out
+                {text.signOut}
               </button>
             </form>
           </div>
@@ -75,11 +90,18 @@ async function HostGate({ children }: { children: ReactNode }) {
       <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-4 px-7 pt-6 pb-12">
         {children}
       </main>
-    </>
+    </LocaleProvider>
   );
 }
 
-function NotAHostNotice({ email }: { email: string | null }) {
+function NotAHostNotice({
+  email,
+  messages,
+}: {
+  email: string | null;
+  messages: Messages;
+}) {
+  const text = messages.host.notAHost;
   return (
     <main className="flex flex-1 items-center justify-center px-5 py-10">
       <section
@@ -91,26 +113,26 @@ function NotAHostNotice({ email }: { email: string | null }) {
           id="not-a-host-heading"
           className="text-[32px] font-extrabold tracking-[-0.01em]"
         >
-          You&apos;re not a host here
+          {text.title}
         </h1>
         <p className="text-muted">
           {email ? (
             <>
-              You&apos;re signed in as{" "}
-              <strong className="font-semibold text-text">{email}</strong>,
-              which isn&apos;t on the hosts list.
+              {text.signedInAsBefore}{" "}
+              <strong className="font-semibold text-text">{email}</strong>
+              {text.signedInAsAfter}
             </>
           ) : (
-            "This account isn't on the hosts list."
+            text.accountNotListed
           )}{" "}
-          Ask your social manager for an invite.
+          {text.askForInvite}
         </p>
         <form action={signOut}>
           <button
             type="submit"
             className={`${OUTLINE_BUTTON_CLASS_NAME} w-full`}
           >
-            Sign out
+            {messages.host.header.signOut}
           </button>
         </form>
       </section>

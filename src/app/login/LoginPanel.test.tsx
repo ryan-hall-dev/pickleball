@@ -1,10 +1,15 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
+import { renderWithLocale as render } from "@/i18n/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readHostAccess } from "@/server/auth/currentHost";
 import { installationHasAnyHost } from "@/server/hosts/hostDirectory";
 import { LoginPanel } from "./LoginPanel";
 
 vi.mock("@/server/auth/currentHost", () => ({ readHostAccess: vi.fn() }));
+vi.mock("@/i18n/getLocale", async () => {
+  const { MESSAGES } = await import("@/i18n/messages");
+  return { getMessages: async () => MESSAGES.en };
+});
 vi.mock("@/server/hosts/hostDirectory", () => ({
   installationHasAnyHost: vi.fn(),
 }));

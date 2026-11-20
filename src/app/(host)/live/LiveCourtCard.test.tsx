@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { renderWithLocale as render } from "@/i18n/testing";
 import { afterEach, expect, it, vi } from "vitest";
 import type { LiveCourt, LivePlayer } from "@/server/live/liveTypes";
 import { LiveCourtCard } from "./LiveCourtCard";
@@ -256,4 +251,51 @@ it("orders by wait, folds past five, and filters by name", () => {
     target: { value: "zzz" },
   });
   expect(screen.getByText(/No one by that name/)).toBeVisible();
+});
+
+it("speaks Vietnamese, keeping player names as entered", () => {
+  const players: LivePlayer[] = ["Ana", "Ben", "Chi", "Dan"].map(
+    (name, index) => ({
+      participantId: `a0000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      name,
+      skill: "beginner",
+      gender: index % 2 ? "male" : "female",
+      status: "waiting",
+      currentWaitMs: 0,
+      returnsAt: null,
+      skipSeq: null,
+      calledCourtId: null,
+      calledCourtName: null,
+    }),
+  );
+  render(
+    <LiveCourtCard
+      court={{
+        courtId: "c0000000-0000-4000-8000-000000000001",
+        name: "Court 1",
+        activeMatch: null,
+        called: null,
+        suggestion: {
+          teamA: [players[0].participantId, players[1].participantId],
+          teamB: [players[2].participantId, players[3].participantId],
+          reason: "",
+        },
+      }}
+      players={players}
+      now={0}
+      timeIsUp={false}
+      disabled={false}
+      selected={false}
+      onPrepare={vi.fn()}
+      onAction={vi.fn()}
+      undoOptions={[]}
+    />,
+    { locale: "vi" },
+  );
+  expect(screen.getByRole("heading", { name: "Sân 1" })).toBeVisible();
+  expect(screen.getByText("Sân trống")).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "Gọi bốn người này" }),
+  ).toBeVisible();
+  expect(screen.getByText("Ana")).toBeVisible();
 });

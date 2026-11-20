@@ -13,10 +13,13 @@ import {
   ATTENTION_OUTLINE_BUTTON_CLASS_NAME,
   OUTLINE_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
+import { useLocale } from "@/i18n/LocaleProvider";
+import { translateMessage } from "@/i18n/messages";
 import { formatSessionWhen } from "@/lib/sessionTime";
 import { discardSessionDraft } from "@/server/setup/setupActions";
+import { en } from "@/i18n/messages/en";
 
-const OFFLINE_MESSAGE = "Couldn't reach the server. Check your connection.";
+const OFFLINE_MESSAGE = en.serverMessages.offline;
 
 const DIALOG_BUTTON_LAYOUT_CLASS_NAME = "flex-[1_1_200px]";
 
@@ -52,6 +55,8 @@ export function DiscardDraftButton({
    */
   onAutosavePausedChange: (isPaused: boolean) => void;
 }) {
+  const { locale, messages } = useLocale();
+  const text = messages.host.setup.discard;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const keepDraftButtonRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -62,18 +67,18 @@ export function DiscardDraftButton({
 
   const trimmedDraftName = draftName.trim();
   const title = trimmedDraftName
-    ? `Discard “${trimmedDraftName}”?`
-    : "Discard this untitled draft?";
-  const draftReference = trimmedDraftName
-    ? `“${trimmedDraftName}”`
-    : "the untitled draft";
+    ? text.title(trimmedDraftName)
+    : text.titleUntitled;
+  const understand = trimmedDraftName
+    ? text.understand(trimmedDraftName)
+    : text.understandUntitled;
   const trimmedHostName = hostName.trim();
   const identityParts = [
     plannedStart && plannedEnd && plannedEnd > plannedStart
-      ? formatSessionWhen(plannedStart, plannedEnd)
+      ? formatSessionWhen(plannedStart, plannedEnd, locale)
       : null,
-    `${attendingPlayerCount} attending`,
-    trimmedHostName ? `Hosted by ${trimmedHostName}` : null,
+    text.attending(attendingPlayerCount),
+    trimmedHostName ? text.hostedBy(trimmedHostName) : null,
   ].filter(Boolean);
 
   function openDialog() {
@@ -136,7 +141,7 @@ export function DiscardDraftButton({
         onClick={openDialog}
         className={OUTLINE_BUTTON_CLASS_NAME}
       >
-        Discard draft
+        {text.button}
       </button>
       <dialog
         ref={dialogRef}
@@ -164,9 +169,7 @@ export function DiscardDraftButton({
               !
             </span>
             <p id={explanationId} className="text-[15px]">
-              This discards the draft for every host of {socialName}, including
-              anyone editing it right now. Its details, courts and players will
-              be lost and can&apos;t be brought back.
+              {text.warning(socialName)}
             </p>
           </div>
           <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px] font-semibold">
@@ -177,11 +180,13 @@ export function DiscardDraftButton({
               onChange={(event) => setIsUnderstoodChecked(event.target.checked)}
               className="size-5 shrink-0 accent-lime"
             />
-            I understand this discards {draftReference} for all hosts
+            {understand}
           </label>
           <div aria-live="polite" className="empty:hidden">
             {errorMessage && (
-              <AttentionMessage>{errorMessage}</AttentionMessage>
+              <AttentionMessage>
+                {translateMessage(errorMessage, messages)}
+              </AttentionMessage>
             )}
           </div>
           <div className="flex flex-wrap justify-end gap-3">
@@ -192,7 +197,7 @@ export function DiscardDraftButton({
               disabled={isPending}
               className={`${OUTLINE_BUTTON_CLASS_NAME} ${DIALOG_BUTTON_LAYOUT_CLASS_NAME}`}
             >
-              Keep draft
+              {text.keepDraft}
             </button>
             <button
               type="button"
@@ -200,7 +205,7 @@ export function DiscardDraftButton({
               disabled={!isUnderstoodChecked || isPending}
               className={`${ATTENTION_OUTLINE_BUTTON_CLASS_NAME} ${DIALOG_BUTTON_LAYOUT_CLASS_NAME}`}
             >
-              {isPending ? "Discarding…" : "Discard for all hosts"}
+              {isPending ? text.discarding : text.discardForAll}
             </button>
           </div>
         </div>

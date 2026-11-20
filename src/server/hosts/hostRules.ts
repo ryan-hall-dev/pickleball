@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { HostRole } from "@/server/auth/hostAccess";
+import { en } from "@/i18n/messages/en";
 
 /** Mirrors the `short_label` domain: trimmed, 1-80 characters, no control characters. */
 export const HOST_DISPLAY_NAME_MAX_LENGTH = 80;
@@ -11,16 +12,16 @@ export const inviteHostInputSchema = z.object({
     .string()
     .trim()
     .toLowerCase()
-    .pipe(z.email({ error: "Enter a valid email address." }).max(254)),
+    .pipe(z.email({ error: en.validation.validEmail }).max(254)),
   displayName: z
     .string()
     .trim()
-    .min(1, { error: "Enter a display name." })
+    .min(1, { error: en.validation.displayNameRequired })
     .max(HOST_DISPLAY_NAME_MAX_LENGTH, {
-      error: `Use at most ${HOST_DISPLAY_NAME_MAX_LENGTH} characters.`,
+      error: en.validation.nameTooLong(HOST_DISPLAY_NAME_MAX_LENGTH),
     })
     .refine((name) => !CONTROL_CHARACTERS.test(name), {
-      error: "Remove special characters.",
+      error: en.validation.nameHasControlCharacters,
     }),
 });
 
@@ -56,7 +57,7 @@ export function checkHostRemoval({
 }
 
 export const HOST_REMOVAL_DENIAL_MESSAGES: Record<HostRemovalDenial, string> = {
-  CANNOT_REMOVE_SELF: "You can't remove yourself.",
-  HOST_NOT_FOUND: "That host has already been removed.",
-  CANNOT_REMOVE_MANAGER: "Only the operator can remove a social manager.",
+  CANNOT_REMOVE_SELF: en.serverMessages.hosts.cannotRemoveSelf,
+  HOST_NOT_FOUND: en.serverMessages.hosts.alreadyRemoved,
+  CANNOT_REMOVE_MANAGER: en.serverMessages.hosts.cannotRemoveManager,
 };

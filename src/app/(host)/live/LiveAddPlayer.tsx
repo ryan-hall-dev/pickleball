@@ -8,12 +8,10 @@ import {
   SECONDARY_BUTTON_CLASS_NAME,
   TEXT_INPUT_CLASS_NAME,
 } from "@/components/controlStyles";
-import {
-  GENDERS,
-  GENDER_LABELS,
-  PERSON_NAME_MAX_LENGTH,
-} from "@/server/participantRules";
-import { SKILL_LEVEL_LABELS, SKILL_LEVELS } from "@/server/skillLevels";
+import { useMessages } from "@/i18n/LocaleProvider";
+import { translateMessage } from "@/i18n/messages";
+import { GENDERS, PERSON_NAME_MAX_LENGTH } from "@/server/participantRules";
+import { SKILL_LEVELS } from "@/server/skillLevels";
 import type { DraftParticipantInput } from "@/server/setup/setupRules";
 import {
   EMPTY_PARTICIPANT_FORM,
@@ -21,9 +19,11 @@ import {
   type ParticipantForm,
   type ParticipantFormErrors,
 } from "../setup/whosPlaying";
+import { failureText, type ShownFailure } from "./liveFailure";
 
 export type AddPlayerOutcome =
-  { kind: "added" } | { kind: "failed"; message: string; uncertain: boolean };
+  | { kind: "added" }
+  | { kind: "failed"; failure: ShownFailure; uncertain: boolean };
 
 /**
  * "Add player" for someone whose phone is missing or flat. The same event id
@@ -40,10 +40,12 @@ export function LiveAddPlayer({
     eventId: string,
   ) => Promise<AddPlayerOutcome>;
 }) {
+  const messages = useMessages();
+  const text = messages.host.live.addPlayer;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<ParticipantForm>(EMPTY_PARTICIPANT_FORM);
   const [fieldErrors, setFieldErrors] = useState<ParticipantFormErrors>({});
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<ShownFailure | null>(null);
   const [saving, setSaving] = useState(false);
   // The last answer was not trustworthy: the add may or may not be saved. The
   // fields stay fixed so a retry can only settle that same add.
@@ -80,7 +82,7 @@ export function LiveAddPlayer({
       eventId.current = null;
       setForm(EMPTY_PARTICIPANT_FORM);
       setOpen(false);
-    } else setFailure(outcome.message);
+    } else setFailure(outcome.failure);
   }
 
   if (!open)
@@ -91,25 +93,22 @@ export function LiveAddPlayer({
         disabled={disabled}
         onClick={() => setOpen(true)}
       >
-        Add player
+        {text.button}
       </button>
     );
   return (
     <form
       onSubmit={(event) => void submit(event)}
-      aria-label="Add player"
+      aria-label={text.button}
       noValidate
       className="w-full rounded-[20px] border border-inner-border bg-inner p-4"
     >
-      <h3 className="text-base font-bold">Add player</h3>
-      <p className="mt-1 text-[13px] text-muted">
-        For someone without a working phone. They join the waiting list when
-        this is saved and play this session only.
-      </p>
+      <h3 className="text-base font-bold">{text.button}</h3>
+      <p className="mt-1 text-[13px] text-muted">{text.intro}</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Field
           id="live-add-first-name"
-          label="First name"
+          label={text.firstName}
           error={fieldErrors.firstName}
         >
           <input
@@ -129,7 +128,7 @@ export function LiveAddPlayer({
         </Field>
         <Field
           id="live-add-last-name"
-          label="Last name"
+          label={text.lastName}
           error={fieldErrors.lastName}
         >
           <input
@@ -147,7 +146,11 @@ export function LiveAddPlayer({
             }
           />
         </Field>
-        <Field id="live-add-gender" label="Gender" error={fieldErrors.gender}>
+        <Field
+          id="live-add-gender"
+          label={text.gender}
+          error={fieldErrors.gender}
+        >
           <select
             id="live-add-gender"
             value={form.gender}
@@ -159,15 +162,19 @@ export function LiveAddPlayer({
               fieldErrors.gender ? "live-add-gender-error" : undefined
             }
           >
-            <option value="">Choose…</option>
+            <option value="">{messages.host.common.choose}</option>
             {GENDERS.map((gender) => (
               <option key={gender} value={gender}>
-                {GENDER_LABELS[gender]}
+                {messages.genders[gender]}
               </option>
             ))}
           </select>
         </Field>
-        <Field id="live-add-skill" label="Level" error={fieldErrors.skillLevel}>
+        <Field
+          id="live-add-skill"
+          label={text.level}
+          error={fieldErrors.skillLevel}
+        >
           <select
             id="live-add-skill"
             value={form.skillLevel}
@@ -179,24 +186,21 @@ export function LiveAddPlayer({
               fieldErrors.skillLevel ? "live-add-skill-error" : undefined
             }
           >
-            <option value="">Choose…</option>
+            <option value="">{messages.host.common.choose}</option>
             {SKILL_LEVELS.map((level) => (
               <option key={level} value={level}>
-                {SKILL_LEVEL_LABELS[level]}
+                {messages.levels[level]}
               </option>
             ))}
           </select>
         </Field>
       </div>
       {unresolved && (
-        <p className="mt-3 text-[13px] text-muted">
-          Not confirmed yet. Retrying checks this same add, so it cannot add
-          them twice. The details are locked until it settles.
-        </p>
+        <p className="mt-3 text-[13px] text-muted">{text.unresolved}</p>
       )}
       {failure && (
         <div className="mt-3">
-          <AttentionMessage>{failure}</AttentionMessage>
+          <AttentionMessage>{failureText(failure, messages)}</AttentionMessage>
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-2">
@@ -206,10 +210,10 @@ export function LiveAddPlayer({
           disabled={disabled || saving}
         >
           {saving
-            ? "Saving…"
+            ? messages.host.common.saving
             : failure
-              ? "Retry add player"
-              : "Add to waiting list"}
+              ? text.retry
+              : text.addToWaiting}
         </button>
         {!unresolved && (
           <button
@@ -222,7 +226,7 @@ export function LiveAddPlayer({
               eventId.current = null;
             }}
           >
-            Cancel
+            {messages.host.common.cancel}
           </button>
         )}
       </div>
@@ -241,13 +245,18 @@ function Field({
   error: string | undefined;
   children: React.ReactNode;
 }) {
+  const messages = useMessages();
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className={FIELD_LABEL_CLASS_NAME}>
         {label}
       </label>
       {children}
-      {error && <AttentionMessage id={`${id}-error`}>{error}</AttentionMessage>}
+      {error && (
+        <AttentionMessage id={`${id}-error`}>
+          {translateMessage(error, messages)}
+        </AttentionMessage>
+      )}
     </div>
   );
 }

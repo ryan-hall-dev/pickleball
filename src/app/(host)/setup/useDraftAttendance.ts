@@ -18,8 +18,9 @@ import {
   type AttendanceFailure,
   type QueuedAttendanceChange,
 } from "./whosPlaying";
+import { en } from "@/i18n/messages/en";
 
-const OFFLINE_MESSAGE = "Couldn't reach the server. Check your connection.";
+const OFFLINE_MESSAGE = en.serverMessages.offline;
 
 function submitAttendanceChange(
   sessionId: string,
@@ -192,7 +193,7 @@ export function useDraftAttendance(
           if (isWritingRef.current)
             return {
               ok: false,
-              message: "Wait for attendance to finish saving, then try again.",
+              message: en.serverMessages.setup.waitForAttendance,
             };
           isWritingRef.current = true;
           try {

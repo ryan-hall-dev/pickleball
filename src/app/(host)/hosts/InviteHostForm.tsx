@@ -12,6 +12,8 @@ import {
   type InviteHostFormState,
 } from "@/server/hosts/hostActions";
 import { HOST_DISPLAY_NAME_MAX_LENGTH } from "@/server/hosts/hostRules";
+import { useMessages } from "@/i18n/LocaleProvider";
+import { translateMessage } from "@/i18n/messages";
 
 const INITIAL_STATE: InviteHostFormState = { status: "idle" };
 
@@ -20,6 +22,8 @@ export function InviteHostForm() {
     inviteHost,
     INITIAL_STATE,
   );
+  const messages = useMessages();
+  const text = messages.host.hosts;
   const fieldErrors = formState.status === "error" ? formState.fieldErrors : {};
   const submittedValues =
     formState.status === "error" ? formState.submittedValues : undefined;
@@ -32,12 +36,10 @@ export function InviteHostForm() {
       className="flex flex-col gap-4"
       noValidate
     >
-      <p className="text-sm text-muted">
-        They sign in on the login page with a code sent to this email.
-      </p>
+      <p className="text-sm text-muted">{text.inviteIntro}</p>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="invite-email" className={FIELD_LABEL_CLASS_NAME}>
-          Email
+          {text.email}
         </label>
         <input
           id="invite-email"
@@ -54,13 +56,13 @@ export function InviteHostForm() {
         />
         {fieldErrors.email && (
           <AttentionMessage id="invite-email-error">
-            {fieldErrors.email}
+            {translateMessage(fieldErrors.email, messages)}
           </AttentionMessage>
         )}
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="invite-display-name" className={FIELD_LABEL_CLASS_NAME}>
-          Display name
+          {text.displayName}
         </label>
         <input
           id="invite-display-name"
@@ -78,16 +80,20 @@ export function InviteHostForm() {
         />
         {fieldErrors.displayName && (
           <AttentionMessage id="invite-display-name-error">
-            {fieldErrors.displayName}
+            {translateMessage(fieldErrors.displayName, messages)}
           </AttentionMessage>
         )}
       </div>
       <div aria-live="polite">
         {formState.status === "error" && (
-          <AttentionMessage>{formState.message}</AttentionMessage>
+          <AttentionMessage>
+            {translateMessage(formState.message, messages)}
+          </AttentionMessage>
         )}
         {formState.status === "success" && (
-          <p className="text-sm text-lime-soft">{formState.message}</p>
+          <p className="text-sm text-lime-soft">
+            {translateMessage(formState.message, messages)}
+          </p>
         )}
       </div>
       <button
@@ -95,7 +101,7 @@ export function InviteHostForm() {
         disabled={isPending}
         className={PRIMARY_BUTTON_CLASS_NAME}
       >
-        {isPending ? "Inviting…" : "Invite host"}
+        {isPending ? text.inviting : text.inviteHost}
       </button>
     </form>
   );

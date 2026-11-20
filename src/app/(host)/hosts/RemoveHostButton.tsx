@@ -10,6 +10,8 @@ import {
   removeHost,
   type RemoveHostFormState,
 } from "@/server/hosts/hostActions";
+import { useMessages } from "@/i18n/LocaleProvider";
+import { translateMessage } from "@/i18n/messages";
 
 const INITIAL_STATE: RemoveHostFormState = { status: "idle" };
 
@@ -21,6 +23,8 @@ export function RemoveHostButton({
   hostUserId: string;
   hostDisplayName: string;
 }) {
+  const messages = useMessages();
+  const text = messages.host.hosts;
   const [isConfirming, setIsConfirming] = useState(false);
   const [formState, formAction, isPending] = useActionState(
     removeHost,
@@ -38,29 +42,31 @@ export function RemoveHostButton({
             disabled={isPending}
             className={OUTLINE_BUTTON_CLASS_NAME}
           >
-            Cancel
+            {messages.host.common.cancel}
           </button>
           <button
             type="submit"
             disabled={isPending}
             className={ATTENTION_OUTLINE_BUTTON_CLASS_NAME}
           >
-            {isPending ? "Removing…" : `Confirm remove ${hostDisplayName}`}
+            {isPending ? text.removing : text.confirmRemove(hostDisplayName)}
           </button>
         </form>
       ) : (
         <button
           type="button"
           onClick={() => setIsConfirming(true)}
-          aria-label={`Remove ${hostDisplayName}`}
+          aria-label={text.removeName(hostDisplayName)}
           className={OUTLINE_BUTTON_CLASS_NAME}
         >
-          Remove
+          {text.remove}
         </button>
       )}
       <div aria-live="polite">
         {formState.status === "error" && (
-          <AttentionMessage>{formState.message}</AttentionMessage>
+          <AttentionMessage>
+            {translateMessage(formState.message, messages)}
+          </AttentionMessage>
         )}
       </div>
     </div>

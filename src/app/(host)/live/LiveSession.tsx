@@ -9,6 +9,10 @@ import {
   PRIMARY_BUTTON_CLASS_NAME,
   SECONDARY_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
+import { courtName } from "@/i18n/courtName";
+import { useMessages } from "@/i18n/LocaleProvider";
+import { translateMessage } from "@/i18n/messages";
+import { en } from "@/i18n/messages/en";
 import { settleWithin } from "@/lib/settleWithin";
 import { approveCheckin } from "@/server/checkin/hostCheckinActions";
 import type { HostCheckinDecisionResult } from "@/server/checkin/hostCheckinResults";
@@ -25,18 +29,20 @@ import type { Gender } from "@/server/participantRules";
 import type { DraftParticipantInput } from "@/server/setup/setupRules";
 import { PendingCheckinTray } from "../setup/PendingCheckinTray";
 import { LiveAddPlayer, type AddPlayerOutcome } from "./LiveAddPlayer";
+import { failureText, type ShownFailure } from "./liveFailure";
 import { TimeUpNotice } from "./TimeUpNotice";
 import { LiveCourtCard } from "./LiveCourtCard";
 import { LiveWaiting } from "./LiveWaiting";
 
 const TIMEOUT_MS = 15_000;
+// English like every server message; shown through translateMessage.
 const READ_FAILURE: ReadLiveResult = {
   ok: false,
-  message: "Couldn't refresh the session. Check your connection and retry.",
+  message: en.serverMessages.live.couldNotRefresh,
 };
 const WRITE_FAILURE: LiveWriteResult = {
   ok: false,
-  message: "Couldn't confirm that action. Retry to check whether it was saved.",
+  message: en.serverMessages.live.couldNotConfirm,
   outcome: "unknown",
 };
 
@@ -45,8 +51,10 @@ export function LiveSession({
 }: {
   initialResult: ReadLiveResult;
 }) {
+  const messages = useMessages();
+  const text = messages.host.live;
   const [result, setResult] = useState(initialResult);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<ShownFailure | null>(null);
   const [isWorking, setIsWorking] = useState(false);
   const [failedWrite, setFailedWrite] = useState<LiveWriteInput | null>(null);
   const [prepareCourtId, setPrepareCourtId] = useState<string>();
@@ -88,7 +96,7 @@ export function LiveSession({
     const response = await settleWithin(readCall, TIMEOUT_MS, READ_FAILURE);
     if (isStopped?.() || number !== readNumber.current) return;
     if (!response.ok) {
-      setMessage(response.message);
+      setMessage({ message: response.message });
       return;
     }
     if (response.status === "session") {
@@ -163,7 +171,7 @@ export function LiveSession({
             lastSeq: Math.max(latestSession.current.lastSeq, response.seq),
           };
       } else {
-        setMessage(response.message);
+        setMessage(response);
         // Only an unknown outcome keeps the same event id for a retry. A
         // rejection or a conflict is settled: the refresh below shows the real
         // state and the host carries on.
@@ -226,7 +234,7 @@ export function LiveSession({
       if (!current || working.current)
         return {
           kind: "failed",
-          message: "Wait for the current save.",
+          failure: { message: en.serverMessages.live.waitForSave },
           uncertain: false,
         };
       working.current = true;
@@ -251,7 +259,7 @@ export function LiveSession({
         ? { kind: "added" }
         : {
             kind: "failed",
-            message: response.message,
+            failure: response,
             uncertain: response.outcome === "unknown",
           };
     },
@@ -263,18 +271,18 @@ export function LiveSession({
   if (!session)
     return (
       <section className={CARD_CLASS_NAME}>
-        <h1 className="text-[32px] font-extrabold">Live courts</h1>
+        <h1 className="text-[32px] font-extrabold">{text.title}</h1>
         <p className="mt-3 text-muted">
           {!result.ok
-            ? result.message
+            ? translateMessage(result.message, messages)
             : result.status === "draft"
-              ? "Your session has not started yet."
+              ? text.notStarted
               : result.status === "legacy"
-                ? "This older session uses the previous live workflow. Its records have been preserved."
-                : "No session is running."}
+                ? text.legacy
+                : text.noSession}
         </p>
         <Link className={`${OUTLINE_BUTTON_CLASS_NAME} mt-4`} href="/setup">
-          Go to session setup
+          {text.goToSetup}
         </Link>
       </section>
     );
@@ -296,25 +304,27 @@ export function LiveSession({
         <div className="min-w-0">
           <p className="text-xs font-bold tracking-widest text-lime uppercase">
             {ended
-              ? "Session ended"
+              ? text.sessionEnded
               : timeIsUp
-                ? "Session time is up"
-                : "Live session"}
+                ? text.sessionTimeIsUp
+                : text.liveSession}
           </p>
           <h1 className="mt-1 text-[32px] font-extrabold break-words">
             {session.name}
           </h1>
           <p className="mt-1 text-muted tabular-nums">
             {ended
-              ? "Thanks for playing. A new session starts fresh."
+              ? text.thanks
               : timeIsUp
-                ? "Finish the active games, then end the session."
-                : `${Math.max(0, Math.ceil((session.deadline - now) / 60_000))} min remaining`}
+                ? text.finishThenEnd
+                : text.minutesRemaining(
+                    Math.max(0, Math.ceil((session.deadline - now) / 60_000)),
+                  )}
           </p>
         </div>
         {ended ? (
           <Link href="/setup" className={SECONDARY_BUTTON_CLASS_NAME}>
-            Set up a new session
+            {text.setUpNew}
           </Link>
         ) : (
           <div>
@@ -327,14 +337,14 @@ export function LiveSession({
               className={OUTLINE_BUTTON_CLASS_NAME}
               onClick={() => setEndConfirmation(true)}
             >
-              End session
+              {text.endSession}
             </button>
             {activeGames > 0 && (
               <p
                 id="end-session-disabled-reason"
                 className="mt-2 text-sm text-muted"
               >
-                Finish the active games before ending the session.
+                {text.finishBeforeEnd}
               </p>
             )}
           </div>
@@ -344,12 +354,14 @@ export function LiveSession({
         <TimeUpNotice
           activeCourtNames={session.courts
             .filter((court) => court.activeMatch)
-            .map((court) => court.name)}
+            .map((court) => courtName(court.name, messages))}
           disabled={disabled}
           onEnd={() => setEndConfirmation(true)}
         />
       )}
-      {message && <AttentionMessage>{message}</AttentionMessage>}
+      {message && (
+        <AttentionMessage>{failureText(message, messages)}</AttentionMessage>
+      )}
       {failedWrite && (
         <button
           type="button"
@@ -357,23 +369,23 @@ export function LiveSession({
           disabled={isWorking}
           onClick={() => void submit(failedWrite)}
         >
-          Retry last action
+          {text.retryLastAction}
         </button>
       )}
       <p role="status" className="text-sm text-muted">
-        {isWorking ? "Saving…" : "Updates every 5 seconds"}
+        {isWorking ? messages.host.common.saving : text.updatesEvery}
       </p>
       {!ended && (
         <>
-          <nav aria-label="Live sections" className="flex flex-wrap gap-2">
+          <nav aria-label={text.sectionsLabel} className="flex flex-wrap gap-2">
             <a className={OUTLINE_BUTTON_CLASS_NAME} href="#checkins">
-              Check-ins
+              {text.checkins}
             </a>
             <a className={OUTLINE_BUTTON_CLASS_NAME} href="#waiting">
-              Waiting
+              {text.waiting}
             </a>
             <a className={OUTLINE_BUTTON_CLASS_NAME} href="#courts">
-              Courts
+              {text.courts}
             </a>
           </nav>
           {/* Hosts approve arrivals and show the QR code most in the first
@@ -394,7 +406,7 @@ export function LiveSession({
           />
           <section id="courts" aria-labelledby="courts-heading">
             <h2 id="courts-heading" className="mb-3 text-xl font-bold">
-              Courts &amp; Up next
+              {text.courtsAndUpNext}
             </h2>
             <div className="grid gap-4 lg:grid-cols-2">
               {session.courts.map((court) => (
@@ -428,20 +440,16 @@ export function LiveSession({
         aria-labelledby="end-session-title"
       >
         <h2 id="end-session-title" className="text-[26px] font-extrabold">
-          End this session?
+          {text.endDialog.title}
         </h2>
-        <p className="mt-3 text-muted">
-          Waiting times stop when you confirm. Unstarted called groups will be
-          released. Nothing is ended for you: any game still on court has to be
-          finished first. The next session starts with a fresh player list.
-        </p>
+        <p className="mt-3 text-muted">{text.endDialog.text}</p>
         <div className="mt-5 flex flex-wrap gap-3">
           <button
             type="button"
             className={OUTLINE_BUTTON_CLASS_NAME}
             onClick={() => setEndConfirmation(false)}
           >
-            Keep session open
+            {text.endDialog.keepOpen}
           </button>
           <button
             type="button"
@@ -451,7 +459,7 @@ export function LiveSession({
               act({ kind: "end" });
             }}
           >
-            End session
+            {text.endSession}
           </button>
         </div>
       </dialog>

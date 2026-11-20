@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { renderWithLocale as render } from "@/i18n/testing";
 import { afterEach, expect, it, vi } from "vitest";
 import type { LiveCourt, LivePlayer } from "@/server/live/liveTypes";
 import { CourtRecovery } from "./CourtRecovery";

@@ -6,6 +6,8 @@ import {
   OUTLINE_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
 import { SkillChip } from "@/components/SkillChip";
+import { courtName } from "@/i18n/courtName";
+import { useMessages } from "@/i18n/LocaleProvider";
 import type { LiveCommand, LivePlayer } from "@/server/live/liveTypes";
 
 const VISIBLE_WHEN_FOLDED = 3;
@@ -13,12 +15,14 @@ const VISIBLE_WHEN_FOLDED = 3;
 function FoldButton({
   expanded,
   hiddenCount,
-  label,
+  showAll,
+  showFewer,
   onToggle,
 }: {
   expanded: boolean;
   hiddenCount: number;
-  label: string;
+  showAll: (count: number) => string;
+  showFewer: string;
   onToggle: () => void;
 }) {
   if (hiddenCount <= 0 && !expanded) return null;
@@ -29,9 +33,7 @@ function FoldButton({
       aria-expanded={expanded}
       onClick={onToggle}
     >
-      {expanded
-        ? `Show fewer ${label}`
-        : `Show all ${hiddenCount + VISIBLE_WHEN_FOLDED} ${label}`}
+      {expanded ? showFewer : showAll(hiddenCount + VISIBLE_WHEN_FOLDED)}
     </button>
   );
 }
@@ -47,6 +49,8 @@ export function LiveWaiting({
   disabled: boolean;
   onAction: (command: LiveCommand) => void;
 }) {
+  const messages = useMessages();
+  const text = messages.host.live.waitingList;
   const waiting = players.filter((player) => player.status === "waiting");
   const resting = players.filter((player) => player.status === "skipped");
   // Kept in state so the 5 s refresh never folds a list the host opened.
@@ -65,9 +69,9 @@ export function LiveWaiting({
       className={CARD_CLASS_NAME}
     >
       <h2 id="waiting-heading" className="text-xl font-bold">
-        Waiting <span className="text-muted">({waiting.length})</span>
+        {text.heading} <span className="text-muted">({waiting.length})</span>
       </h2>
-      <p className="mt-1 text-xs text-muted">Longest wait first.</p>
+      <p className="mt-1 text-xs text-muted">{text.longestFirst}</p>
       {waiting.length ? (
         <ul className="mt-4 flex flex-col gap-2">
           {shownWaiting.map((player, index) => (
@@ -82,15 +86,17 @@ export function LiveWaiting({
                   {index + 1}. {player.name}
                 </p>
                 <p className="shrink-0 font-bold whitespace-nowrap tabular-nums">
-                  {Math.floor((player.currentWaitMs ?? 0) / 60_000)} min
+                  {text.minutes(
+                    Math.floor((player.currentWaitMs ?? 0) / 60_000),
+                  )}
                 </p>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                 <SkillChip skillLevel={player.skill} />
                 <span>
                   {player.calledCourtName
-                    ? `Called · ${player.calledCourtName}`
-                    : "Waiting"}
+                    ? text.calledTo(courtName(player.calledCourtName, messages))
+                    : text.waiting}
                 </span>
               </div>
               <div className="mt-3 grid grid-cols-[1fr_auto] gap-2 sm:max-w-xs">
@@ -98,7 +104,7 @@ export function LiveWaiting({
                   type="button"
                   className={OUTLINE_BUTTON_CLASS_NAME}
                   disabled={disabled}
-                  aria-label={`Rest ${player.name}`}
+                  aria-label={text.restName(player.name)}
                   onClick={() =>
                     onAction({
                       kind: "rest",
@@ -106,13 +112,13 @@ export function LiveWaiting({
                     })
                   }
                 >
-                  Rest 10 min
+                  {text.rest}
                 </button>
                 <button
                   type="button"
                   className={OUTLINE_BUTTON_CLASS_NAME}
                   disabled={disabled}
-                  aria-label={`Mark ${player.name} as left`}
+                  aria-label={text.leftName(player.name)}
                   onClick={() =>
                     onAction({
                       kind: "leave",
@@ -120,27 +126,26 @@ export function LiveWaiting({
                     })
                   }
                 >
-                  Left
+                  {text.left}
                 </button>
               </div>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-4 text-muted">No players waiting.</p>
+        <p className="mt-4 text-muted">{text.noneWaiting}</p>
       )}
       <FoldButton
         expanded={waitingExpanded}
         hiddenCount={waiting.length - VISIBLE_WHEN_FOLDED}
-        label="waiting"
+        showAll={text.showAllWaiting}
+        showFewer={text.showFewerWaiting}
         onToggle={() => setWaitingExpanded((open) => !open)}
       />
       <h3 className="mt-5 text-lg font-bold">
-        Resting <span className="text-muted">({resting.length})</span>
+        {text.resting} <span className="text-muted">({resting.length})</span>
       </h3>
-      <p className="mt-1 text-xs text-muted">
-        Wait time is kept. Back automatically after 10 min.
-      </p>
+      <p className="mt-1 text-xs text-muted">{text.restingHint}</p>
       {resting.length ? (
         <ul className="mt-3 flex flex-col gap-2">
           {shownResting.map((player) => (
@@ -151,17 +156,21 @@ export function LiveWaiting({
               <p className="font-semibold break-words">{player.name}</p>
               <p className="mt-1 text-xs text-muted tabular-nums">
                 {player.returnsAt
-                  ? `Returns in ${Math.max(0, Math.ceil((player.returnsAt - now) / 60_000))} min`
-                  : "Resting"}{" "}
-                · {Math.floor((player.currentWaitMs ?? 0) / 60_000)} min wait
-                kept
+                  ? text.returnsIn(
+                      Math.max(0, Math.ceil((player.returnsAt - now) / 60_000)),
+                    )
+                  : text.resting}{" "}
+                ·{" "}
+                {text.waitKept(
+                  Math.floor((player.currentWaitMs ?? 0) / 60_000),
+                )}
               </p>
               <div className="mt-3 grid grid-cols-[1fr_auto] gap-2 sm:max-w-xs">
                 <button
                   type="button"
                   className={OUTLINE_BUTTON_CLASS_NAME}
                   disabled={disabled || player.skipSeq === null}
-                  aria-label={`Ready now ${player.name}`}
+                  aria-label={text.readyNowName(player.name)}
                   onClick={() =>
                     onAction({
                       kind: "ready",
@@ -170,13 +179,13 @@ export function LiveWaiting({
                     })
                   }
                 >
-                  Ready now
+                  {text.readyNow}
                 </button>
                 <button
                   type="button"
                   className={OUTLINE_BUTTON_CLASS_NAME}
                   disabled={disabled}
-                  aria-label={`Mark ${player.name} as left`}
+                  aria-label={text.leftName(player.name)}
                   onClick={() =>
                     onAction({
                       kind: "leave",
@@ -184,19 +193,20 @@ export function LiveWaiting({
                     })
                   }
                 >
-                  Left
+                  {text.left}
                 </button>
               </div>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-muted">Nobody resting.</p>
+        <p className="mt-3 text-muted">{text.nobodyResting}</p>
       )}
       <FoldButton
         expanded={restingExpanded}
         hiddenCount={resting.length - VISIBLE_WHEN_FOLDED}
-        label="resting"
+        showAll={text.showAllResting}
+        showFewer={text.showFewerResting}
         onToggle={() => setRestingExpanded((open) => !open)}
       />
     </section>

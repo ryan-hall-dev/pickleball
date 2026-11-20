@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { renderWithLocale as render } from "@/i18n/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import type { LivePlayer } from "@/server/live/liveTypes";
 import { LiveWaiting } from "./LiveWaiting";

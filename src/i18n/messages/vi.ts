@@ -1,4 +1,6 @@
 import type { Messages } from "./en";
+import { hostVi } from "./hostVi";
+import { engineErrorsVi, serverMessagesVi } from "./serverVi";
 
 // Vietnamese interface text, drafted by Claude: a native speaker reviews it
 // before each deploy (docs/plans/bilingual-ui.md). Players are addressed as
@@ -28,6 +30,18 @@ export const vi: Messages = {
     genderRequired: "Chọn nam hoặc nữ.",
     nameTooLong: (maxLength: number) => `Tối đa ${maxLength} ký tự.`,
     nameHasControlCharacters: "Xóa các ký tự đặc biệt.",
+    hostFirstNameRequired: "Nhập tên.",
+    hostLastNameRequired: "Nhập họ.",
+    hostLevelRequired: "Chọn trình độ.",
+    sessionNameRequired: "Nhập tên buổi chơi.",
+    wholeMinutes: (min: number, max: number) =>
+      `Nhập số phút nguyên từ ${min} đến ${max}.`,
+    courtCountRange: (min: number, max: number) =>
+      `Nhập số sân nguyên từ ${min} đến ${max}.`,
+    validEmail: "Nhập địa chỉ email hợp lệ.",
+    displayNameRequired: "Nhập tên hiển thị.",
+    socialNameRequired: "Nhập tên nhóm.",
+    checkHighlightedFields: "Hãy kiểm tra các ô được đánh dấu.",
   },
   time: {
     minutesLeft: (minutes: number) => `Còn ${minutes} phút`,
@@ -113,4 +127,7 @@ export const vi: Messages = {
     },
     tryAgain: "Thử lại",
   },
+  host: hostVi,
+  serverMessages: serverMessagesVi,
+  engineErrors: engineErrorsVi,
 };

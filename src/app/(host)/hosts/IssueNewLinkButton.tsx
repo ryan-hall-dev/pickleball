@@ -15,8 +15,11 @@ import {
 } from "@/components/controlStyles";
 import { reissueCheckinLink } from "@/server/checkin/checkinLinkActions";
 import { CheckIcon } from "../setup/CheckIcon";
+import { en } from "@/i18n/messages/en";
+import { useMessages } from "@/i18n/LocaleProvider";
+import { translateMessage } from "@/i18n/messages";
 
-const OFFLINE_MESSAGE = "Couldn't reach the server. Check your connection.";
+const OFFLINE_MESSAGE = en.serverMessages.offline;
 const DIALOG_BUTTON_LAYOUT_CLASS_NAME = "flex-[1_1_200px]";
 /** Solid orange confirm (decision #30: DESIGN.md has no destructive style). */
 const SOLID_ORANGE_BUTTON_CLASS_NAME =
@@ -30,6 +33,8 @@ const SOLID_ORANGE_BUTTON_CLASS_NAME =
  * the dialog mid-request (Chrome does on a repeated Esc).
  */
 export function IssueNewLinkButton({ socialName }: { socialName: string }) {
+  const messages = useMessages();
+  const text = messages.host.hosts.issueNewLink;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -91,18 +96,20 @@ export function IssueNewLinkButton({ socialName }: { socialName: string }) {
         onClick={openDialog}
         className={ATTENTION_OUTLINE_BUTTON_CLASS_NAME}
       >
-        Issue new link
+        {text.button}
       </button>
       <div aria-live="polite" className="empty:hidden">
         {!isDialogOpen && errorMessage && (
-          <AttentionMessage>{errorMessage}</AttentionMessage>
+          <AttentionMessage>
+            {translateMessage(errorMessage, messages)}
+          </AttentionMessage>
         )}
         {hasIssuedNewLink && (
           <p className="flex items-start gap-1.5 text-[13px] text-lime-soft">
             <span className="mt-px flex size-[18px] shrink-0 items-center justify-center rounded-full bg-lime text-on-lime">
               <CheckIcon sizePx={12} />
             </span>
-            New link issued. The old link, QR code and stickers no longer work.
+            {text.issued}
           </p>
         )}
       </div>
@@ -118,7 +125,7 @@ export function IssueNewLinkButton({ socialName }: { socialName: string }) {
         <div className="flex flex-col gap-[18px] p-5 sm:p-7">
           <div>
             <h2 id={titleId} className="text-[26px] font-extrabold">
-              Issue a new check-in link?
+              {text.title}
             </h2>
             <p className="mt-1 text-sm break-words text-muted">{socialName}</p>
           </div>
@@ -129,19 +136,14 @@ export function IssueNewLinkButton({ socialName }: { socialName: string }) {
             >
               !
             </span>
-            <p id={warningId}>
-              The current link and QR code stop working immediately, including
-              every printed and NFC sticker. Anyone who uses them sees “This
-              check-in link isn&apos;t active”.
-            </p>
+            <p id={warningId}>{text.warning}</p>
           </div>
-          <p className="text-text-soft">
-            Afterwards, print new stickers from the Sticker and QR page and
-            replace the old ones. Check-ins already sent are not affected.
-          </p>
+          <p className="text-text-soft">{text.afterwards}</p>
           <div aria-live="polite" className="empty:hidden">
             {isDialogOpen && errorMessage && (
-              <AttentionMessage>{errorMessage}</AttentionMessage>
+              <AttentionMessage>
+                {translateMessage(errorMessage, messages)}
+              </AttentionMessage>
             )}
           </div>
           <div className="flex flex-wrap justify-end gap-2.5">
@@ -152,7 +154,7 @@ export function IssueNewLinkButton({ socialName }: { socialName: string }) {
               disabled={isPending}
               className={`${LARGE_OUTLINE_BUTTON_CLASS_NAME} ${DIALOG_BUTTON_LAYOUT_CLASS_NAME}`}
             >
-              Cancel
+              {messages.host.common.cancel}
             </button>
             <button
               type="button"
@@ -160,7 +162,7 @@ export function IssueNewLinkButton({ socialName }: { socialName: string }) {
               disabled={isPending}
               className={`${SOLID_ORANGE_BUTTON_CLASS_NAME} ${DIALOG_BUTTON_LAYOUT_CLASS_NAME}`}
             >
-              {isPending ? "Issuing…" : "Issue new link"}
+              {isPending ? text.issuing : text.button}
             </button>
           </div>
         </div>

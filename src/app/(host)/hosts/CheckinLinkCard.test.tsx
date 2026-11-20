@@ -2,11 +2,11 @@ import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
+import { renderWithLocale as render } from "@/i18n/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { reissueCheckinLink } from "@/server/checkin/checkinLinkActions";
 import {

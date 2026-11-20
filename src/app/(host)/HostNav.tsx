@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useMessages } from "@/i18n/LocaleProvider";
 
 // Phone workflow; manager tools stay outside ordinary game turnover.
 const HOST_NAV_ITEMS = [
-  { href: "/setup", label: "Session setup" },
-  { href: "/live", label: "Live courts" },
-  { href: "/hosts", label: "Hosts" },
+  { href: "/setup", labelKey: "setup" },
+  { href: "/live", labelKey: "live" },
+  { href: "/hosts", labelKey: "hosts" },
 ] as const;
 
 /** A section stays current on its sub-pages (e.g. /hosts/...). */
@@ -17,10 +18,11 @@ function isCurrentSection(pathname: string, href: string): boolean {
 
 export function HostNav() {
   const pathname = usePathname();
+  const text = useMessages().host.header;
   return (
-    <nav aria-label="Host">
+    <nav aria-label={text.navLabel}>
       <ul className="flex flex-wrap gap-1">
-        {HOST_NAV_ITEMS.map(({ href, label }) => {
+        {HOST_NAV_ITEMS.map(({ href, labelKey }) => {
           const isInCurrentSection = isCurrentSection(pathname, href);
           return (
             <li key={href}>
@@ -39,7 +41,7 @@ export function HostNav() {
                     : "font-medium text-muted hover:text-text"
                 }`}
               >
-                {label}
+                {text.nav[labelKey]}
               </Link>
             </li>
           );

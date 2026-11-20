@@ -14,30 +14,46 @@ import {
   type RequestLoginCodeOutcome,
   type VerifyLoginCodeFailure,
 } from "@/server/auth/loginCodeErrors";
+import { useMessages } from "@/i18n/LocaleProvider";
+import type { Messages } from "@/i18n/messages";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
-const REQUEST_CODE_ERROR_MESSAGES: Record<
-  Exclude<RequestLoginCodeOutcome, "CODE_SENT">,
-  string
-> = {
-  INVALID_EMAIL: "Enter a valid email address.",
-  RATE_LIMITED: "Too many sign-in attempts. Wait 10 minutes, then try again.",
-  UNAVAILABLE: "We couldn't send a code just now. Try again in a moment.",
-};
+type LoginText = Messages["host"]["login"];
 
-const VERIFY_CODE_ERROR_MESSAGES: Record<VerifyLoginCodeFailure, string> = {
-  INVALID_CODE_FORMAT: `Enter the ${LOGIN_CODE_LENGTH}-digit code from the email.`,
-  WRONG_OR_EXPIRED_CODE:
-    "That code is wrong or has expired. Check it, or send a new code.",
-  RATE_LIMITED: "Too many sign-in attempts. Wait 10 minutes, then try again.",
-  UNAVAILABLE: "We couldn't check the code just now. Try again in a moment.",
-};
+function requestCodeErrorText(
+  outcome: Exclude<RequestLoginCodeOutcome, "CODE_SENT">,
+  text: LoginText,
+): string {
+  return {
+    INVALID_EMAIL: text.errors.invalidEmail,
+    RATE_LIMITED: text.errors.rateLimited,
+    UNAVAILABLE: text.errors.sendUnavailable,
+  }[outcome];
+}
+
+function verifyCodeErrorText(
+  failure: VerifyLoginCodeFailure,
+  text: LoginText,
+): string {
+  return {
+    INVALID_CODE_FORMAT: text.errors.invalidCodeFormat(LOGIN_CODE_LENGTH),
+    WRONG_OR_EXPIRED_CODE: text.errors.wrongOrExpired,
+    RATE_LIMITED: text.errors.rateLimited,
+    UNAVAILABLE: text.errors.checkUnavailable,
+  }[failure];
+}
 
 type LoginStep = "enter_email" | "enter_code";
-type FeedbackMessage = { tone: "error" | "info"; text: string } | null;
+/** Kept as a reason, so it follows a language switch. */
+type FeedbackMessage =
+  | { tone: "error"; request: Exclude<RequestLoginCodeOutcome, "CODE_SENT"> }
+  | { tone: "error"; verify: VerifyLoginCodeFailure }
+  | { tone: "info" }
+  | null;
 
 export function LoginForm() {
+  const text = useMessages().host.login;
   const [step, setStep] = useState<LoginStep>("enter_email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -66,10 +82,7 @@ export function LoginForm() {
         setSecondsUntilResend(RESEND_COOLDOWN_SECONDS);
         onSent();
       } else {
-        setFeedback({
-          tone: "error",
-          text: REQUEST_CODE_ERROR_MESSAGES[outcome],
-        });
+        setFeedback({ tone: "error", request: outcome });
       }
     });
   }
@@ -85,12 +98,7 @@ export function LoginForm() {
 
   function handleResend() {
     setFeedback(null);
-    sendCode(() =>
-      setFeedback({
-        tone: "info",
-        text: "New code sent. Use the newest email.",
-      }),
-    );
+    sendCode(() => setFeedback({ tone: "info" }));
   }
 
   function handleCodeSubmit(event: FormEvent<HTMLFormElement>) {
@@ -106,7 +114,7 @@ export function LoginForm() {
       } catch {
         failure = "UNAVAILABLE";
       }
-      setFeedback({ tone: "error", text: VERIFY_CODE_ERROR_MESSAGES[failure] });
+      setFeedback({ tone: "error", verify: failure });
     });
   }
 
@@ -121,10 +129,14 @@ export function LoginForm() {
   const feedbackRegion = (
     <div id={feedbackId} aria-live="polite" className="min-h-0">
       {feedback?.tone === "error" && (
-        <AttentionMessage>{feedback.text}</AttentionMessage>
+        <AttentionMessage>
+          {"request" in feedback
+            ? requestCodeErrorText(feedback.request, text)
+            : verifyCodeErrorText(feedback.verify, text)}
+        </AttentionMessage>
       )}
       {feedback?.tone === "info" && (
-        <p className="text-sm text-lime-soft">{feedback.text}</p>
+        <p className="text-sm text-lime-soft">{text.newCodeSent}</p>
       )}
     </div>
   );
@@ -141,16 +153,13 @@ export function LoginForm() {
             id="login-heading"
             className="text-[32px] font-extrabold tracking-[-0.01em]"
           >
-            Host sign in
+            {text.title}
           </h1>
-          <p className="text-muted">
-            We&apos;ll email you a {LOGIN_CODE_LENGTH}-digit code. Hosts are
-            invited by their social manager.
-          </p>
+          <p className="text-muted">{text.intro(LOGIN_CODE_LENGTH)}</p>
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="login-email" className={FIELD_LABEL_CLASS_NAME}>
-            Email
+            {text.email}
           </label>
           <input
             id="login-email"
@@ -173,7 +182,7 @@ export function LoginForm() {
           disabled={isPending || email.trim() === ""}
           className={PRIMARY_BUTTON_CLASS_NAME}
         >
-          {isPending ? "Sending code…" : "Send code"}
+          {isPending ? text.sendingCode : text.sendCode}
         </button>
       </form>
     );
@@ -190,16 +199,17 @@ export function LoginForm() {
           id="login-heading"
           className="text-[32px] font-extrabold tracking-[-0.01em]"
         >
-          Check your email
+          {text.checkEmailTitle}
         </h1>
         <p className="text-muted">
-          If <strong className="font-semibold text-text">{email.trim()}</strong>{" "}
-          is on the hosts list, a {LOGIN_CODE_LENGTH}-digit code is on its way.
+          {text.codeOnItsWayBefore}{" "}
+          <strong className="font-semibold text-text">{email.trim()}</strong>{" "}
+          {text.codeOnItsWayAfter(LOGIN_CODE_LENGTH)}
         </p>
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="login-code" className={FIELD_LABEL_CLASS_NAME}>
-          {LOGIN_CODE_LENGTH}-digit code
+          {text.codeLabel(LOGIN_CODE_LENGTH)}
         </label>
         <input
           id="login-code"
@@ -224,7 +234,7 @@ export function LoginForm() {
         disabled={isPending || code.trim() === ""}
         className={PRIMARY_BUTTON_CLASS_NAME}
       >
-        {isPending ? "Checking…" : "Sign in"}
+        {isPending ? text.checking : text.signIn}
       </button>
       <div className="flex flex-wrap items-center justify-between gap-x-4">
         <button
@@ -234,8 +244,8 @@ export function LoginForm() {
           className={LINK_BUTTON_CLASS_NAME}
         >
           {secondsUntilResend > 0
-            ? `Send a new code in ${secondsUntilResend}s`
-            : "Send a new code"}
+            ? text.sendNewCodeIn(secondsUntilResend)
+            : text.sendNewCode}
         </button>
         <button
           type="button"
@@ -243,7 +253,7 @@ export function LoginForm() {
           disabled={isPending}
           className={LINK_BUTTON_CLASS_NAME}
         >
-          Use a different email
+          {text.useDifferentEmail}
         </button>
       </div>
     </form>

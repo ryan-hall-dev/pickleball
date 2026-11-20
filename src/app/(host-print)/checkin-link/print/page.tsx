@@ -11,14 +11,16 @@ import {
 import { CheckinQrCode } from "@/app/(host)/checkin-link/CheckinQrCode";
 import { STICKER_AND_QR_PAGE_PATH } from "@/app/(host)/checkin-link/checkinLinkPaths";
 import { PrintStickersButton } from "./PrintStickersButton";
+import { getLocale, hostPageTitle } from "@/i18n/getLocale";
+import { MESSAGES } from "@/i18n/messages";
 
 // The A4 sticker sheet (S03). It sits outside the (host) group so the host
 // header and nav don't print, and checks host access itself: any host of
 // the social may print its stickers (decision #25).
 
-export const metadata: Metadata = {
-  title: "Print stickers · Pickleball Social Manager",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: await hostPageTitle("printStickers") };
+}
 
 /** 3 × 4 stickers per A4 page, about 63 × 69 mm each (decision #28). */
 const STICKERS_PER_PAGE = 12;
@@ -32,7 +34,7 @@ export default function PrintStickersPage() {
     <Suspense
       fallback={
         <p className="p-7 text-muted" aria-live="polite">
-          Loading the stickers…
+          Loading… · <span lang="vi">Đang tải…</span>
         </p>
       }
     >
@@ -42,7 +44,12 @@ export default function PrintStickersPage() {
 }
 
 async function PrintStickersContent() {
-  const hostAccess = await readHostAccess();
+  const [hostAccess, locale] = await Promise.all([
+    readHostAccess(),
+    getLocale(),
+  ]);
+  const text = MESSAGES[locale].host.print;
+  const scanToCheckIn = MESSAGES[locale].host.stickerAndQr.scanToCheckIn;
   if (hostAccess.status === "signed_out") redirect("/login");
   // Session setup shows a signed-in non-host why they can't get in.
   if (hostAccess.status === "not_a_host") redirect("/setup");
@@ -51,25 +58,23 @@ async function PrintStickersContent() {
   const qrCodeSvg = checkinQrCodeSvg(link);
 
   return (
-    <>
+    // The print page has no host layout: it sets its own language.
+    <div lang={locale} className={locale === "vi" ? "font-vietnamese" : ""}>
       <style>{PRINT_PAGE_CSS}</style>
       <div className="flex flex-wrap items-center gap-3 border-b border-card-border bg-bg-header px-7 py-4 print:hidden">
         <Link
           href={STICKER_AND_QR_PAGE_PATH}
           className={OUTLINE_BUTTON_CLASS_NAME}
         >
-          Back
+          {text.back}
         </Link>
-        <p className="flex-[1_1_300px] text-sm text-muted">
-          12 stickers per A4 page. Print on sticker sheets or plain paper and
-          cut along the dashed lines.
-        </p>
-        <PrintStickersButton />
+        <p className="flex-[1_1_300px] text-sm text-muted">{text.intro}</p>
+        <PrintStickersButton label={text.print} />
       </div>
       <main className="overflow-x-auto bg-inner-border p-7 print:overflow-visible print:bg-white print:p-0">
-        <h1 className="sr-only">Print stickers for {socialName}</h1>
+        <h1 className="sr-only">{text.heading(socialName)}</h1>
         <ul
-          aria-label="Stickers"
+          aria-label={text.stickers}
           className="mx-auto grid h-[297mm] w-[210mm] grid-cols-3 grid-rows-4 overflow-hidden bg-white p-[10mm] text-black"
         >
           {Array.from({ length: STICKERS_PER_PAGE }, (_, stickerIndex) => (
@@ -79,18 +84,20 @@ async function PrintStickersContent() {
             >
               <CheckinQrCode
                 qrCodeSvg={qrCodeSvg}
-                shortLink={shortLink}
+                label={MESSAGES[locale].host.stickerAndQr.qrCodeLabel(
+                  shortLink,
+                )}
                 className="size-[40mm] shrink-0"
               />
               <p className="line-clamp-2 text-[15px] leading-tight font-extrabold break-words">
                 {socialName}
               </p>
-              <p className="text-[13px] font-semibold">Scan to check in</p>
+              <p className="text-[13px] font-semibold">{scanToCheckIn}</p>
               <p className="text-[11px] break-all text-outline">{shortLink}</p>
             </li>
           ))}
         </ul>
       </main>
-    </>
+    </div>
   );
 }

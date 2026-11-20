@@ -1,10 +1,5 @@
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import { renderWithLocale as render } from "@/i18n/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   COPIED_CONFIRMATION_VISIBLE_MS,

@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { getMessages } from "@/i18n/getLocale";
+import type { Messages } from "@/i18n/messages";
 import { readHostAccess } from "@/server/auth/currentHost";
 import { installationHasAnyHost } from "@/server/hosts/hostDirectory";
 import { LoginForm } from "./LoginForm";
@@ -10,32 +12,31 @@ export async function LoginPanel() {
   const hostAccess = await readHostAccess();
   if (hostAccess.status !== "signed_out") redirect("/setup");
 
-  return (await installationHasAnyHost()) ? <LoginForm /> : <NoHostsYet />;
+  return (await installationHasAnyHost()) ? (
+    <LoginForm />
+  ) : (
+    <NoHostsYet messages={await getMessages()} />
+  );
 }
 
-function NoHostsYet() {
+function NoHostsYet({ messages }: { messages: Messages }) {
+  const text = messages.host.login.noHosts;
   return (
     <>
       <h1
         id="login-heading"
         className="text-[32px] font-extrabold tracking-[-0.01em]"
       >
-        No hosts yet
+        {text.title}
       </h1>
-      <p className="text-muted">
-        Nobody can sign in until the first social and its manager exist. Whoever
-        runs this app creates them from a terminal in the project folder:
-      </p>
+      <p className="text-muted">{text.text}</p>
       <pre className="overflow-x-auto rounded-2xl border border-inner-border bg-inner p-3.5 text-sm text-text">
         <code>
           pnpm create-social --name &quot;Your social&quot; --manager-email
           you@example.com --manager-name &quot;Your name&quot;
         </code>
       </pre>
-      <p className="text-sm text-muted">
-        Then reload this page and sign in with that email. Full steps are in
-        docs/auth.md.
-      </p>
+      <p className="text-sm text-muted">{text.then}</p>
     </>
   );
 }

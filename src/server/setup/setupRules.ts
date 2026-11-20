@@ -9,6 +9,7 @@ import {
 } from "@/engine/session";
 import { genderSchema, personNameSchema } from "@/server/participantRules";
 import { SKILL_LEVELS } from "@/server/skillLevels";
+import { en } from "@/i18n/messages/en";
 
 // Validation and the draft config shape for the Setup screen (plan §4, §7 M4).
 // Shared by the server actions and the client form, so both apply the same
@@ -45,16 +46,16 @@ export function shortLabelSchema(emptyMessage: string) {
         .string()
         .min(1, { error: emptyMessage })
         .max(SHORT_LABEL_MAX_LENGTH, {
-          error: `Use at most ${SHORT_LABEL_MAX_LENGTH} characters.`,
+          error: en.validation.nameTooLong(SHORT_LABEL_MAX_LENGTH),
         })
         .refine((label) => !CONTROL_CHARACTERS.test(label), {
-          error: "Remove special characters.",
+          error: en.validation.nameHasControlCharacters,
         }),
     );
 }
 
 function wholeMinutesSchema(range: { min: number; max: number }) {
-  const message = `Use a whole number of minutes from ${range.min} to ${range.max}.`;
+  const message = en.validation.wholeMinutes(range.min, range.max);
   return z
     .number({ error: message })
     .int({ error: message })
@@ -147,10 +148,10 @@ const locationSchema = z
     z
       .string()
       .max(LOCATION_MAX_LENGTH, {
-        error: `Use at most ${LOCATION_MAX_LENGTH} characters.`,
+        error: en.validation.nameTooLong(LOCATION_MAX_LENGTH),
       })
       .refine((location) => !CONTROL_CHARACTERS.test(location), {
-        error: "Remove special characters.",
+        error: en.validation.nameHasControlCharacters,
       }),
   )
   .transform((location) => (location === "" ? null : location));
@@ -159,7 +160,7 @@ const locationSchema = z
 export const saveSessionDraftInputSchema = z
   .object({
     sessionId: z.uuid(),
-    name: shortLabelSchema("Enter a session name."),
+    name: shortLabelSchema(en.validation.sessionNameRequired),
     location: locationSchema,
     hostName: shortLabelSchema("Enter the host's name."),
     plannedStart: z.iso.datetime({ offset: true }),
@@ -182,8 +183,12 @@ export type ValidSessionDraft = z.output<typeof saveSessionDraftInputSchema>;
 /** Short Setup saves session-local courts; planned times remain draft placeholders. */
 export const saveSimpleSessionDraftInputSchema = z.object({
   sessionId: z.uuid(),
-  name: shortLabelSchema("Enter a session name."),
-  courtCount: z.number().int().min(1).max(1000),
+  name: shortLabelSchema(en.validation.sessionNameRequired),
+  courtCount: z
+    .number({ error: en.validation.courtCountRange(1, 1000) })
+    .int({ error: en.validation.courtCountRange(1, 1000) })
+    .min(1, { error: en.validation.courtCountRange(1, 1000) })
+    .max(1000, { error: en.validation.courtCountRange(1, 1000) }),
   durationMinutes: wholeMinutesSchema({
     min: 1,
     max: MAX_SESSION_DURATION_MINUTES,
@@ -197,7 +202,7 @@ export type SaveSimpleSessionDraftInput = z.input<
 /** A new draft: the browser picks the default times (it knows the host's time zone). */
 export const startSessionDraftInputSchema = z
   .object({
-    name: shortLabelSchema("Enter a session name."),
+    name: shortLabelSchema(en.validation.sessionNameRequired),
     plannedStart: z.iso.datetime({ offset: true }),
     plannedEnd: z.iso.datetime({ offset: true }),
   })
@@ -226,9 +231,9 @@ export type AddClubCourtInput = z.input<typeof addClubCourtInputSchema>;
  * already in the session (NAME_ALREADY_IN_SESSION).
  */
 export const draftParticipantInputSchema = z.object({
-  firstName: personNameSchema("Enter a first name."),
-  lastName: personNameSchema("Enter a last name."),
-  skillLevel: z.enum(SKILL_LEVELS, { error: "Choose a level." }),
+  firstName: personNameSchema(en.validation.hostFirstNameRequired),
+  lastName: personNameSchema(en.validation.hostLastNameRequired),
+  skillLevel: z.enum(SKILL_LEVELS, { error: en.validation.hostLevelRequired }),
   gender: genderSchema,
 });
 
@@ -388,7 +393,7 @@ export type ApplySavedSetupInput = z.input<typeof applySavedSetupInputSchema>;
 
 /** Shown when "Start a new session" opens the draft a co-host already started. */
 export function coHostDraftNotice(draftName: string): string {
-  return `A co-host already started \u201c${draftName}\u201d. You're editing it together.`;
+  return en.serverMessages.setup.coHostDraft(draftName);
 }
 
 /** After applying a saved setup: "Court 5 is no longer available and was left out." */
@@ -407,7 +412,7 @@ export const setDraftParticipantDetailsInputSchema = z.object({
   sessionId: z.uuid(),
   participantId: z.uuid(),
   gender: genderSchema,
-  skillLevel: z.enum(SKILL_LEVELS, { error: "Choose a level." }),
+  skillLevel: z.enum(SKILL_LEVELS, { error: en.validation.hostLevelRequired }),
   expectedDraftRevision: z.number().int().nonnegative(),
 });
 export type SetDraftParticipantDetailsInput = z.input<

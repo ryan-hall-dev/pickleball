@@ -9,12 +9,9 @@ import {
   SECONDARY_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
 import { InitialsAvatar } from "@/components/InitialsAvatar";
-import {
-  GENDERS,
-  GENDER_LABELS,
-  genderSchema,
-  type Gender,
-} from "@/server/participantRules";
+import { useMessages } from "@/i18n/LocaleProvider";
+import type { Messages } from "@/i18n/messages";
+import { GENDERS, genderSchema, type Gender } from "@/server/participantRules";
 import { SkillChip } from "@/components/SkillChip";
 import { settleWithin } from "@/lib/settleWithin";
 import {
@@ -88,6 +85,7 @@ export function PendingCheckinTray({
     missingGender?: Gender,
   ) => Promise<HostCheckinDecisionResult>;
 }) {
+  const text = useMessages().host.tray;
   const [state, dispatch] = useReducer(trayReducer, INITIAL_TRAY_STATE);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -154,12 +152,10 @@ export function PendingCheckinTray({
         </span>
         <div className="min-w-0 flex-[1_1_240px]">
           <h2 id={HEADING_ID} className="text-xl font-bold">
-            Check-ins waiting <span className="sr-only">({waitingCount})</span>
+            {text.heading} <span className="sr-only">({waitingCount})</span>
           </h2>
           {isWaiting && (
-            <p className="mt-0.5 text-[13px] text-muted">
-              Approve to add them to Who&apos;s playing. Oldest first.
-            </p>
+            <p className="mt-0.5 text-[13px] text-muted">{text.intro}</p>
           )}
         </div>
         {/* Always in the header, empty or not (decision #8, H02). */}
@@ -168,15 +164,12 @@ export function PendingCheckinTray({
           className={`${OUTLINE_BUTTON_CLASS_NAME} gap-2 whitespace-nowrap`}
         >
           <QrCodeIcon />
-          Show QR code
+          {text.showQrCode}
         </Link>
       </div>
       {state.isRefreshFailing && (
         <div className="mt-3">
-          <AttentionMessage>
-            Couldn&apos;t refresh check-ins. Check your connection; this retries
-            every few seconds.
-          </AttentionMessage>
+          <AttentionMessage>{text.refreshFailing}</AttentionMessage>
         </div>
       )}
       {state.rows.length > 0 ? (
@@ -200,14 +193,11 @@ export function PendingCheckinTray({
       ) : state.hasLoaded ? (
         <div className="mt-3.5 flex items-center gap-3 rounded-[18px] border border-dashed border-outline px-4 py-3.5 text-sm text-text-soft">
           <InfoBadge />
-          <span>
-            No check-ins waiting. Players scan the social&apos;s QR code or tap
-            the sticker to check in.
-          </span>
+          <span>{text.empty}</span>
         </div>
       ) : (
         !state.isRefreshFailing && (
-          <p className="mt-3 text-sm text-muted">Looking for check-ins…</p>
+          <p className="mt-3 text-sm text-muted">{text.looking}</p>
         )
       )}
     </section>
@@ -298,6 +288,8 @@ function PendingCheckinRow({
   ) => void;
   onDecidedRowExpired: (checkinRequestId: string) => void;
 }) {
+  const messages = useMessages();
+  const text = messages.host.tray;
   const { request } = row;
   const [missingGender, setMissingGender] = useState("");
   const view = trayRowView(row);
@@ -357,7 +349,7 @@ function PendingCheckinRow({
               {view.showsAddedByAnotherHost && (
                 <p className="mt-1.5 flex items-center gap-1.5 text-[13px] text-text-soft">
                   <InfoBadge />
-                  Added by another host a moment ago.
+                  {text.addedByAnotherHost}
                 </p>
               )}
             </>
@@ -366,16 +358,16 @@ function PendingCheckinRow({
       </div>
       {!request.gender && !isDecided && (
         <select
-          aria-label={`Gender for ${name}`}
+          aria-label={text.genderFor(name)}
           disabled={isWorking}
           value={missingGender}
           onChange={(event) => setMissingGender(event.target.value)}
           className={INNER_BOX_TEXT_INPUT_CLASS_NAME}
         >
-          <option value="">Choose gender…</option>
+          <option value="">{text.chooseGender}</option>
           {GENDERS.map((gender) => (
             <option key={gender} value={gender}>
-              {GENDER_LABELS[gender]}
+              {messages.genders[gender]}
             </option>
           ))}
         </select>
@@ -419,39 +411,34 @@ function RequestDetails({
   request: PendingCheckinRequest;
   nowMs: number;
 }) {
+  const messages = useMessages();
   return (
     <div className="mt-[3px] flex flex-wrap items-center gap-1.5 text-xs text-muted">
       <SkillChip skillLevel={request.skillLevel} />
       <span>
-        {request.gender ? GENDER_LABELS[request.gender] : "Gender missing"}
+        {request.gender
+          ? messages.genders[request.gender]
+          : messages.host.tray.genderMissing}
       </span>
       <span className="tabular-nums">
-        {relativeTimeLabel(request.createdAt, nowMs)}
+        {relativeTimeLabel(request.createdAt, nowMs, messages.host.tray)}
       </span>
     </div>
   );
 }
 
-const FAILED_ACTION_WORDS: Record<TrayDecisionAction, string> = {
-  approve: "Couldn't approve.",
-  reject: "Couldn't reject.",
-};
-
 function RowAttention({ attention }: { attention: TrayRowAttention }) {
+  const text = useMessages().host.tray;
   const [headline, detail] =
     attention === "nameAlreadyInSession"
-      ? [
-          "This name is already checked in to this session.",
-          "They can't be added twice.",
-        ]
+      ? [text.nameAlreadyIn, text.cantAddTwice]
       : attention === "sessionChanged"
-        ? [
-            "The session changed before this was saved.",
-            "Nobody was added. Check the latest courts, then approve again.",
-          ]
+        ? [text.sessionChanged, text.sessionChangedDetail]
         : [
-            FAILED_ACTION_WORDS[attention.failedAction],
-            "Check your connection and retry.",
+            attention.failedAction === "approve"
+              ? text.couldNotApprove
+              : text.couldNotReject,
+            text.checkConnection,
           ];
   const isFailure = attention !== "nameAlreadyInSession";
   return (
@@ -473,13 +460,8 @@ function RowAttention({ attention }: { attention: TrayRowAttention }) {
   );
 }
 
-const DECIDED_MESSAGES: Record<TrayDecidedOutcome, string> = {
-  approved: "Added to Who's playing",
-  rejected: 'Check-in rejected. The player sees "Please speak to the host".',
-  decidedElsewhere: "Already decided by another host",
-};
-
 function DecidedMessage({ outcome }: { outcome: TrayDecidedOutcome }) {
+  const text = useMessages().host.tray;
   const isApproved = outcome === "approved";
   return (
     <p
@@ -495,7 +477,7 @@ function DecidedMessage({ outcome }: { outcome: TrayDecidedOutcome }) {
       ) : (
         <InfoBadge />
       )}
-      {DECIDED_MESSAGES[outcome]}
+      {text[outcome]}
     </p>
   );
 }
@@ -511,27 +493,24 @@ function InfoBadge() {
   );
 }
 
-const BUSY_WORDS: Record<TrayDecisionAction, string> = {
-  approve: "Approving…",
-  reject: "Rejecting…",
-};
-
 function rowButtonWords(
   rowButton: TrayRowButton,
   name: string,
+  messages: Messages,
 ): { label: string; accessibleName: string } {
+  const text = messages.host.tray;
   switch (rowButton.kind) {
     case "approve":
-      return { label: "Approve", accessibleName: `Approve ${name}` };
+      return { label: text.approve, accessibleName: text.approveName(name) };
     case "reject":
-      return { label: "Reject", accessibleName: `Reject ${name}` };
+      return { label: text.reject, accessibleName: text.rejectName(name) };
     case "retry":
       return {
-        label: "Retry",
+        label: messages.host.common.retry,
         accessibleName:
           rowButton.action === "approve"
-            ? `Retry approving ${name}`
-            : `Retry rejecting ${name}`,
+            ? text.retryApproving(name)
+            : text.retryRejecting(name),
       };
   }
 }
@@ -545,7 +524,8 @@ function RowButton({
   name: string;
   onPress: () => void;
 }) {
-  const { label, accessibleName } = rowButtonWords(rowButton, name);
+  const messages = useMessages();
+  const { label, accessibleName } = rowButtonWords(rowButton, name, messages);
   const isBlue = rowButton.kind !== "reject";
   return (
     <button
@@ -558,7 +538,9 @@ function RowButton({
       {rowButton.isBusy ? (
         <>
           <Spinner />
-          {BUSY_WORDS[rowButton.action]}
+          {rowButton.action === "approve"
+            ? messages.host.tray.approving
+            : messages.host.tray.rejecting}
         </>
       ) : (
         <>

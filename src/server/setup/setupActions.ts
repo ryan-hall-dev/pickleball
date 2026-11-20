@@ -49,6 +49,7 @@ import {
   type StartSessionDraftInput,
 } from "./setupRules";
 import { sessionCourtsFromCount } from "./sessionCourtsFromCount";
+import { en } from "@/i18n/messages/en";
 
 // Setup screen writes (plan §7 M4). Every action verifies the caller as a host
 // with getUser() first, then writes with the service-role client
@@ -121,9 +122,8 @@ export type DraftAttendanceResult =
 const SETUP_PATH = "/setup";
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 const POSTGRES_CHECK_VIOLATION = "23514";
-const SOMETHING_WENT_WRONG = "Something went wrong. Try again in a moment.";
-const DRAFT_NOT_OPEN =
-  "This draft is no longer open (it was discarded or started). Reload the page.";
+const SOMETHING_WENT_WRONG = en.serverMessages.somethingWentWrong;
+const DRAFT_NOT_OPEN = en.serverMessages.setup.draftNotOpen;
 /** Raised by the draft write functions when the session isn't the social's open draft. */
 const DRAFT_NOT_OPEN_ERROR = "DRAFT_NOT_OPEN";
 /** Raised by remove_draft_participant when the participant's session is no longer a draft. */
@@ -133,7 +133,7 @@ const PARTICIPANT_NOT_FOUND_ERROR = "PARTICIPANT_NOT_FOUND";
 /** Raised by every participant write when the name is already in the session. */
 const NAME_ALREADY_IN_SESSION_ERROR = "NAME_ALREADY_IN_SESSION";
 const SAVED_BUT_LIST_NOT_REFRESHED =
-  "Saved, but the list couldn't refresh. Reload the page.";
+  en.serverMessages.setup.savedButListNotRefreshed;
 const SAVED_SETUP_NOT_FOUND =
   "That saved setup isn't available any more. Reload the page.";
 /** Raised by apply_saved_setup when the setup isn't the social's. */
@@ -141,8 +141,7 @@ const SAVED_SETUP_NOT_FOUND_ERROR = "SAVED_SETUP_NOT_FOUND";
 const MS_PER_MINUTE = 60_000;
 /** Raised by the draft settings writes when the expected revision is stale. */
 const DRAFT_CHANGED_ELSEWHERE_ERROR = "DRAFT_CHANGED_ELSEWHERE";
-const DRAFT_CHANGED_ELSEWHERE =
-  "Setup was changed by another host, tab or device. Reload to see the latest \u2014 your unsaved changes here will be lost.";
+const DRAFT_CHANGED_ELSEWHERE = en.serverMessages.setup.changedElsewhere;
 const draftRevisionSchema = z.number().int().min(0);
 
 /** The new revision a draft settings write returns ({ draftRevision }). */
@@ -156,8 +155,7 @@ function draftRevisionFrom(data: unknown): number {
   return parsed.data.draftRevision;
 }
 const ONLY_MANAGERS_ADD_COURTS = "Only the social manager can add courts.";
-const LIVE_SESSION_EXISTS =
-  "Your social already has a live session. End it before setting up a new one.";
+const LIVE_SESSION_EXISTS = en.serverMessages.setup.liveSessionExists;
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -173,7 +171,7 @@ function logActionFailure(label: string, host: SignedInHost, error: unknown) {
 }
 
 function firstIssueMessage(error: z.ZodError): string {
-  return error.issues[0]?.message ?? "Check the highlighted fields.";
+  return error.issues[0]?.message ?? en.validation.checkHighlightedFields;
 }
 
 /** The social's draft, or null when it's another social's or isn't a draft any more. */
@@ -372,7 +370,10 @@ export async function saveSessionDraft(
       return { ok: false, message: DRAFT_CHANGED_ELSEWHERE, isConflict: true };
     }
     if (error?.code === POSTGRES_CHECK_VIOLATION) {
-      return { ok: false, message: "Check the session details and try again." };
+      return {
+        ok: false,
+        message: en.serverMessages.setup.checkSessionDetails,
+      };
     }
     if (error) throw new Error(`Saving the draft failed: ${error.message}`);
     return { ok: true, draftRevision: draftRevisionFrom(data) };
@@ -449,7 +450,10 @@ export async function saveSimpleSessionDraft(
       return { ok: false, message: DRAFT_CHANGED_ELSEWHERE, isConflict: true };
     }
     if (error?.code === POSTGRES_CHECK_VIOLATION) {
-      return { ok: false, message: "Check the session details and try again." };
+      return {
+        ok: false,
+        message: en.serverMessages.setup.checkSessionDetails,
+      };
     }
     if (error) throw new Error(`Saving the draft failed: ${error.message}`);
     return { ok: true, draftRevision: draftRevisionFrom(data) };
@@ -632,7 +636,7 @@ function nameAlreadyInSessionMessage(
   firstName: string,
   lastName: string,
 ): string {
-  return `Someone named ${firstName} ${lastName} is already in this session. Add something to tell them apart, like an initial.`;
+  return en.serverMessages.setup.nameAlreadyInSession(firstName, lastName);
 }
 
 /**

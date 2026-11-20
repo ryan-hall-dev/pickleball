@@ -10,18 +10,46 @@ const { vi } = (await import(
   `${messagesDirectory}/vi.ts`
 )) as typeof import("../src/i18n/messages/vi");
 
-const SAMPLE_ARGUMENTS: Record<string, unknown[]> = {
-  nameTooLong: [50],
-  minutesLeft: [80],
-  sessionMinutes: [120],
-  minutes: [120],
-  startedEndUnavailable: ["18:00"],
-  welcomeHeading: ["Riverside Pickleball"],
-  sent: ["Saturday Social"],
-  checkedInTo: ["Saturday Social"],
-  "checkin.alreadyCheckedIn.title": ["Saturday Social"],
-  nothingMore: ["Linh"],
+// A sample for each parameter name used by the message functions.
+const SAMPLE_VALUES: Record<string, unknown> = {
+  maxLength: 50,
+  min: 1,
+  max: 720,
+  minutes: 12,
+  hours: 1,
+  seconds: 42,
+  digits: 6,
+  count: 8,
+  players: 12,
+  courts: "3",
+  courtNumber: "2",
+  team: "A",
+  player: 1,
+  startTime: "18:00",
+  name: "Linh Tran",
+  firstName: "Linh",
+  lastName: "Tran",
+  hostName: "Mai",
+  displayName: "Mai Le",
+  email: "mai@example.com",
+  sessionName: "Saturday Social",
+  draftName: "Saturday Social",
+  socialName: "Riverside Pickleball",
+  courtName: "Court 2",
+  courtNames: "Court 1, Court 2",
+  shortLink: "pickle.example/t/ab12cd",
+  description: "Adding Linh Tran",
+  message: "Check your connection and retry.",
 };
+
+/** "(firstName: string, lastName: string) => …" → ["firstName", "lastName"] */
+function parameterNames(messageFunction: (...values: never[]) => string) {
+  const parameters = /^\(([^)]*)\)/.exec(messageFunction.toString())?.[1];
+  return (parameters ?? "")
+    .split(",")
+    .map((parameter) => parameter.trim().split(/[\s:=]/)[0])
+    .filter(Boolean);
+}
 
 type Tree = { [key: string]: unknown };
 const rows: Array<{ key: string; en: string; vi: string }> = [];
@@ -29,8 +57,12 @@ const rows: Array<{ key: string; en: string; vi: string }> = [];
 function sample(key: string, value: unknown, path: string): string {
   if (typeof value === "string") return value;
   if (typeof value === "function") {
-    const values = SAMPLE_ARGUMENTS[path] ?? SAMPLE_ARGUMENTS[key] ?? ["Linh"];
-    return String(value(...values));
+    const values = parameterNames(value as () => string).map((parameter) => {
+      if (!(parameter in SAMPLE_VALUES))
+        throw new Error(`No sample for "${parameter}" at ${path}`);
+      return SAMPLE_VALUES[parameter];
+    });
+    return String((value as (...values: unknown[]) => string)(...values));
   }
   throw new Error(`Unexpected message at ${path}`);
 }

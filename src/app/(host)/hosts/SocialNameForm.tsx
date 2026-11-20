@@ -12,6 +12,8 @@ import {
   updateSocialName,
   type UpdateSocialNameFormState,
 } from "@/server/socials/socialActions";
+import { useMessages } from "@/i18n/LocaleProvider";
+import { translateMessage } from "@/i18n/messages";
 
 const INITIAL_STATE: UpdateSocialNameFormState = { status: "idle" };
 
@@ -21,6 +23,8 @@ export function SocialNameForm({ socialName }: { socialName: string }) {
     updateSocialName,
     INITIAL_STATE,
   );
+  const messages = useMessages();
+  const text = messages.host.hosts;
   const fieldError =
     formState.status === "error" ? formState.fieldError : undefined;
 
@@ -35,7 +39,7 @@ export function SocialNameForm({ socialName }: { socialName: string }) {
     >
       <div className="flex flex-col gap-1.5">
         <label htmlFor="social-name" className={FIELD_LABEL_CLASS_NAME}>
-          Name
+          {text.name}
         </label>
         <input
           id="social-name"
@@ -55,16 +59,20 @@ export function SocialNameForm({ socialName }: { socialName: string }) {
         />
         {fieldError && (
           <AttentionMessage id="social-name-error">
-            {fieldError}
+            {translateMessage(fieldError, messages)}
           </AttentionMessage>
         )}
       </div>
       <div aria-live="polite">
         {formState.status === "error" && (
-          <AttentionMessage>{formState.message}</AttentionMessage>
+          <AttentionMessage>
+            {translateMessage(formState.message, messages)}
+          </AttentionMessage>
         )}
         {formState.status === "success" && (
-          <p className="text-sm text-lime-soft">{formState.message}</p>
+          <p className="text-sm text-lime-soft">
+            {translateMessage(formState.message, messages)}
+          </p>
         )}
       </div>
       <button
@@ -72,7 +80,7 @@ export function SocialNameForm({ socialName }: { socialName: string }) {
         disabled={isPending}
         className={SECONDARY_BUTTON_CLASS_NAME}
       >
-        {isPending ? "Saving…" : "Save name"}
+        {isPending ? messages.host.common.saving : text.saveName}
       </button>
     </form>
   );

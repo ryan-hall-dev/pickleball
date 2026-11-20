@@ -1,4 +1,5 @@
 import type { Database } from "@/lib/database.types";
+import { en } from "@/i18n/messages/en";
 
 export type HostRole = Database["public"]["Enums"]["host_role"];
 
@@ -40,7 +41,7 @@ export function authorizeHostAccess(
 }
 
 export const HOST_ACCESS_DENIAL_MESSAGES: Record<HostAccessDenial, string> = {
-  SIGNED_OUT: "Your session has ended. Sign in again.",
-  NOT_A_HOST: "You're not a host here. Ask your social manager for an invite.",
-  NOT_A_MANAGER: "Only the social manager can do this.",
+  SIGNED_OUT: en.serverMessages.access.signedOut,
+  NOT_A_HOST: en.serverMessages.access.notAHost,
+  NOT_A_MANAGER: en.serverMessages.access.notAManager,
 };

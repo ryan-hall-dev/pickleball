@@ -1,4 +1,7 @@
+"use client";
+
 import { PRIMARY_BUTTON_CLASS_NAME } from "@/components/controlStyles";
+import { useMessages } from "@/i18n/LocaleProvider";
 
 /**
  * Shown from the planned end until a host confirms End. The deadline never
@@ -14,6 +17,8 @@ export function TimeUpNotice({
   disabled: boolean;
   onEnd: () => void;
 }) {
+  const messages = useMessages();
+  const text = messages.host.live.timeUp;
   const blocked = activeCourtNames.length > 0;
   return (
     <section
@@ -27,17 +32,12 @@ export function TimeUpNotice({
         >
           !
         </span>
-        Session time is up
+        {text.title}
       </h2>
-      <p className="mt-2 text-sm text-orange-text">
-        No new groups can be called and no new games can start. Waiting times
-        keep counting until you end the session.
-      </p>
+      <p className="mt-2 text-sm text-orange-text">{text.text}</p>
       {blocked && (
         <p id="time-up-active-games" className="mt-2 text-sm text-orange-text">
-          Still on court: {activeCourtNames.join(", ")}. Nothing is ended for
-          you. Tap Game finished on each when it ends (or use Court options),
-          then End session unlocks.
+          {text.stillOnCourt(activeCourtNames.join(", "))}
         </p>
       )}
       <button
@@ -47,7 +47,7 @@ export function TimeUpNotice({
         aria-describedby={blocked ? "time-up-active-games" : undefined}
         onClick={onEnd}
       >
-        End session
+        {messages.host.live.endSession}
       </button>
     </section>
   );

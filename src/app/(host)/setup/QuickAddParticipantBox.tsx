@@ -15,12 +15,10 @@ import {
   SECONDARY_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
 import { InitialsAvatar } from "@/components/InitialsAvatar";
-import {
-  GENDERS,
-  GENDER_LABELS,
-  PERSON_NAME_MAX_LENGTH,
-} from "@/server/participantRules";
-import { SKILL_LEVEL_LABELS, SKILL_LEVELS } from "@/server/skillLevels";
+import { useMessages } from "@/i18n/LocaleProvider";
+import { translateMessage } from "@/i18n/messages";
+import { GENDERS, PERSON_NAME_MAX_LENGTH } from "@/server/participantRules";
+import { SKILL_LEVELS } from "@/server/skillLevels";
 import type { DraftParticipant } from "@/server/setup/setupDraft";
 import type { DraftParticipantInput } from "@/server/setup/setupRules";
 import {
@@ -52,6 +50,8 @@ export function QuickAddParticipantBox({
   onAddParticipant: (participant: DraftParticipantInput) => void;
   onRemoveParticipant: (participant: DraftParticipant) => void;
 }) {
+  const messages = useMessages();
+  const text = messages.host.setup.quickAdd;
   const [fieldErrors, setFieldErrors] = useState<ParticipantFormErrors>({});
   const firstNameInputRef = useRef<HTMLInputElement>(null);
 
@@ -82,9 +82,9 @@ export function QuickAddParticipantBox({
     <div className="mt-[18px] rounded-[20px] border border-inner-border bg-inner p-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h3 id="quick-add-participant-heading" className="text-base font-bold">
-          Add a player
+          {text.heading}
         </h3>
-        <span className="text-[13px] text-muted">Plays this session only</span>
+        <span className="text-[13px] text-muted">{text.thisSessionOnly}</span>
       </div>
       <form
         onSubmit={submit}
@@ -94,7 +94,7 @@ export function QuickAddParticipantBox({
       >
         <ParticipantNameField
           id="participant-first-name"
-          label="First name"
+          label={text.firstName}
           value={form.firstName}
           error={fieldErrors.firstName}
           inputRef={firstNameInputRef}
@@ -102,14 +102,14 @@ export function QuickAddParticipantBox({
         />
         <ParticipantNameField
           id="participant-last-name"
-          label="Last name"
+          label={text.lastName}
           value={form.lastName}
           error={fieldErrors.lastName}
           onChange={(value) => updateField("lastName", value)}
         />
         <div className="flex flex-[1_1_150px] flex-col gap-1.5">
           <label htmlFor="participant-skill" className={FIELD_LABEL_CLASS_NAME}>
-            Skill
+            {text.skill}
           </label>
           <select
             id="participant-skill"
@@ -121,16 +121,16 @@ export function QuickAddParticipantBox({
             }
             className={INNER_BOX_TEXT_INPUT_CLASS_NAME}
           >
-            <option value="">Choose…</option>
+            <option value="">{messages.host.common.choose}</option>
             {SKILL_LEVELS.map((skillLevel) => (
               <option key={skillLevel} value={skillLevel}>
-                {SKILL_LEVEL_LABELS[skillLevel]}
+                {messages.levels[skillLevel]}
               </option>
             ))}
           </select>
           {fieldErrors.skillLevel && (
             <AttentionMessage id="participant-skill-error">
-              {fieldErrors.skillLevel}
+              {translateMessage(fieldErrors.skillLevel, messages)}
             </AttentionMessage>
           )}
         </div>
@@ -139,7 +139,7 @@ export function QuickAddParticipantBox({
             htmlFor="participant-gender"
             className={FIELD_LABEL_CLASS_NAME}
           >
-            Gender
+            {text.gender}
           </label>
           <select
             id="participant-gender"
@@ -151,16 +151,16 @@ export function QuickAddParticipantBox({
             }
             className={INNER_BOX_TEXT_INPUT_CLASS_NAME}
           >
-            <option value="">Choose…</option>
+            <option value="">{messages.host.common.choose}</option>
             {GENDERS.map((gender) => (
               <option key={gender} value={gender}>
-                {GENDER_LABELS[gender]}
+                {messages.genders[gender]}
               </option>
             ))}
           </select>
           {fieldErrors.gender && (
             <AttentionMessage id="participant-gender-error">
-              {fieldErrors.gender}
+              {translateMessage(fieldErrors.gender, messages)}
             </AttentionMessage>
           )}
         </div>
@@ -169,11 +169,11 @@ export function QuickAddParticipantBox({
           type="submit"
           className={`${SECONDARY_BUTTON_CLASS_NAME} mt-[25px]`}
         >
-          Add player
+          {text.addPlayer}
         </button>
       </form>
       {participants.length > 0 && (
-        <ul aria-label="Players" className="mt-3.5 flex flex-wrap gap-2">
+        <ul aria-label={text.players} className="mt-3.5 flex flex-wrap gap-2">
           {participants.map((participant) => (
             <ParticipantChip
               key={participant.participantId}
@@ -203,6 +203,7 @@ function ParticipantNameField({
   inputRef?: Ref<HTMLInputElement>;
   onChange: (value: string) => void;
 }) {
+  const messages = useMessages();
   const errorId = `${id}-error`;
   return (
     <div className="flex flex-[1_1_160px] flex-col gap-1.5">
@@ -223,7 +224,11 @@ function ParticipantNameField({
         aria-describedby={error ? errorId : undefined}
         className={INNER_BOX_TEXT_INPUT_CLASS_NAME}
       />
-      {error && <AttentionMessage id={errorId}>{error}</AttentionMessage>}
+      {error && (
+        <AttentionMessage id={errorId}>
+          {translateMessage(error, messages)}
+        </AttentionMessage>
+      )}
     </div>
   );
 }
@@ -237,22 +242,24 @@ function ParticipantChip({
   isPending: boolean;
   onRemove: () => void;
 }) {
+  const messages = useMessages();
+  const text = messages.host.setup.quickAdd;
   const fullName = `${participant.firstName} ${participant.lastName}`;
   const label = participant.skillLevel
-    ? SKILL_LEVEL_LABELS[participant.skillLevel]
-    : "No level";
+    ? messages.levels[participant.skillLevel]
+    : text.noLevel;
   return (
     <li className="flex max-w-full min-w-0 items-center gap-2 rounded-full border border-blue-edge bg-blue-surface p-1">
       <InitialsAvatar name={fullName} tone="next" size="chip" />
       <span className="min-w-0 truncate text-sm font-semibold">{fullName}</span>
       <span className="shrink-0 text-[11px] font-bold tracking-[0.08em] text-link uppercase">
         {isPending
-          ? "Adding…"
-          : `${label} · ${participant.gender ? GENDER_LABELS[participant.gender] : "Gender missing"}`}
+          ? text.adding
+          : `${label} · ${participant.gender ? messages.genders[participant.gender] : text.genderMissing}`}
       </span>
       <button
         type="button"
-        aria-label={`Remove ${fullName}`}
+        aria-label={text.remove(fullName)}
         disabled={isPending}
         onClick={onRemove}
         // 30px in the design; 44px where the pointer is a finger.

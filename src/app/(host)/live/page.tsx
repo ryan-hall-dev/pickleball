@@ -1,20 +1,16 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { hostPageTitle } from "@/i18n/getLocale";
+import { HostLoading } from "../HostLoading";
 import { readLiveSession } from "@/server/live/liveActions";
 import { LiveSession } from "./LiveSession";
 
-export const metadata: Metadata = {
-  title: "Live courts · Pickleball Social Manager",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: await hostPageTitle("live") };
+}
 export default function LivePage() {
   return (
-    <Suspense
-      fallback={
-        <p className="text-muted" role="status">
-          Loading live courts…
-        </p>
-      }
-    >
+    <Suspense fallback={<HostLoading page="live" />}>
       <LiveContent />
     </Suspense>
   );

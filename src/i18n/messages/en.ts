@@ -3,6 +3,9 @@
 // Values are plain strings, or functions where a name or number is inserted.
 // Names, social names, session names and links are inserted as entered.
 
+import { hostEn } from "./hostEn";
+import { engineErrorsEn, serverMessagesEn } from "./serverEn";
+
 export const en = {
   languageSwitch: {
     label: "Language",
@@ -28,6 +31,18 @@ export const en = {
     genderRequired: "Choose male or female.",
     nameTooLong: (maxLength: number) => `Use at most ${maxLength} characters.`,
     nameHasControlCharacters: "Remove special characters.",
+    hostFirstNameRequired: "Enter a first name.",
+    hostLastNameRequired: "Enter a last name.",
+    hostLevelRequired: "Choose a level.",
+    sessionNameRequired: "Enter a session name.",
+    wholeMinutes: (min: number, max: number) =>
+      `Use a whole number of minutes from ${min} to ${max}.`,
+    courtCountRange: (min: number, max: number) =>
+      `Use a whole number of courts from ${min} to ${max}.`,
+    validEmail: "Enter a valid email address.",
+    displayNameRequired: "Enter a display name.",
+    socialNameRequired: "Enter the social's name.",
+    checkHighlightedFields: "Check the highlighted fields.",
   },
   time: {
     minutesLeft: (minutes: number) => `${minutes} min left`,
@@ -113,6 +128,9 @@ export const en = {
     },
     tryAgain: "Try again",
   },
+  host: hostEn,
+  serverMessages: serverMessagesEn,
+  engineErrors: engineErrorsEn,
 };
 
 export type Messages = typeof en;

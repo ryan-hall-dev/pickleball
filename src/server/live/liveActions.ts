@@ -27,23 +27,23 @@ import {
   type ReadLiveResult,
   type LiveCommand,
 } from "./liveTypes";
+import { en } from "@/i18n/messages/en";
 
 const readSchema = z.object({
   sessionId: z.uuid().optional(),
   prepareCourtId: z.uuid().optional(),
 });
-const UNAVAILABLE =
-  "Couldn't refresh the session. Check your connection and retry.";
+const UNAVAILABLE = en.serverMessages.live.couldNotRefresh;
 
 export async function readLiveSession(
   input: { sessionId?: string; prepareCourtId?: string } = {},
 ): Promise<ReadLiveResult> {
   const authorization = await authorizeCurrentHost("host");
   if (!authorization.ok)
-    return { ok: false, message: "Sign in as a host to view this session." };
+    return { ok: false, message: en.serverMessages.live.signInToView };
   const parsed = readSchema.safeParse(input);
   if (!parsed.success)
-    return { ok: false, message: "Reload the session and try again." };
+    return { ok: false, message: en.serverMessages.live.reloadAndRetry };
   try {
     const client = await createSupabaseServerClient();
     let query = client
@@ -202,14 +202,14 @@ export async function writeLiveAction(
   if (!authorization.ok)
     return {
       ok: false,
-      message: "Sign in as a host to change this session.",
+      message: en.serverMessages.live.signInToChange,
       outcome: "rejected",
     };
   const parsed = liveWriteSchema.safeParse(input);
   if (!parsed.success)
     return {
       ok: false,
-      message: "Check the action and retry.",
+      message: en.serverMessages.live.checkAction,
       outcome: "rejected",
     };
   try {
@@ -218,14 +218,14 @@ export async function writeLiveAction(
     if (!log)
       return {
         ok: false,
-        message: "This session is not available.",
+        message: en.serverMessages.live.sessionNotAvailable,
         outcome: "rejected",
       };
     const replayed = replay(log.events);
     if (!replayed.ok || !isSimpleSocial(replayed.state.config))
       return {
         ok: false,
-        message: "This session cannot use the simple live controls.",
+        message: en.serverMessages.live.notSimpleSession,
         outcome: "rejected",
       };
     const at = Math.max(Date.now(), replayed.state.lastAt ?? 0);
@@ -245,7 +245,7 @@ export async function writeLiveAction(
       ) {
         return {
           ok: false,
-          message: "Only a game start or finish can be undone here.",
+          message: en.serverMessages.live.onlyStartOrFinishUndo,
           outcome: "rejected",
         };
       }
@@ -260,7 +260,7 @@ export async function writeLiveAction(
       ) {
         return {
           ok: false,
-          message: "That action ID was already used. Refresh and try again.",
+          message: en.serverMessages.live.actionIdUsed,
           outcome: "rejected",
         };
       }
@@ -282,7 +282,7 @@ export async function writeLiveAction(
       if (landed && landed.type !== eventTypes[command.kind]) {
         return {
           ok: false,
-          message: "That action ID was already used. Refresh and try again.",
+          message: en.serverMessages.live.actionIdUsed,
           outcome: "rejected",
         };
       }
@@ -292,7 +292,7 @@ export async function writeLiveAction(
       if (!action) {
         return {
           ok: false,
-          message: "The group or player changed. Refresh before trying again.",
+          message: en.serverMessages.live.groupOrPlayerChanged,
           outcome: "conflict",
         };
       }
@@ -313,11 +313,16 @@ export async function writeLiveAction(
     return result.reason === "UPDATED_BY_ANOTHER_HOST"
       ? {
           ok: false,
-          message: "Updated by another host. Review the refreshed session.",
+          message: en.serverMessages.live.updatedByAnotherHost,
           outcome: "conflict",
         }
       : // INVALID_ACTION: the engine refused it for good; nothing to retry.
-        { ok: false, message: result.error.message, outcome: "rejected" };
+        {
+          ok: false,
+          message: result.error.message,
+          outcome: "rejected",
+          engineErrorCode: result.error.code,
+        };
   } catch (error) {
     console.error("Writing live action failed", {
       actorUserId: authorization.host.userId,
@@ -325,8 +330,7 @@ export async function writeLiveAction(
     });
     return {
       ok: false,
-      message:
-        "Couldn't save that action. Retry it after checking your connection.",
+      message: en.serverMessages.live.couldNotSave,
       // The database may or may not have saved it: keep the event id for a retry.
       outcome: "unknown",
     };

@@ -7,6 +7,7 @@ import type {
   ListPendingCheckinsResult,
   PendingCheckinRequest,
 } from "@/server/checkin/hostCheckinResults";
+import { en, type Messages } from "@/i18n/messages/en";
 
 export type TrayDecisionAction = "approve" | "reject";
 
@@ -344,11 +345,15 @@ const MS_PER_MINUTE = 60_000;
 const MINUTES_PER_HOUR = 60;
 
 /** "Just now", "2 min ago", "1 h ago" (a clock a little ahead reads as just now). */
-export function relativeTimeLabel(createdAtIso: string, nowMs: number): string {
+export function relativeTimeLabel(
+  createdAtIso: string,
+  nowMs: number,
+  text: Messages["host"]["tray"] = en.host.tray,
+): string {
   const minutes = Math.floor(
     (nowMs - Date.parse(createdAtIso)) / MS_PER_MINUTE,
   );
-  if (minutes < 1) return "Just now";
-  if (minutes < MINUTES_PER_HOUR) return `${minutes} min ago`;
-  return `${Math.floor(minutes / MINUTES_PER_HOUR)} h ago`;
+  if (minutes < 1) return text.justNow;
+  if (minutes < MINUTES_PER_HOUR) return text.minutesAgo(minutes);
+  return text.hoursAgo(Math.floor(minutes / MINUTES_PER_HOUR));
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { SessionErrorCode } from "@/engine/session/errors";
 import type { Gender } from "@/server/participantRules";
 import type { SkillLevel } from "@/server/skillLevels";
 import { draftParticipantInputSchema } from "@/server/setup/setupRules";
@@ -103,7 +104,13 @@ export type LiveWriteInput = z.infer<typeof liveWriteSchema>;
 export type LiveWriteFailureOutcome = "rejected" | "conflict" | "unknown";
 export type LiveWriteResult =
   | { ok: true; seq: number; wasDuplicate: boolean }
-  | { ok: false; message: string; outcome: LiveWriteFailureOutcome };
+  | {
+      ok: false;
+      message: string;
+      outcome: LiveWriteFailureOutcome;
+      /** An engine rejection's code, so the browser can show it in the chosen language. */
+      engineErrorCode?: SessionErrorCode;
+    };
 
 /**
  * A host adds a player whose phone is missing or flat. `eventId` is kept by the

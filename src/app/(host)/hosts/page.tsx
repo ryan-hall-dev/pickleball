@@ -9,24 +9,21 @@ import { CheckinLinkCard, type CheckinLinkCardLink } from "./CheckinLinkCard";
 import { InviteHostForm } from "./InviteHostForm";
 import { RemoveHostButton } from "./RemoveHostButton";
 import { SocialNameForm } from "./SocialNameForm";
+import { getMessages, hostPageTitle } from "@/i18n/getLocale";
+import { HostLoading } from "../HostLoading";
+import { HostsHeading } from "./HostsHeading";
 
-export const metadata: Metadata = {
-  title: "Hosts · Pickleball Social Manager",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: await hostPageTitle("hosts") };
+}
 
 export default function HostsPage() {
   return (
     <>
-      <h1 className="text-[32px] font-extrabold tracking-[-0.01em]">Hosts</h1>
+      <HostsHeading />
       {/* Per-user data streams in behind its own boundary: on a client
           navigation the layout's boundary is already mounted and can't cover it. */}
-      <Suspense
-        fallback={
-          <p className="text-muted" aria-live="polite">
-            Loading hosts…
-          </p>
-        }
-      >
+      <Suspense fallback={<HostLoading page="hosts" />}>
         <HostsManagement />
       </Suspense>
     </>
@@ -34,7 +31,11 @@ export default function HostsPage() {
 }
 
 async function HostsManagement() {
-  const hostAccess = await readHostAccess();
+  const [hostAccess, messages] = await Promise.all([
+    readHostAccess(),
+    getMessages(),
+  ]);
+  const text = messages.host.hosts;
   // Fails closed: only hosts see the list (RLS also returns nothing otherwise).
   if (hostAccess.status !== "host") return null;
   const currentHost = hostAccess.host;
@@ -48,7 +49,7 @@ async function HostsManagement() {
         className={`${CARD_CLASS_NAME} flex flex-[999_1_480px] flex-col gap-4`}
       >
         <h2 id="hosts-list-heading" className="text-xl font-bold">
-          Who can host
+          {text.whoCanHost}
         </h2>
         <ul className="flex flex-col gap-2">
           {hosts.map((host) => {
@@ -61,7 +62,7 @@ async function HostsManagement() {
                 <span className="flex-1 font-semibold">
                   {host.displayName}
                   {isCurrentHost && (
-                    <span className="font-normal text-muted"> (you)</span>
+                    <span className="font-normal text-muted">{text.you}</span>
                   )}
                 </span>
                 <span
@@ -71,7 +72,7 @@ async function HostsManagement() {
                       : "bg-inner-border text-text"
                   }`}
                 >
-                  {host.role === "manager" ? "MANAGER" : "HOST"}
+                  {host.role === "manager" ? text.managerBadge : text.hostBadge}
                 </span>
                 {isManager && !isCurrentHost && (
                   <RemoveHostButton
@@ -84,9 +85,7 @@ async function HostsManagement() {
           })}
         </ul>
         {!isManager && (
-          <p className="text-sm text-muted">
-            Only the social manager can invite or remove hosts.
-          </p>
+          <p className="text-sm text-muted">{text.onlyManagerInvites}</p>
         )}
       </section>
       <div className="flex min-w-0 flex-[1_1_360px] flex-col gap-4">
@@ -109,7 +108,7 @@ async function HostsManagement() {
               className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
             >
               <h2 id="invite-host-heading" className="text-xl font-bold">
-                Invite a host
+                {text.inviteHeading}
               </h2>
               <InviteHostForm />
             </section>
@@ -118,7 +117,7 @@ async function HostsManagement() {
               className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
             >
               <h2 id="social-name-heading" className="text-xl font-bold">
-                Social name
+                {text.socialNameHeading}
               </h2>
               <SocialNameForm socialName={currentHost.socialName} />
             </section>

@@ -9,8 +9,8 @@ import {
   SECONDARY_BUTTON_CLASS_NAME,
   TEXT_INPUT_CLASS_NAME,
 } from "@/components/controlStyles";
-import { SKILL_LEVEL_LABELS } from "@/server/skillLevels";
-import { GENDER_LABELS } from "@/server/participantRules";
+import { courtName } from "@/i18n/courtName";
+import { useMessages } from "@/i18n/LocaleProvider";
 import type {
   LiveCommand,
   LiveCourt,
@@ -27,11 +27,12 @@ function Teams({
   teams: LiveTeams;
   players: LivePlayer[];
 }) {
+  const text = useMessages().host.live.court;
   const name = (id: string | null) =>
     id === null
-      ? "Replacement needed"
+      ? text.replacementNeeded
       : (players.find((player) => player.participantId === id)?.name ??
-        "Player unavailable");
+        text.playerUnavailable);
   return (
     <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
       <div>
@@ -44,7 +45,7 @@ function Teams({
           </p>
         ))}
       </div>
-      <span className="text-xs text-muted">vs</span>
+      <span className="text-xs text-muted">{text.versus}</span>
       <div>
         {teams.teamB.map((id, index) => (
           <p
@@ -80,23 +81,31 @@ export function LiveCourtCard({
   onAction: (command: LiveCommand) => void;
   undoOptions: LiveSessionView["undoOptions"];
 }) {
+  const messages = useMessages();
+  const text = messages.host.live.court;
+  const shownCourtName = courtName(court.name, messages);
   const [editing, setEditing] = useState(false);
   const group = court.called ?? court.suggestion;
   const vacancy =
     court.called &&
     [...court.called.teamA, ...court.called.teamB].some((id) => id === null);
   return (
-    <article className={CARD_CLASS_NAME} aria-label={court.name}>
+    <article className={CARD_CLASS_NAME} aria-label={shownCourtName}>
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-lg font-bold">{court.name}</h3>
+        <h3 className="text-lg font-bold">{shownCourtName}</h3>
         <span
           className={`text-sm font-semibold ${court.activeMatch ? "text-lime-soft" : "text-muted"}`}
         >
           {court.activeMatch
-            ? `Playing · ${Math.max(0, Math.floor((now - court.activeMatch.startedAt) / 60_000))} min`
+            ? text.playingMinutes(
+                Math.max(
+                  0,
+                  Math.floor((now - court.activeMatch.startedAt) / 60_000),
+                ),
+              )
             : court.called
-              ? "Group prepared"
-              : "Court free"}
+              ? text.groupPrepared
+              : text.courtFree}
         </span>
       </header>
       {court.activeMatch ? (
@@ -110,11 +119,11 @@ export function LiveCourtCard({
               onAction({ kind: "finish", matchId: court.activeMatch!.matchId })
             }
           >
-            Game finished
+            {text.gameFinished}
           </button>
         </>
       ) : court.called ? null : (
-        <p className="mt-2 text-xs text-muted">No game on this court.</p>
+        <p className="mt-2 text-xs text-muted">{text.noGame}</p>
       )}
       <CourtRecovery
         key={court.activeMatch?.matchId ?? "idle"}
@@ -125,30 +134,25 @@ export function LiveCourtCard({
         onAction={onAction}
       />
       <section
-        aria-label={`Up next for ${court.name}`}
+        aria-label={text.upNextFor(shownCourtName)}
         className="mt-5 rounded-[20px] border border-blue-edge bg-blue-surface p-4"
       >
         <h4 className="font-bold text-blue-soft">
-          {court.called && !court.activeMatch ? "Ready to start" : "Up next"}
-          {court.called && court.activeMatch ? " · Prepared" : ""}
+          {court.called && !court.activeMatch ? text.readyToStart : text.upNext}
+          {court.called && court.activeMatch ? text.prepared : ""}
         </h4>
         {timeIsUp ? (
-          <p className="mt-2 text-xs text-muted">
-            Time is up: no new groups or games.
-          </p>
+          <p className="mt-2 text-xs text-muted">{text.timeIsUp}</p>
         ) : group ? (
           <>
             <Teams teams={group} players={players} />
             <p className="mt-2 text-xs text-blue-soft">
-              {court.called
-                ? "Fixed. Waiting continues until the game starts."
-                : "Longest waits first."}
+              {court.called ? text.fixed : text.longestWaitsFirst}
             </p>
             {vacancy && (
               <div className="mt-2">
                 <AttentionMessage>
-                  A called player is unavailable. Choose a valid replacement
-                  before starting.
+                  {text.calledPlayerUnavailable}
                 </AttentionMessage>
               </div>
             )}
@@ -167,7 +171,7 @@ export function LiveCourtCard({
                     })
                   }
                 >
-                  Start game
+                  {text.startGame}
                 </button>
               ) : (
                 <button
@@ -183,7 +187,7 @@ export function LiveCourtCard({
                     })
                   }
                 >
-                  Call these four
+                  {text.callTheseFour}
                 </button>
               )}
               <button
@@ -193,7 +197,7 @@ export function LiveCourtCard({
                 aria-expanded={editing}
                 onClick={() => setEditing((value) => !value)}
               >
-                Change players
+                {text.changePlayers}
               </button>
               {court.called && (
                 <button
@@ -207,7 +211,7 @@ export function LiveCourtCard({
                     })
                   }
                 >
-                  Release group
+                  {text.releaseGroup}
                 </button>
               )}
             </div>
@@ -239,9 +243,9 @@ export function LiveCourtCard({
             <p className="mt-2 text-sm text-muted">
               {court.activeMatch
                 ? selected
-                  ? "Not enough available players for a valid group."
-                  : "Choose this court to prepare its next group."
-                : "Waiting for four available players."}
+                  ? text.notEnoughPlayers
+                  : text.chooseToPrepare
+                : text.waitingForFour}
             </p>
             <button
               type="button"
@@ -249,7 +253,7 @@ export function LiveCourtCard({
               disabled={disabled}
               onClick={onPrepare}
             >
-              {selected ? "Refresh next four" : "Prepare next four"}
+              {selected ? text.refreshNextFour : text.prepareNextFour}
             </button>
           </>
         )}
@@ -293,6 +297,8 @@ function GroupEditor({
   disabled: boolean;
   onSave: (teamA: string[], teamB: string[]) => void;
 }) {
+  const messages = useMessages();
+  const text = messages.host.live.picker;
   const [ids, setIds] = useState(
     [...teams.teamA, ...teams.teamB].map((id) => id ?? ""),
   );
@@ -335,10 +341,7 @@ function GroupEditor({
     showAll || query ? matching : matching.slice(0, PICKER_VISIBLE_WHEN_FOLDED);
   return (
     <div className="mt-4 border-t border-blue-edge pt-3">
-      <p className="text-sm text-blue-soft">
-        Tap a player to replace them. Mixed teams need one man and one woman on
-        each team.
-      </p>
+      <p className="text-sm text-blue-soft">{text.hint}</p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {ids.map((id, index) => (
           <button
@@ -346,7 +349,11 @@ function GroupEditor({
             type="button"
             disabled={disabled}
             aria-pressed={seat === index}
-            aria-label={`Team ${index < 2 ? "A" : "B"} · Player ${(index % 2) + 1}: ${(id && byId(id)?.name) || "choose player"}`}
+            aria-label={text.seatLabel(
+              index < 2 ? "A" : "B",
+              (index % 2) + 1,
+              (id && byId(id)?.name) || text.choosePlayerLower,
+            )}
             className={`${OUTLINE_BUTTON_CLASS_NAME} h-auto min-h-11 flex-col items-start py-2 text-left ${seat === index ? "border-2 border-link" : ""}`}
             onClick={() => {
               setSeat(seat === index ? null : index);
@@ -355,10 +362,10 @@ function GroupEditor({
             }}
           >
             <span className="text-xs font-normal text-muted">
-              Team {index < 2 ? "A" : "B"} · Player {(index % 2) + 1}
+              {text.seat(index < 2 ? "A" : "B", (index % 2) + 1)}
             </span>
             <span className="break-words">
-              {(id && byId(id)?.name) || "Choose player"}
+              {(id && byId(id)?.name) || text.choosePlayer}
             </span>
           </button>
         ))}
@@ -366,13 +373,13 @@ function GroupEditor({
       {seat !== null && (
         <div className="mt-3 rounded-2xl border border-inner-border bg-inner p-3">
           <label className="text-sm text-muted">
-            Search players
+            {text.searchPlayers}
             <input
               type="search"
               className={`${TEXT_INPUT_CLASS_NAME} mt-1`}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Type a name"
+              placeholder={text.typeAName}
             />
           </label>
           {matching.length ? (
@@ -395,11 +402,13 @@ function GroupEditor({
                   >
                     <span className="break-words">{player.name}</span>
                     <span className="text-xs font-normal text-muted">
-                      {Math.floor((player.currentWaitMs ?? 0) / 60_000)} min ·{" "}
-                      {GENDER_LABELS[player.gender!]} ·{" "}
+                      {text.waitMinutes(
+                        Math.floor((player.currentWaitMs ?? 0) / 60_000),
+                      )}{" "}
+                      · {messages.genders[player.gender!]} ·{" "}
                       {player.skill
-                        ? SKILL_LEVEL_LABELS[player.skill]
-                        : "Level missing"}
+                        ? messages.levels[player.skill]
+                        : text.levelMissing}
                     </span>
                   </button>
                 </li>
@@ -407,9 +416,7 @@ function GroupEditor({
             </ul>
           ) : (
             <p className="mt-3 text-sm text-muted">
-              {query
-                ? "No one by that name keeps the teams valid."
-                : "No one available keeps the teams valid."}
+              {query ? text.noMatchingName : text.noneAvailable}
             </p>
           )}
           {!query && matching.length > PICKER_VISIBLE_WHEN_FOLDED && (
@@ -419,9 +426,7 @@ function GroupEditor({
               aria-expanded={showAll}
               onClick={() => setShowAll((open) => !open)}
             >
-              {showAll
-                ? "Show fewer players"
-                : `Show all ${matching.length} players`}
+              {showAll ? text.showFewer : text.showAll(matching.length)}
             </button>
           )}
         </div>
@@ -432,7 +437,7 @@ function GroupEditor({
         disabled={disabled || !distinct}
         onClick={() => onSave(ids.slice(0, 2), ids.slice(2))}
       >
-        {court.called ? "Confirm changed group" : "Call chosen four"}
+        {court.called ? text.confirmChanged : text.callChosen}
       </button>
     </div>
   );

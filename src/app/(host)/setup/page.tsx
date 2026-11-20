@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
 import { CARD_CLASS_NAME } from "@/components/controlStyles";
+import { getMessages, hostPageTitle } from "@/i18n/getLocale";
+import { HostLoading } from "../HostLoading";
 import { readHostAccess } from "@/server/auth/currentHost";
 import { readSocialOpenSession } from "@/server/setup/setupDraft";
 import { CoHostDraftNoticeProvider } from "./CoHostDraftNotice";
@@ -9,9 +11,9 @@ import { SessionSetupEditor } from "./SessionSetupEditor";
 import { SetupPageHeader } from "./SetupPageHeader";
 import { StartSessionDraftButton } from "./StartSessionDraftButton";
 
-export const metadata: Metadata = {
-  title: "Session setup · Pickleball Social Manager",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: await hostPageTitle("setup") };
+}
 
 export default function SessionSetupPage() {
   return (
@@ -23,9 +25,7 @@ export default function SessionSetupPage() {
           fallback={
             <>
               <SetupPageHeader />
-              <p className="text-muted" aria-live="polite">
-                Loading your session…
-              </p>
+              <HostLoading page="setup" />
             </>
           }
         >
@@ -37,7 +37,11 @@ export default function SessionSetupPage() {
 }
 
 async function SessionSetupContent() {
-  const hostAccess = await readHostAccess();
+  const [hostAccess, messages] = await Promise.all([
+    readHostAccess(),
+    getMessages(),
+  ]);
+  const text = messages.host.setup;
   // Fails closed: only hosts see setup (RLS also returns nothing otherwise).
   if (hostAccess.status !== "host") return null;
   const openSession = await readSocialOpenSession(hostAccess.host.socialId);
@@ -63,27 +67,22 @@ async function SessionSetupContent() {
         {openSession.status === "live" ? (
           <>
             <h2 id="no-draft-heading" className="text-xl font-bold">
-              {openSession.name} is live
+              {text.isLive(openSession.name)}
             </h2>
-            <p className="text-muted">
-              You can set up your next session once this one has ended.
-            </p>
+            <p className="text-muted">{text.setUpNextAfterEnd}</p>
             <Link
               href="/live"
               className="inline-flex min-h-11 items-center font-semibold text-link"
             >
-              Open live session
+              {text.openLiveSession}
             </Link>
           </>
         ) : (
           <>
             <h2 id="no-draft-heading" className="text-xl font-bold">
-              No session in progress
+              {text.noSession}
             </h2>
-            <p className="text-muted">
-              Start a new session to choose its time, courts and players. It
-              stays a draft until you start it.
-            </p>
+            <p className="text-muted">{text.noSessionText}</p>
             <StartSessionDraftButton />
           </>
         )}

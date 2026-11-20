@@ -9,6 +9,7 @@ import {
 } from "@/components/controlStyles";
 import { CheckIcon } from "../setup/CheckIcon";
 import { CopyIcon } from "./CheckinLinkIcons";
+import { useMessages } from "@/i18n/LocaleProvider";
 
 /** How long "Copied" stays after pressing Copy link (S01: "a few seconds"). */
 export const COPIED_CONFIRMATION_VISIBLE_MS = 3_000;
@@ -22,6 +23,7 @@ type CopyOutcome =
 
 /** The read-only check-in link with Copy link and its confirmation (S01). */
 export function CopyCheckinLinkField({ link }: { link: string }) {
+  const text = useMessages().host.stickerAndQr;
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [copyOutcome, setCopyOutcome] = useState<CopyOutcome>({
@@ -53,7 +55,7 @@ export function CopyCheckinLinkField({ link }: { link: string }) {
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={inputId} className={FIELD_LABEL_CLASS_NAME}>
-        Link
+        {text.link}
       </label>
       <div className="flex flex-wrap gap-2">
         <input
@@ -71,7 +73,7 @@ export function CopyCheckinLinkField({ link }: { link: string }) {
           className={`${OUTLINE_BUTTON_CLASS_NAME} gap-2 self-center whitespace-nowrap`}
         >
           <CopyIcon />
-          Copy link
+          {text.copyLink}
         </button>
       </div>
       <div aria-live="polite" className="empty:hidden">
@@ -80,14 +82,11 @@ export function CopyCheckinLinkField({ link }: { link: string }) {
             <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-lime text-on-lime">
               <CheckIcon sizePx={12} />
             </span>
-            Copied
+            {text.copied}
           </p>
         )}
         {copyOutcome.kind === "selected" && (
-          <AttentionMessage>
-            Couldn&apos;t copy automatically. The link is selected: copy it from
-            there.
-          </AttentionMessage>
+          <AttentionMessage>{text.copyFailed}</AttentionMessage>
         )}
       </div>
     </div>

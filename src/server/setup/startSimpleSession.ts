@@ -11,6 +11,7 @@ import {
   MAX_SESSION_DURATION_MINUTES,
   parseSessionDraftConfig,
 } from "./setupRules";
+import { en } from "@/i18n/messages/en";
 
 const inputSchema = z.object({
   sessionId: z.uuid(),
@@ -36,7 +37,7 @@ export async function startSimpleSession(
   }
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success)
-    return { ok: false, message: "Reload the setup and try again." };
+    return { ok: false, message: en.serverMessages.start.reloadSetupAndRetry };
   const { host } = authorization;
   try {
     const client = await createSupabaseServerClient();
@@ -52,7 +53,7 @@ export async function startSimpleSession(
     if (!session)
       return {
         ok: false,
-        message: "This session is not available. Reload the setup.",
+        message: en.serverMessages.start.sessionNotAvailable,
       };
 
     // Recover the original payload before inspecting draft status: a successful
@@ -70,7 +71,7 @@ export async function startSimpleSession(
       if (landed.type !== "SessionStarted") {
         return {
           ok: false,
-          message: "That action ID was already used. Reload the session.",
+          message: en.serverMessages.start.actionIdUsed,
         };
       }
       payload =
@@ -78,19 +79,19 @@ export async function startSimpleSession(
       if (payload.config.policyVersion !== "simple-social-v1") {
         return {
           ok: false,
-          message: "That action ID was already used. Reload the session.",
+          message: en.serverMessages.start.actionIdUsed,
         };
       }
     } else {
       if (session.status !== "draft")
         return {
           ok: false,
-          message: "This session is no longer a draft. Reload the setup.",
+          message: en.serverMessages.start.noLongerDraft,
         };
       if (session.draft_revision !== parsed.data.expectedDraftRevision) {
         return {
           ok: false,
-          message: "Setup changed elsewhere. Reload before starting.",
+          message: en.serverMessages.start.changedElsewhere,
           isConflict: true,
         };
       }
@@ -101,7 +102,7 @@ export async function startSimpleSession(
       ) {
         return {
           ok: false,
-          message: "Choose at least one doubles court before starting.",
+          message: en.serverMessages.start.chooseDoublesCourt,
         };
       }
       const duration =
@@ -114,7 +115,7 @@ export async function startSimpleSession(
       ) {
         return {
           ok: false,
-          message: "Choose a duration from 1 to 720 minutes.",
+          message: en.serverMessages.start.chooseDuration,
         };
       }
       const roster = await listDraftParticipants(
@@ -127,8 +128,7 @@ export async function startSimpleSession(
         if (player.gender === null || player.skillLevel === null) {
           return {
             ok: false,
-            message:
-              "Complete every player's gender and level before starting.",
+            message: en.serverMessages.start.completeDetails,
           };
         }
         participants.push({
@@ -164,7 +164,7 @@ export async function startSimpleSession(
     if (result.reason === "UPDATED_BY_ANOTHER_HOST") {
       return {
         ok: false,
-        message: "Setup or players changed elsewhere. Reload before starting.",
+        message: en.serverMessages.start.playersChangedElsewhere,
         isConflict: true,
       };
     }
@@ -176,7 +176,7 @@ export async function startSimpleSession(
     });
     return {
       ok: false,
-      message: "Couldn't start the session. Reload and try again.",
+      message: en.serverMessages.start.couldNotStart,
     };
   }
 }

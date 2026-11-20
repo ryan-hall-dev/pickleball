@@ -6,6 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { authorizeCurrentHost } from "@/server/auth/currentHost";
 import { HOST_ACCESS_DENIAL_MESSAGES } from "@/server/auth/hostAccess";
 import { shortLabelSchema } from "@/server/setup/setupRules";
+import { en } from "@/i18n/messages/en";
 
 // Writes use the service-role client, always after the caller is verified as
 // the social's manager with getUser() (docs/decisions/0002-server-only-writes.md).
@@ -22,10 +23,10 @@ export type UpdateSocialNameFormState =
     };
 
 const socialNameInputSchema = z.object({
-  socialName: shortLabelSchema("Enter the social's name."),
+  socialName: shortLabelSchema(en.validation.socialNameRequired),
 });
 
-const SOMETHING_WENT_WRONG = "Something went wrong. Try again in a moment.";
+const SOMETHING_WENT_WRONG = en.serverMessages.somethingWentWrong;
 
 export async function updateSocialName(
   _previousState: UpdateSocialNameFormState,
@@ -50,7 +51,7 @@ export async function updateSocialName(
   if (!parsed.success) {
     return {
       status: "error",
-      message: "Fix the highlighted field.",
+      message: en.serverMessages.hosts.fixHighlightedField,
       fieldError: z.flattenError(parsed.error).fieldErrors.socialName?.[0],
       submittedSocialName,
     };
@@ -83,5 +84,8 @@ export async function updateSocialName(
 
   // The name shows in the header on every host page.
   revalidatePath("/", "layout");
-  return { status: "success", message: `The social is now ${socialName}.` };
+  return {
+    status: "success",
+    message: en.serverMessages.hosts.socialRenamed(socialName),
+  };
 }

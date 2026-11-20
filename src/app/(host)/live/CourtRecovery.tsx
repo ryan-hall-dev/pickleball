@@ -6,6 +6,8 @@ import {
   SECONDARY_BUTTON_CLASS_NAME,
   TEXT_INPUT_CLASS_NAME,
 } from "@/components/controlStyles";
+import { courtName } from "@/i18n/courtName";
+import { useMessages } from "@/i18n/LocaleProvider";
 import type {
   LiveCommand,
   LiveCourt,
@@ -26,13 +28,14 @@ export function CourtRecovery({
   disabled: boolean;
   onAction: (command: LiveCommand) => void;
 }) {
+  const text = useMessages().host.live.recovery;
   const [choice, setChoice] = useState<"replace" | "interrupt" | null>(null);
   const match = court.activeMatch;
   if (!match && undoOptions.length === 0) return null;
   return (
     <details className="mt-3 rounded-[14px] border border-outline p-3">
       <summary className="flex min-h-11 cursor-pointer items-center font-semibold">
-        Court options
+        {text.courtOptions}
       </summary>
       <div className="mt-2 flex flex-wrap gap-2">
         {match && (
@@ -43,7 +46,7 @@ export function CourtRecovery({
               disabled={disabled}
               onClick={() => setChoice("replace")}
             >
-              Replace player
+              {text.replacePlayer}
             </button>
             <button
               type="button"
@@ -51,7 +54,7 @@ export function CourtRecovery({
               disabled={disabled}
               onClick={() => setChoice("interrupt")}
             >
-              End as interrupted
+              {text.endAsInterrupted}
             </button>
           </>
         )}
@@ -65,7 +68,7 @@ export function CourtRecovery({
               onAction({ kind: "undo", targetSeq: option.targetSeq })
             }
           >
-            Undo game {option.kind === "start" ? "start" : "finish"}
+            {option.kind === "start" ? text.undoStart : text.undoFinish}
           </button>
         ))}
       </div>
@@ -86,15 +89,12 @@ export function CourtRecovery({
         <div
           className="mt-4 rounded-[14px] border border-orange-edge bg-orange-surface p-4"
           role="group"
-          aria-label="Confirm interrupted game"
+          aria-label={text.confirmInterruptedLabel}
         >
           <p className="font-semibold text-orange-soft">
-            End this game as interrupted?
+            {text.interruptTitle}
           </p>
-          <p className="mt-2 text-sm text-muted">
-            All four return to waiting with fresh waiting clocks. No completed
-            game is counted. Rest is a separate action.
-          </p>
+          <p className="mt-2 text-sm text-muted">{text.interruptText}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
@@ -102,7 +102,7 @@ export function CourtRecovery({
               disabled={disabled}
               onClick={() => setChoice(null)}
             >
-              Keep playing
+              {text.keepPlaying}
             </button>
             <button
               type="button"
@@ -113,7 +113,7 @@ export function CourtRecovery({
                 setChoice(null);
               }}
             >
-              Confirm interrupted game
+              {text.confirmInterrupted}
             </button>
           </div>
         </div>
@@ -135,6 +135,8 @@ function ReplacementForm({
   onCancel: () => void;
   onReplace: (outId: string, inId: string) => void;
 }) {
+  const messages = useMessages();
+  const text = messages.host.live.recovery;
   const match = court.activeMatch!;
   const lineupIds = [...match.teamA, ...match.teamB].filter(
     (id): id is string => id !== null,
@@ -156,14 +158,14 @@ function ReplacementForm({
   return (
     <form
       className="mt-4 flex flex-col gap-3"
-      aria-label={`Replace player on ${court.name}`}
+      aria-label={text.replaceOn(courtName(court.name, messages))}
       onSubmit={(event) => {
         event.preventDefault();
         if (valid && !disabled) onReplace(outId, inId);
       }}
     >
       <label className="text-sm text-muted">
-        Player leaving the game
+        {text.leaving}
         <select
           className={`${TEXT_INPUT_CLASS_NAME} mt-1`}
           disabled={disabled}
@@ -176,20 +178,20 @@ function ReplacementForm({
           {lineupIds.map((id) => (
             <option key={id} value={id}>
               {players.find((player) => player.participantId === id)?.name ??
-                "Player unavailable"}
+                messages.host.live.court.playerUnavailable}
             </option>
           ))}
         </select>
       </label>
       <label className="text-sm text-muted">
-        Replacement player
+        {text.replacement}
         <select
           className={`${TEXT_INPUT_CLASS_NAME} mt-1`}
           disabled={disabled || candidates.length === 0}
           value={inId}
           onChange={(event) => setInId(event.target.value)}
         >
-          <option value="">Choose an available player</option>
+          <option value="">{text.chooseAvailable}</option>
           {candidates.map((player) => (
             <option key={player.participantId} value={player.participantId}>
               {player.name}
@@ -197,14 +199,10 @@ function ReplacementForm({
           ))}
         </select>
       </label>
-      <p className="text-sm text-muted">
-        The incoming player takes the same team and seat. Only the four who
-        finish receive a completed-game credit.
-      </p>
+      <p className="text-sm text-muted">{text.sameSeat}</p>
       {candidates.length === 0 && (
         <p role="status" className="text-sm text-orange-soft">
-          No valid replacement is available. Choose another outgoing player or
-          End as interrupted.
+          {text.noReplacement}
         </p>
       )}
       <div className="flex flex-wrap gap-2">
@@ -214,14 +212,14 @@ function ReplacementForm({
           disabled={disabled}
           onClick={onCancel}
         >
-          Cancel replacement
+          {text.cancelReplacement}
         </button>
         <button
           type="submit"
           className={SECONDARY_BUTTON_CLASS_NAME}
           disabled={disabled || !valid}
         >
-          Confirm replacement
+          {text.confirmReplacement}
         </button>
       </div>
     </form>

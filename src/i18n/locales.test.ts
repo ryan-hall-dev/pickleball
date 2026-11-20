@@ -1,7 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { localeFromAcceptLanguage, pickLocale } from "./locales";
-import { MESSAGES, translateValidationMessage } from "./messages";
+import { courtName } from "./courtName";
+import {
+  MESSAGES,
+  translateEngineError,
+  translateMessage,
+  translateValidationMessage,
+} from "./messages";
+import { en } from "./messages/en";
 
 describe("picking the language", () => {
   it("uses Vietnamese only when the browser ranks it above English", () => {
@@ -50,5 +57,49 @@ describe("translated validation messages", () => {
     expect(sample(MESSAGES.vi)).toContain("Ana");
     expect(sample(MESSAGES.vi)).toContain("Friday");
     expect(sample(MESSAGES.vi)).not.toEqual(sample(MESSAGES.en));
+  });
+});
+
+describe("host server messages", () => {
+  it("shows a fixed server message in Vietnamese and leaves English alone", () => {
+    const english = en.serverMessages.live.updatedByAnotherHost;
+    expect(translateMessage(english, MESSAGES.vi)).toBe(
+      MESSAGES.vi.serverMessages.live.updatedByAnotherHost,
+    );
+    expect(translateMessage(english, MESSAGES.en)).toBe(english);
+  });
+  it("keeps the names and numbers a message carries", () => {
+    expect(
+      translateMessage(
+        en.serverMessages.setup.nameAlreadyInSession("Linh", "Tran"),
+        MESSAGES.vi,
+      ),
+    ).toBe(
+      MESSAGES.vi.serverMessages.setup.nameAlreadyInSession("Linh", "Tran"),
+    );
+    expect(
+      translateMessage(en.validation.wholeMinutes(1, 720), MESSAGES.vi),
+    ).toBe("Nhập số phút nguyên từ 1 đến 720.");
+    expect(
+      translateMessage(
+        en.serverMessages.hosts.nowAHost("Mai Le", "mai@example.com"),
+        MESSAGES.vi,
+      ),
+    ).toContain("mai@example.com");
+  });
+  it("shows engine rejections by code in Vietnamese, in full in English", () => {
+    const error = {
+      code: "COURT_BUSY" as const,
+      message: "Court 2 already has a game in progress.",
+    };
+    expect(translateEngineError(error, MESSAGES.en)).toBe(error.message);
+    expect(translateEngineError(error, MESSAGES.vi)).toBe(
+      "Sân này đang có trận.",
+    );
+  });
+  it("names generated courts in the chosen language only", () => {
+    expect(courtName("Court 3", MESSAGES.vi)).toBe("Sân 3");
+    expect(courtName("Court 3", MESSAGES.en)).toBe("Court 3");
+    expect(courtName("Riverside 1", MESSAGES.vi)).toBe("Riverside 1");
   });
 });

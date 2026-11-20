@@ -17,10 +17,13 @@ import { PRINT_STICKERS_PAGE_PATH } from "./checkinLinkPaths";
 import { CheckinQrCode } from "./CheckinQrCode";
 import { CopyCheckinLinkField } from "./CopyCheckinLinkField";
 import { FullScreenQrButton } from "./FullScreenQrButton";
+import { getMessages, hostPageTitle } from "@/i18n/getLocale";
+import { HostLoading } from "../HostLoading";
+import { BackToSetupText } from "./BackToSetupText";
 
-export const metadata: Metadata = {
-  title: "Sticker and QR · Pickleball Social Manager",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: await hostPageTitle("stickerAndQr") };
+}
 
 export default function StickerAndQrPage() {
   return (
@@ -30,21 +33,10 @@ export default function StickerAndQrPage() {
         className={`${LINK_BUTTON_CLASS_NAME} gap-1.5 self-start`}
       >
         <BackChevronIcon />
-        Back to session setup
+        <BackToSetupText />
       </Link>
       {/* Per-user data streams in behind its own boundary (cacheComponents). */}
-      <Suspense
-        fallback={
-          <>
-            <h1 className="text-[32px] font-extrabold tracking-[-0.01em]">
-              Sticker and QR
-            </h1>
-            <p className="text-muted" aria-live="polite">
-              Loading the check-in link…
-            </p>
-          </>
-        }
-      >
+      <Suspense fallback={<HostLoading page="stickerAndQr" />}>
         <StickerAndQrContent />
       </Suspense>
     </>
@@ -52,7 +44,11 @@ export default function StickerAndQrPage() {
 }
 
 async function StickerAndQrContent() {
-  const hostAccess = await readHostAccess();
+  const [hostAccess, messages] = await Promise.all([
+    readHostAccess(),
+    getMessages(),
+  ]);
+  const text = messages.host.stickerAndQr;
   // Fails closed: only hosts of the social see its link (any role, #25).
   if (hostAccess.status !== "host") return null;
   const { socialId, socialName } = hostAccess.host;
@@ -63,12 +59,10 @@ async function StickerAndQrContent() {
     <>
       <div>
         <h1 className="text-[32px] font-extrabold tracking-[-0.01em]">
-          Sticker and QR
+          {text.title}
         </h1>
         <p className="mt-1 max-w-[720px] text-muted">
-          One check-in link for {socialName}. Players scan the QR code or tap a
-          sticker to check in to whichever session is open. It stays the same
-          for every session.
+          {text.intro(socialName)}
         </p>
       </div>
       <div className="flex flex-wrap items-start gap-[18px]">
@@ -77,7 +71,7 @@ async function StickerAndQrContent() {
           className={`${CARD_CLASS_NAME} flex min-w-0 flex-[999_1_520px] flex-col gap-4`}
         >
           <h2 id="checkin-link-heading" className="text-xl font-bold">
-            Check-in link
+            {text.checkinLink}
           </h2>
           <CopyCheckinLinkField link={link} />
           <p className="flex items-start gap-2.5 rounded-2xl border border-inner-border bg-inner px-3.5 py-3 text-sm text-text-soft">
@@ -87,10 +81,7 @@ async function StickerAndQrContent() {
             >
               i
             </span>
-            <span>
-              NFC stickers: write this same link to the sticker. Every sticker
-              and QR code for this social uses it.
-            </span>
+            <span>{text.nfcNote}</span>
           </p>
           <div className="flex flex-wrap gap-2">
             <FullScreenQrButton
@@ -104,30 +95,27 @@ async function StickerAndQrContent() {
               className={`${OUTLINE_BUTTON_CLASS_NAME} gap-2 whitespace-nowrap`}
             >
               <PrintIcon />
-              Print stickers
+              {text.printStickers}
             </Link>
           </div>
-          <p className="text-sm text-muted">
-            Only a manager can issue a new link (Hosts page). When they do, this
-            link, the QR code and printed stickers stop working.
-          </p>
+          <p className="text-sm text-muted">{text.managerOnly}</p>
         </section>
         <section
           aria-labelledby="qr-code-heading"
           className={`${CARD_CLASS_NAME} flex min-w-0 flex-[1_1_300px] flex-col items-center gap-4`}
         >
           <h2 id="qr-code-heading" className="self-start text-xl font-bold">
-            QR code
+            {text.qrCode}
           </h2>
           <div className="rounded-[20px] bg-white p-[18px]">
             <CheckinQrCode
               qrCodeSvg={qrCodeSvg}
-              shortLink={shortLink}
+              label={text.qrCodeLabel(shortLink)}
               className="size-[min(260px,calc(100vw-140px))]"
             />
           </div>
           <p className="text-center text-sm break-all text-muted">
-            Scan to check in · {shortLink}
+            {text.scanToCheckIn} · {shortLink}
           </p>
         </section>
       </div>

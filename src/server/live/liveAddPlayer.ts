@@ -12,9 +12,9 @@ import {
   type LiveAddPlayerInput,
   type LiveWriteResult,
 } from "./liveTypes";
+import { en } from "@/i18n/messages/en";
 
-const STALE_MESSAGE =
-  "The session changed before this was saved. Nobody was added. Check the latest list, then add again.";
+const STALE_MESSAGE = en.serverMessages.addPlayer.sessionChanged;
 
 /**
  * Adds a session-only player to the live waiting list (one transaction:
@@ -31,14 +31,14 @@ export async function addLivePlayer(
   if (!authorization.ok)
     return {
       ok: false,
-      message: "Sign in as a host to change this session.",
+      message: en.serverMessages.live.signInToChange,
       outcome: "rejected",
     };
   const parsed = liveAddPlayerSchema.safeParse(input);
   if (!parsed.success)
     return {
       ok: false,
-      message: "Check the name, gender and level, then try again.",
+      message: en.serverMessages.addPlayer.checkDetails,
       outcome: "rejected",
     };
   const { host } = authorization;
@@ -51,14 +51,14 @@ export async function addLivePlayer(
     if (!log)
       return {
         ok: false,
-        message: "This session is not available.",
+        message: en.serverMessages.live.sessionNotAvailable,
         outcome: "rejected",
       };
     const replayed = replay(log.events);
     if (!replayed.ok || !isSimpleSocial(replayed.state.config))
       return {
         ok: false,
-        message: "This session cannot use the simple live controls.",
+        message: en.serverMessages.live.notSimpleSession,
         outcome: "rejected",
       };
     const at = Math.max(Date.now(), replayed.state.lastAt ?? 0);
@@ -71,7 +71,7 @@ export async function addLivePlayer(
       if (landed.type !== "PlayerJoined")
         return {
           ok: false,
-          message: "That action ID was already used. Refresh and try again.",
+          message: en.serverMessages.live.actionIdUsed,
           outcome: "rejected",
         };
       // The retry must be the same person: a different name or details under
@@ -88,8 +88,7 @@ export async function addLivePlayer(
       )
         return {
           ok: false,
-          message:
-            "That action ID was already used for a different player. Refresh and add again.",
+          message: en.serverMessages.addPlayer.actionIdUsedForOther,
           outcome: "rejected",
         };
       participantId = earlier.participantId;
@@ -117,6 +116,7 @@ export async function addLivePlayer(
           ok: false,
           message: checked.error.message,
           outcome: "rejected",
+          engineErrorCode: checked.error.code,
         };
     }
     const { data, error } = await createSupabaseAdminClient()
@@ -141,7 +141,7 @@ export async function addLivePlayer(
       if (error.message === "SESSION_NOT_LIVE")
         return {
           ok: false,
-          message: "This session is not live, so nobody can be added.",
+          message: en.serverMessages.addPlayer.notLive,
           outcome: "rejected",
         };
       throw new Error(`add_participant_mid_session failed: ${error.message}`);
@@ -162,8 +162,7 @@ export async function addLivePlayer(
     });
     return {
       ok: false,
-      message:
-        "Couldn't confirm that the player was added. Retry to check whether it was saved.",
+      message: en.serverMessages.addPlayer.couldNotConfirm,
       outcome: "unknown",
     };
   }

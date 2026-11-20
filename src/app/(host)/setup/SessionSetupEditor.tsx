@@ -17,6 +17,8 @@ import {
   OUTLINE_BUTTON_CLASS_NAME,
   PRIMARY_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
+import { useMessages } from "@/i18n/LocaleProvider";
+import { translateMessage } from "@/i18n/messages";
 import {
   readSessionDraft,
   saveSimpleSessionDraft,
@@ -38,19 +40,18 @@ import {
   trackOwnDraftWrite,
 } from "./ownDraftWrites";
 import { SetupPageHeader } from "./SetupPageHeader";
-import {
-  isParticipantFormUnfinished,
-  unfinishedParticipantFormMessage,
-} from "./setupReadiness";
+import { HostLoading } from "../HostLoading";
+import { isParticipantFormUnfinished } from "./setupReadiness";
 import { useDraftAttendance } from "./useDraftAttendance";
 import { EMPTY_PARTICIPANT_FORM, type ParticipantForm } from "./whosPlaying";
 import { WhosPlayingCard } from "./WhosPlayingCard";
+import { en } from "@/i18n/messages/en";
 
 /** Edits settle for this long before they are saved. */
 const AUTOSAVE_DELAY_MS = 700;
 /** How long a new editor waits for this tab's earlier writes before asking for a reload. */
 const EARLIER_WRITES_WAIT_LIMIT_MS = 15_000;
-const OFFLINE_MESSAGE = "Couldn't reach the server. Check your connection.";
+const OFFLINE_MESSAGE = en.serverMessages.offline;
 
 function subscribeToNothing() {
   return () => {};
@@ -71,9 +72,7 @@ export function SessionSetupEditor(props: SessionSetupFormProps) {
     return (
       <>
         <SetupPageHeader />
-        <p className="text-muted" aria-live="polite">
-          Loading your session…
-        </p>
+        <HostLoading page="setup" />
       </>
     );
   }
@@ -377,7 +376,7 @@ function useDraftAutosave({
       if (isConflictRef.current) {
         return {
           ok: false,
-          message: "The setup was changed elsewhere.",
+          message: en.serverMessages.setup.changedElsewhere,
           isConflict: true,
         };
       }
@@ -470,32 +469,39 @@ function SaveStatusIndicator({
   status: SaveStatus;
   onRetry: () => void;
 }) {
+  const messages = useMessages();
+  const text = messages.host.setup.status;
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <span role="status" className="contents">
-        {status.kind === "saved" && <span className="text-muted">Saved</span>}
+        {status.kind === "saved" && (
+          <span className="text-muted">{text.saved}</span>
+        )}
         {status.kind === "saving" && (
-          <span className="text-muted">Saving…</span>
+          <span className="text-muted">{messages.host.common.saving}</span>
         )}
         {status.kind === "invalid" && (
           <span className="text-orange-soft">
-            <span aria-hidden="true">! </span>Not saved: fix the highlighted
-            fields
+            <span aria-hidden="true">! </span>
+            {text.invalid}
           </span>
         )}
         {status.kind === "failed" && (
           <span className="text-orange-soft">
-            <span aria-hidden="true">! </span>Not saved. {status.message}
+            <span aria-hidden="true">! </span>
+            {text.failed} {translateMessage(status.message, messages)}
           </span>
         )}
         {status.kind === "conflict" && (
           <span className="text-orange-soft">
-            <span aria-hidden="true">! </span>Not saved: changed elsewhere
+            <span aria-hidden="true">! </span>
+            {text.conflict}
           </span>
         )}
         {status.kind === "reloadRequired" && (
           <span className="text-orange-soft">
-            <span aria-hidden="true">! </span>Not saved: reload the page
+            <span aria-hidden="true">! </span>
+            {text.reloadRequired}
           </span>
         )}
       </span>
@@ -505,7 +511,7 @@ function SaveStatusIndicator({
           onClick={onRetry}
           className={LINK_BUTTON_CLASS_NAME}
         >
-          Retry
+          {messages.host.common.retry}
         </button>
       )}
     </div>
@@ -523,6 +529,8 @@ function SessionSetupForm({
   earlierOwnWrites,
 }: SessionSetupFormProps & { earlierOwnWrites: EarlierOwnWrites }) {
   const router = useRouter();
+  const messages = useMessages();
+  const text = messages.host.setup;
   const [form, setForm] = useState(() => ({
     name: draft.name,
     courtCount: String(draft.config.courts.length),
@@ -663,8 +671,7 @@ function SessionSetupForm({
       expectedDraftRevision: draftRevisionRef.current,
     }).catch(() => ({
       ok: false as const,
-      message:
-        "Couldn't confirm whether the session started. Retry with the same action, or reload.",
+      message: en.serverMessages.start.unconfirmed,
     }));
     if (result.ok) {
       // Cached routes retain the dialog; release its modal inertness before leaving.
@@ -723,19 +730,17 @@ function SessionSetupForm({
           className={`${CARD_CLASS_NAME} flex flex-col gap-4`}
         >
           <h2 id="short-setup-heading" className="text-xl font-bold">
-            A simple start
+            {text.simpleStart}
           </h2>
-          <p className="text-sm text-muted">
-            Set the space and session length. Players check in for today.
-          </p>
+          <p className="text-sm text-muted">{text.simpleStartIntro}</p>
           <div className="grid gap-4 sm:grid-cols-2">
             {(
               [
-                { key: "name", label: "Session name", type: "text" },
-                { key: "courtCount", label: "Court count", type: "number" },
+                { key: "name", label: text.sessionName, type: "text" },
+                { key: "courtCount", label: text.courtCount, type: "number" },
                 {
                   key: "durationMinutes",
-                  label: "Session duration (minutes)",
+                  label: text.durationMinutes,
                   type: "number",
                 },
               ] as const
@@ -776,22 +781,16 @@ function SessionSetupForm({
                     id={`setup-error-${key}`}
                     className="text-xs text-orange-text"
                   >
-                    {validation.fieldErrors[key]}
+                    {translateMessage(validation.fieldErrors[key], messages)}
                   </span>
                 )}
               </label>
             ))}
           </div>
-          <p className="text-sm text-muted">
-            Courts are numbered automatically. The duration begins when you
-            start the session.
-          </p>
+          <p className="text-sm text-muted">{text.courtsNumbered}</p>
           <div className="rounded-2xl border border-inner-border bg-inner p-4">
-            <h3 className="font-bold">Doubles, every game</h3>
-            <p className="mt-1 text-sm text-muted">
-              Four men, four women, or mixed with one man and one woman on each
-              team.
-            </p>
+            <h3 className="font-bold">{text.doublesTitle}</h3>
+            <p className="mt-1 text-sm text-muted">{text.doublesText}</p>
           </div>
         </section>
         <PendingCheckinTray
@@ -804,32 +803,35 @@ function SessionSetupForm({
           onParticipantFormChange={setParticipantForm}
         />
         <section
-          aria-label="Start session"
+          aria-label={text.startSession}
           className={`${CARD_CLASS_NAME} flex flex-col gap-3`}
         >
           <p className="text-sm text-muted">
-            {attendance.participants.length} players approved ·{" "}
-            {form.courtCount || "0"} courts · {form.durationMinutes || "0"}{" "}
-            minutes
+            {text.summary(
+              attendance.participants.length,
+              form.courtCount || "0",
+              form.durationMinutes || "0",
+            )}
           </p>
           {unfinishedParticipant && (
             <p className="text-sm text-orange-text">
-              {unfinishedParticipantFormMessage(participantForm)}
+              {participantForm.firstName.trim() !== "" &&
+              participantForm.lastName.trim() === ""
+                ? text.unfinishedParticipantWithName(
+                    participantForm.firstName.trim(),
+                  )
+                : text.unfinishedParticipant}
             </p>
           )}
           {attendance.participants.length < 4 && (
-            <p className="text-sm text-orange-text">
-              Approve or add at least four players before starting.
-            </p>
+            <p className="text-sm text-orange-text">{text.needFourPlayers}</p>
           )}
           {missingDetails && (
-            <p className="text-sm text-orange-text">
-              Complete every player&apos;s gender and level before starting.
-            </p>
+            <p className="text-sm text-orange-text">{text.completeDetails}</p>
           )}
           {attendanceBusy && (
             <p className="text-sm text-orange-text">
-              Wait for player changes to save and resolve any errors.
+              {text.waitForPlayerChanges}
             </p>
           )}
           <button
@@ -838,7 +840,7 @@ function SessionSetupForm({
             onClick={openStartDialog}
             className={`${PRIMARY_BUTTON_CLASS_NAME} w-full`}
           >
-            Start session
+            {text.startSession}
           </button>
         </section>
       </fieldset>
@@ -852,16 +854,20 @@ function SessionSetupForm({
         className="m-auto w-[calc(100%-32px)] max-w-[560px] rounded-[28px] border border-card-border bg-card p-6 text-text shadow-[0_24px_64px_rgba(0,0,0,0.5)] backdrop:bg-bg-backdrop/90"
       >
         <h2 id="confirm-start-heading" className="text-[26px] font-extrabold">
-          Start {form.name.trim()}?
+          {text.confirmTitle(form.name.trim())}
         </h2>
         <p className="mt-3 text-muted">
-          {attendance.participants.length} players · {form.courtCount} courts ·{" "}
-          {form.durationMinutes} minutes. The session clock starts now.
-          You&apos;ll call and start games from the live screen.
+          {text.confirmText(
+            attendance.participants.length,
+            form.courtCount,
+            form.durationMinutes,
+          )}
         </p>
         {startError && (
           <div role="alert" className="mt-3">
-            <AttentionMessage>{startError}</AttentionMessage>
+            <AttentionMessage>
+              {translateMessage(startError, messages)}
+            </AttentionMessage>
           </div>
         )}
         <div className="mt-5 flex flex-wrap gap-3">
@@ -872,7 +878,7 @@ function SessionSetupForm({
               className={OUTLINE_BUTTON_CLASS_NAME}
               onClick={reloadDiscardingEdits}
             >
-              Reload session
+              {text.reloadSession}
             </button>
           ) : (
             <button
@@ -881,7 +887,7 @@ function SessionSetupForm({
               className={OUTLINE_BUTTON_CLASS_NAME}
               onClick={closeStartDialog}
             >
-              Keep editing
+              {text.keepEditing}
             </button>
           )}
           <button
@@ -891,10 +897,10 @@ function SessionSetupForm({
             onClick={() => void confirmStart()}
           >
             {isStarting
-              ? "Starting…"
+              ? text.starting
               : hasAttemptedStart
-                ? "Retry start"
-                : "Confirm start"}
+                ? text.retryStart
+                : text.confirmStart}
           </button>
         </div>
       </dialog>
@@ -904,9 +910,10 @@ function SessionSetupForm({
 
 /** DESIGN.md "Updated by another host": settings changed by a co-host, another tab or device. */
 function DraftConflictBanner({ onReload }: { onReload: () => void }) {
+  const messages = useMessages();
   return (
     <section
-      aria-label="Setup changed elsewhere"
+      aria-label={messages.host.setup.conflictLabel}
       className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[14px] border border-orange-edge bg-orange-surface px-3.5 py-2.5"
     >
       <span
@@ -916,15 +923,14 @@ function DraftConflictBanner({ onReload }: { onReload: () => void }) {
         !
       </span>
       <p className="min-w-0 flex-[1_1_300px] text-sm text-orange-text">
-        Setup was changed by another host, tab or device. Reload to see the
-        latest &mdash; your unsaved changes here will be lost.
+        {messages.host.setup.conflictText}
       </p>
       <button
         type="button"
         onClick={onReload}
         className={ATTENTION_OUTLINE_BUTTON_CLASS_NAME}
       >
-        Reload
+        {messages.host.common.reload}
       </button>
     </section>
   );

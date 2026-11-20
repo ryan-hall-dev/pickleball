@@ -8,6 +8,7 @@ import {
   type HostAccessDenial,
 } from "@/server/auth/hostAccess";
 import { checkinDatabaseTimeoutSignal } from "./checkinPage";
+import { en } from "@/i18n/messages/en";
 
 // Issuing a new check-in link (a new socials.checkin_tag) is manager-only
 // (M5 plan). The caller is verified as their social's manager with getUser()
@@ -17,7 +18,7 @@ import { checkinDatabaseTimeoutSignal } from "./checkinPage";
 export type ReissueCheckinLinkResult =
   { ok: true } | { ok: false; message: string };
 
-const SOMETHING_WENT_WRONG = "Something went wrong. Try again in a moment.";
+const SOMETHING_WENT_WRONG = en.serverMessages.somethingWentWrong;
 
 /** Every page that shows the link (the QR and stickers encode it). */
 const PATHS_SHOWING_THE_CHECKIN_LINK = [

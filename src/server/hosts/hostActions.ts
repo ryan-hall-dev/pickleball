@@ -11,6 +11,7 @@ import {
   HOST_REMOVAL_DENIAL_MESSAGES,
   inviteHostInputSchema,
 } from "./hostRules";
+import { en } from "@/i18n/messages/en";
 
 // Writes use the service-role client, always after the caller is verified as a
 // social manager with getUser() (docs/decisions/0002-server-only-writes.md).
@@ -32,10 +33,9 @@ export type RemoveHostFormState =
 
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 const HOSTS_PATH = "/hosts";
-const SOMETHING_WENT_WRONG = "Something went wrong. Try again in a moment.";
+const SOMETHING_WENT_WRONG = en.serverMessages.somethingWentWrong;
 // Neutral on purpose: it must not reveal that the email hosts another social.
-const EMAIL_CANNOT_BE_INVITED =
-  "That email can't be invited here. Use a different email.";
+const EMAIL_CANNOT_BE_INVITED = en.serverMessages.hosts.emailCannotBeInvited;
 
 function formText(formData: FormData, fieldName: string): string {
   const value = formData.get(fieldName);
@@ -69,7 +69,7 @@ export async function inviteHost(
   const parsed = inviteHostInputSchema.safeParse(submittedValues);
   if (!parsed.success) {
     const fieldErrors = z.flattenError(parsed.error).fieldErrors;
-    return formError("Fix the highlighted fields.", {
+    return formError(en.serverMessages.hosts.fixHighlightedFields, {
       email: fieldErrors.email?.[0],
       displayName: fieldErrors.displayName?.[0],
     });
@@ -99,11 +99,11 @@ export async function inviteHost(
         );
       }
       return hostOfThisSocial
-        ? formError("That person is already a host.", {
-            email: "Already on the hosts list.",
+        ? formError(en.serverMessages.hosts.alreadyAHost, {
+            email: en.serverMessages.hosts.alreadyOnList,
           })
         : formError(EMAIL_CANNOT_BE_INVITED, {
-            email: "Use a different email.",
+            email: en.serverMessages.hosts.useDifferentEmail,
           });
     }
     if (error) throw new Error(`Adding the host failed: ${error.message}`);
@@ -118,7 +118,7 @@ export async function inviteHost(
   revalidatePath(HOSTS_PATH);
   return {
     status: "success",
-    message: `${displayName} is now a host. They sign in on the login page with ${email}.`,
+    message: en.serverMessages.hosts.nowAHost(displayName, email),
   };
 }
 

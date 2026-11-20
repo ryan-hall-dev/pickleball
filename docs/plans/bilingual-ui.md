@@ -1,6 +1,6 @@
 # English / Tiếng Việt switch
 
-Status: approved 2026-11-19. Phase 1 built locally (not deployed; awaiting the Vietnamese review). Phase 2 not started.
+Status: approved 2026-11-19. Phase 1 deployed 2026-11-20 (review passed, no changes). Phase 2 (host screens) built locally 2026-11-20, awaiting its Vietnamese review; not deployed.
 
 ## Goal
 
@@ -70,3 +70,16 @@ Each phase runs lint, typecheck, format check, Vitest with local Supabase, pgTAP
   - The Vietnamese date case in `checkinHeaderFormatting.test.ts`.
   - The switch keeping typed input and translating errors (`ParticipantCheckinForm.test.tsx`).
   - The e2e "in Vietnamese" describe in `e2e/checkin.spec.ts`: a `vi-VN` browser checks in in Vietnamese at 390px, gets approved, switches to English, and the choice survives a reload; plus the inactive link in Vietnamese.
+
+## Phase 2 as built (2026-11-20)
+
+- **Where the switch is:** the host header (every host page) and the sign-in page. The host layout reads the language once and wraps the area in `LocaleProvider`; Suspense fallbacks outside a provider show "Loading… · Đang tải…".
+- **Files:** `src/i18n/messages/hostEn.ts` / `hostVi.ts` (screen text), `serverEn.ts` / `serverVi.ts` (server messages and one sentence per engine error code), `src/i18n/courtName.ts`, `getMessages()` and `hostPageTitle()` in `src/i18n/getLocale.ts`.
+- **Server messages:** server actions still answer in English, now taken from `en.serverMessages` / `en.validation` (one source). The browser shows them through `translateMessage`, which matches exact strings and the patterns of message functions (names and numbers carried over). A message stays in the stored English and is translated when drawn, so an error on screen follows a language switch. Messages made in the browser (offline, unconfirmed write, wait for save) use the same set.
+- **Engine rejections:** `LiveWriteResult` carries `engineErrorCode`; English shows the engine's own detailed message, Vietnamese the sentence for the code (`translateEngineError`).
+- **Court names:** generated names ("Court 3") read "Sân 3" in Vietnamese; any other stored name stays as entered.
+- **Printed stickers** use the printing host's language ("Scan to check in" / "Quét để điểm danh").
+- **Not translated:** the six old Setup components no longer rendered (`CourtsCard`, `RotationCard`, `SavedSetups`, `SessionDetailsCard`, `SessionSummary`, `SetupStepper`), and server messages only they can trigger.
+- **Review:** `pnpm i18n-review-rows` now picks sample values by parameter name and runs with a small resolve hook (`scripts/resolveTsExtensions.mjs`). The phase 2 review page (claude.ai artifact `Bus1U7NV2B6ekDx1yYrEjL`) holds the 435 new lines; notes save to its `suggestions` collection.
+- **Tests:** `translateMessage` / engine / court-name unit tests (`src/i18n/locales.test.ts`), a Vietnamese court card test, host component tests render inside `renderWithLocale`, and `e2e/hostVietnamese.spec.ts`: a `vi-VN` phone at 390px signs in, sets up, starts and finishes a game in Vietnamese with no sideways scroll, then switches to English and the choice survives a reload.
+- **Known:** in Who's playing, the longer Vietnamese chip label ("TRUNG BÌNH · NAM") truncates names sooner on a phone (the English chip already truncates long names).

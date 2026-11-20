@@ -6,17 +6,18 @@
  */
 export function CheckinQrCode({
   qrCodeSvg,
-  shortLink,
+  label,
   className,
 }: {
   qrCodeSvg: string;
-  shortLink: string;
+  /** "QR code for the check-in link …", in the chosen language. */
+  label: string;
   className: string;
 }) {
   return (
     <div
       role="img"
-      aria-label={`QR code for the check-in link ${shortLink}`}
+      aria-label={label}
       className={`bg-white [&>svg]:block [&>svg]:size-full ${className}`}
       dangerouslySetInnerHTML={{ __html: qrCodeSvg }}
     />
