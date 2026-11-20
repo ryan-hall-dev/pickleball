@@ -13,7 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function LoginPage() {
   return (
-    <main className="flex flex-1 items-center justify-center px-5 py-10">
+    <main className="host-compact flex flex-1 items-center justify-center px-5 py-10">
       <div className="flex w-full max-w-[440px] flex-col gap-6">
         {/* The language comes from the request, so it streams in. */}
         <Suspense

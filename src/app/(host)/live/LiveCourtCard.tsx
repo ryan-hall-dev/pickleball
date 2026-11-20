@@ -34,24 +34,24 @@ function Teams({
       : (players.find((player) => player.participantId === id)?.name ??
         text.playerUnavailable);
   return (
-    <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3 max-sm:mt-0 max-sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] max-sm:gap-2">
+    <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3 compact:mt-0 compact:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] compact:gap-2">
       <div>
         {teams.teamA.map((id, index) => (
           <p
-            className="py-1 font-semibold break-words max-sm:py-0"
+            className="py-1 font-semibold break-words compact:py-0"
             key={id ?? `vacant-${index}`}
           >
             {name(id)}
           </p>
         ))}
       </div>
-      <span className="text-xs text-muted max-sm:text-[11px] max-sm:font-bold max-sm:text-link max-sm:uppercase">
+      <span className="text-xs text-muted compact:text-[11px] compact:font-bold compact:text-link compact:uppercase">
         {text.versus}
       </span>
-      <div className="max-sm:text-right">
+      <div className="compact:text-right">
         {teams.teamB.map((id, index) => (
           <p
-            className="py-1 font-semibold break-words max-sm:py-0"
+            className="py-1 font-semibold break-words compact:py-0"
             key={id ?? `vacant-${index}`}
           >
             {name(id)}
@@ -91,26 +91,28 @@ export function LiveCourtCard({
   const vacancy =
     court.called &&
     [...court.called.teamA, ...court.called.teamB].some((id) => id === null);
-  const phoneLayout = phoneCourtLayout(court, group, timeIsUp);
+  const compactLayout = compactCourtLayout(court, group, timeIsUp);
   return (
     <article
-      className={`${CARD_CLASS_NAME} ${PHONE_ARTICLE_CLASS_NAMES[phoneLayout]}`}
+      className={`${CARD_CLASS_NAME} ${COMPACT_ARTICLE_CLASS_NAMES[compactLayout]}`}
       aria-label={shownCourtName}
     >
       <header
         className={`flex flex-wrap items-center justify-between gap-2 ${
-          phoneLayout === "playing"
+          compactLayout === "playing" || compactLayout === "playingNothingNext"
             ? ""
-            : `max-sm:col-span-1! max-sm:col-start-1 max-sm:row-start-1 max-sm:justify-start ${phoneLayout === "group" ? "max-sm:mb-2" : ""}`
+            : `compact:col-span-1! compact:col-start-1 compact:row-start-1 compact:justify-start ${compactLayout === "group" ? "compact:mb-2" : ""}`
         }`}
       >
-        <h3 className="text-lg font-bold max-sm:text-base">{shownCourtName}</h3>
+        <h3 className="text-lg font-bold compact:text-base">
+          {shownCourtName}
+        </h3>
         <span
-          className={`text-sm font-semibold max-sm:rounded-full max-sm:px-2 max-sm:py-0.5 max-sm:text-xs ${
+          className={`text-sm font-semibold compact:rounded-full compact:px-2 compact:py-0.5 compact:text-xs ${
             court.activeMatch
-              ? "text-lime-soft max-sm:border max-sm:border-lime-edge max-sm:bg-lime-surface max-sm:font-bold"
-              : "text-muted max-sm:bg-inner-border max-sm:text-text-soft"
-          } ${phoneLayout === "group" ? "max-sm:hidden" : ""}`}
+              ? "text-lime-soft compact:border compact:border-lime-edge compact:bg-lime-surface compact:font-bold"
+              : "text-muted compact:bg-inner-border compact:text-text-soft"
+          } ${compactLayout === "group" ? "compact:hidden" : ""}`}
         >
           {court.activeMatch
             ? text.playingMinutes(
@@ -128,7 +130,7 @@ export function LiveCourtCard({
         <>
           <Teams teams={court.activeMatch} players={players} />
           <button
-            className={`${PRIMARY_BUTTON_CLASS_NAME} mt-4 max-sm:mt-3`}
+            className={`${PRIMARY_BUTTON_CLASS_NAME} mt-4 compact:mt-3`}
             type="button"
             disabled={disabled}
             onClick={() =>
@@ -139,7 +141,7 @@ export function LiveCourtCard({
           </button>
         </>
       ) : court.called ? null : (
-        <p className="mt-2 text-xs text-muted max-sm:hidden">{text.noGame}</p>
+        <p className="mt-2 text-xs text-muted compact:hidden">{text.noGame}</p>
       )}
       <CourtRecovery
         key={court.activeMatch?.matchId ?? "idle"}
@@ -151,28 +153,24 @@ export function LiveCourtCard({
       />
       <section
         aria-label={text.upNextFor(shownCourtName)}
-        className={`mt-5 rounded-[20px] border border-blue-edge bg-blue-surface p-4 ${
-          phoneLayout === "playing"
-            ? "max-sm:mt-3 max-sm:rounded-[14px] max-sm:p-3"
-            : "max-sm:contents"
-        }`}
+        className={`mt-5 rounded-[20px] border border-blue-edge bg-blue-surface p-4 ${COMPACT_UP_NEXT_BOX_CLASS_NAMES[compactLayout]}`}
       >
         <h4
-          className={`font-bold text-blue-soft ${PHONE_UP_NEXT_HEADING_CLASS_NAMES[phoneLayout]}`}
+          className={`font-bold text-blue-soft ${COMPACT_UP_NEXT_HEADING_CLASS_NAMES[compactLayout]}`}
         >
           {court.called && !court.activeMatch ? text.readyToStart : text.upNext}
           {court.called && court.activeMatch ? text.prepared : ""}
         </h4>
         {timeIsUp ? (
           <p
-            className={`mt-2 text-xs text-muted ${phoneLayout === "free" ? PHONE_FREE_CAPTION_CLASS_NAME : ""}`}
+            className={`mt-2 text-xs text-muted ${compactLayout === "free" ? COMPACT_FREE_CAPTION_CLASS_NAME : ""}`}
           >
             {text.timeIsUp}
           </p>
         ) : group ? (
           <>
             <Teams teams={group} players={players} />
-            <p className="mt-2 text-xs text-blue-soft max-sm:mt-1.5">
+            <p className="mt-2 text-xs text-blue-soft compact:mt-1.5">
               {court.called ? text.fixed : text.longestWaitsFirst}
             </p>
             {vacancy && (
@@ -182,11 +180,11 @@ export function LiveCourtCard({
                 </AttentionMessage>
               </div>
             )}
-            <div className="mt-3 flex flex-wrap gap-2 max-sm:mt-2.5 max-sm:gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-2 compact:mt-2.5 compact:gap-1.5">
               {court.called ? (
                 <button
                   type="button"
-                  className={`${SECONDARY_BUTTON_CLASS_NAME} max-sm:flex-1`}
+                  className={`${SECONDARY_BUTTON_CLASS_NAME} compact:flex-1`}
                   disabled={disabled || !!court.activeMatch || !!vacancy}
                   onClick={() =>
                     onAction({
@@ -202,7 +200,7 @@ export function LiveCourtCard({
               ) : (
                 <button
                   type="button"
-                  className={`${SECONDARY_BUTTON_CLASS_NAME} max-sm:flex-1`}
+                  className={`${SECONDARY_BUTTON_CLASS_NAME} compact:flex-1`}
                   disabled={disabled}
                   onClick={() =>
                     onAction({
@@ -267,7 +265,13 @@ export function LiveCourtCard({
         ) : (
           <>
             <p
-              className={`mt-2 text-sm text-muted ${phoneLayout === "free" ? PHONE_FREE_CAPTION_CLASS_NAME : "max-sm:text-xs"}`}
+              className={`mt-2 text-sm text-muted ${
+                compactLayout === "free"
+                  ? COMPACT_FREE_CAPTION_CLASS_NAME
+                  : compactLayout === "playingNothingNext" && !selected
+                    ? "compact:sr-only"
+                    : "compact:mt-0 compact:mb-1.5 compact:text-xs"
+              }`}
             >
               {court.activeMatch
                 ? selected
@@ -278,9 +282,11 @@ export function LiveCourtCard({
             <button
               type="button"
               className={`${SECONDARY_BUTTON_CLASS_NAME} mt-3 ${
-                phoneLayout === "free"
-                  ? "max-sm:col-start-2 max-sm:row-span-2 max-sm:row-start-1 max-sm:mt-0"
-                  : "max-sm:mt-2"
+                compactLayout === "free"
+                  ? "compact:col-start-2 compact:row-span-2 compact:row-start-1 compact:mt-0"
+                  : compactLayout === "playingNothingNext"
+                    ? "compact:mt-0 compact:h-12 compact:w-full compact:border compact:border-blue-edge compact:bg-transparent compact:text-blue-soft"
+                    : "compact:mt-2"
               }`}
               disabled={disabled}
               onClick={onPrepare}
@@ -295,39 +301,54 @@ export function LiveCourtCard({
 }
 
 /**
- * Phones (Design A, docs/plans/mobile-compact-ui.md): a game in progress keeps
- * its Up next box; a court with a group waiting to start (or a suggestion)
- * becomes one card whose Up next title is the pill beside the court name; a
- * free court is one row with its button on the right. The Up next box uses
- * `display: contents` on phones so its parts join the card's grid.
+ * Below 1024px (Design A, docs/plans/mobile-compact-ui.md): a game in progress
+ * keeps a slim Up next box, or only a "Prepare next four" button while nothing
+ * is prepared; a court with a group waiting to start (or a suggestion) becomes
+ * one card whose Up next title is the pill beside the court name; a free court
+ * is one row with its button on the right. The Up next box uses
+ * `display: contents` there so its parts join the card's grid.
  */
-type PhoneCourtLayout = "playing" | "group" | "free";
+type CompactCourtLayout = "playing" | "playingNothingNext" | "group" | "free";
 
-function phoneCourtLayout(
+function compactCourtLayout(
   court: LiveCourt,
   group: LiveTeams | null,
   timeIsUp: boolean,
-): PhoneCourtLayout {
-  if (court.activeMatch) return "playing";
+): CompactCourtLayout {
+  if (court.activeMatch)
+    return group || timeIsUp ? "playing" : "playingNothingNext";
   return group && !timeIsUp ? "group" : "free";
 }
 
-const PHONE_ARTICLE_CLASS_NAMES: Record<PhoneCourtLayout, string> = {
+const COMPACT_ARTICLE_CLASS_NAMES: Record<CompactCourtLayout, string> = {
   playing: "",
+  // Court options and Prepare next four share a row; open options take it all.
+  playingNothingNext:
+    "compact:grid compact:grid-cols-2 compact:gap-x-2 compact:[&>*]:col-span-2 compact:[&>details]:col-span-1 compact:[&>details[open]]:col-span-2 compact:[&>section]:col-span-1",
   group:
-    "max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-2 max-sm:border-blue-edge max-sm:bg-blue-surface max-sm:[&>*]:col-span-2 max-sm:[&>section>*]:col-span-2",
-  free: "max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-2.5 max-sm:[&>*]:col-span-2",
+    "compact:grid compact:grid-cols-[minmax(0,1fr)_auto] compact:items-center compact:gap-x-2 compact:border-blue-edge compact:bg-blue-surface compact:[&>*]:col-span-2 compact:[&>section>*]:col-span-2",
+  free: "compact:grid compact:grid-cols-[minmax(0,1fr)_auto] compact:items-center compact:gap-x-2.5 compact:[&>*]:col-span-2",
 };
 
-const PHONE_UP_NEXT_HEADING_CLASS_NAMES: Record<PhoneCourtLayout, string> = {
-  playing: "",
-  group:
-    "max-sm:col-span-1! max-sm:col-start-2 max-sm:row-start-1 max-sm:justify-self-end max-sm:rounded-full max-sm:bg-blue max-sm:px-2.5 max-sm:py-0.5 max-sm:text-xs max-sm:text-on-blue",
-  free: "max-sm:sr-only",
+const COMPACT_UP_NEXT_BOX_CLASS_NAMES: Record<CompactCourtLayout, string> = {
+  playing: "compact:mt-3 compact:rounded-[14px] compact:p-3",
+  playingNothingNext:
+    "compact:mt-3 compact:rounded-none compact:border-0 compact:bg-transparent compact:p-0",
+  group: "compact:contents",
+  free: "compact:contents",
 };
 
-const PHONE_FREE_CAPTION_CLASS_NAME =
-  "max-sm:col-span-1! max-sm:col-start-1 max-sm:row-start-2 max-sm:mt-0.5 max-sm:text-xs";
+const COMPACT_UP_NEXT_HEADING_CLASS_NAMES: Record<CompactCourtLayout, string> =
+  {
+    playing: "",
+    playingNothingNext: "compact:sr-only",
+    group:
+      "compact:col-span-1! compact:col-start-2 compact:row-start-1 compact:justify-self-end compact:rounded-full compact:bg-blue compact:px-2.5 compact:py-0.5 compact:text-xs compact:text-on-blue",
+    free: "compact:sr-only",
+  };
+
+const COMPACT_FREE_CAPTION_CLASS_NAME =
+  "compact:col-span-1! compact:col-start-1 compact:row-start-2 compact:mt-0.5 compact:text-xs";
 
 const PICKER_VISIBLE_WHEN_FOLDED = 5;
 type Gender = NonNullable<LivePlayer["gender"]>;

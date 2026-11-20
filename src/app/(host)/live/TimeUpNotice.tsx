@@ -23,11 +23,11 @@ export function TimeUpNotice({
   return (
     <section
       aria-labelledby="time-up-heading"
-      className="rounded-3xl border border-orange-edge bg-orange-surface p-5 max-sm:rounded-2xl max-sm:p-3"
+      className="rounded-3xl border border-orange-edge bg-orange-surface p-5 compact:rounded-2xl compact:p-3"
     >
       <h2
         id="time-up-heading"
-        className="text-xl font-extrabold max-sm:text-base"
+        className="text-xl font-extrabold compact:text-base"
       >
         <span
           aria-hidden="true"
@@ -45,7 +45,7 @@ export function TimeUpNotice({
       )}
       <button
         type="button"
-        className={`${PRIMARY_BUTTON_CLASS_NAME} mt-4 max-sm:mt-3`}
+        className={`${PRIMARY_BUTTON_CLASS_NAME} mt-4 compact:mt-3`}
         disabled={disabled || blocked}
         aria-describedby={blocked ? "time-up-active-games" : undefined}
         onClick={onEnd}

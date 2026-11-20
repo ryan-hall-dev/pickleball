@@ -731,7 +731,7 @@ function SessionSetupForm({
         >
           <h2
             id="short-setup-heading"
-            className="text-xl font-bold max-sm:text-base"
+            className="text-xl font-bold compact:text-base"
           >
             {text.simpleStart}
           </h2>
@@ -854,11 +854,11 @@ function SessionSetupForm({
           event.preventDefault();
           closeStartDialog();
         }}
-        className="m-auto w-[calc(100%-32px)] max-w-[560px] rounded-[28px] border border-card-border bg-card p-6 text-text shadow-[0_24px_64px_rgba(0,0,0,0.5)] backdrop:bg-bg-backdrop/90 max-sm:rounded-2xl max-sm:p-4"
+        className="m-auto w-[calc(100%-32px)] max-w-[560px] rounded-[28px] border border-card-border bg-card p-6 text-text shadow-[0_24px_64px_rgba(0,0,0,0.5)] backdrop:bg-bg-backdrop/90 compact:rounded-2xl compact:p-4"
       >
         <h2
           id="confirm-start-heading"
-          className="text-[26px] font-extrabold max-sm:text-xl"
+          className="text-[26px] font-extrabold compact:text-xl"
         >
           {text.confirmTitle(form.name.trim())}
         </h2>

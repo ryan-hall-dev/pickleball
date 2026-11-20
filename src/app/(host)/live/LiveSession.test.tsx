@@ -430,8 +430,8 @@ describe("LiveSession layout", () => {
     expect(follows(courts, waiting)).toBe(true);
     expect(follows(waiting, checkIns)).toBe(true);
     // From the sm breakpoint, CSS order puts check-ins first again.
-    expect(checkIns.closest("#checkins")).toHaveClass("sm:order-1");
-    expect(courts.closest("#courts")).toHaveClass("sm:order-3");
+    expect(checkIns.closest("#checkins")).toHaveClass("lg:order-1");
+    expect(courts.closest("#courts")).toHaveClass("lg:order-3");
     // The jump links follow the same order and count each section.
     const sections = within(
       screen.getByRole("navigation", { name: "Live sections" }),

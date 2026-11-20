@@ -39,7 +39,7 @@ export function HostMenu({ children }: { children: ReactNode }) {
   }, [open]);
 
   return (
-    <div ref={container} className="sm:hidden">
+    <div ref={container} className="lg:hidden">
       <button
         ref={button}
         type="button"

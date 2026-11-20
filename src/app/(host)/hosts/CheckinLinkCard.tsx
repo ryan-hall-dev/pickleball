@@ -39,7 +39,7 @@ export function CheckinLinkCard({
     >
       <h2
         id="checkin-link-card-heading"
-        className="text-xl font-bold max-sm:text-base"
+        className="text-xl font-bold compact:text-base"
       >
         {text.heading}
       </h2>

@@ -10,7 +10,7 @@ import {
   useRandomClientIp as giveRandomClientIp,
 } from "./support/localHostSession";
 
-// The compact phone layout (docs/plans/mobile-compact-ui.md) at 390 px:
+// The compact layout (docs/plans/mobile-compact-ui.md) at 390 px, then 820 px:
 // nothing scrolls sideways and everything tappable answers a 44px finger.
 // Set PHONE_SCREENSHOT_DIR to also save a screenshot of each step.
 const PHONE_WIDTH = 390;
@@ -73,7 +73,14 @@ async function checkInFromAPhone(
     .getByRole("group", { name: "Your level" })
     .getByRole("button", { name: "Beginner" })
     .click();
-  await phone.getByRole("button", { name: "Check in", exact: true }).click();
+  // The player page keeps its own sizes: the host compact layout stops at
+  // the host screens (a 56px main button, not the host's 48px).
+  const checkInButton = phone.getByRole("button", {
+    name: "Check in",
+    exact: true,
+  });
+  expect((await checkInButton.boundingBox())!.height).toBe(56);
+  await checkInButton.click();
   await expect(
     phone.getByRole("heading", { name: "Waiting for the host to approve" }),
   ).toBeVisible();
@@ -234,4 +241,22 @@ test("the host screens fit a 390 px phone in both languages", async ({
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expectPhoneFriendly(page);
   await capture(page, "10-sticker-and-qr");
+
+  // Tablets (below 1024px) get the same compact layout and order.
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await page.goto("/live");
+  await expect(
+    page.getByRole("button", { name: "Menu", exact: true }),
+  ).toBeVisible();
+  const tabletCourtsTop = (await page
+    .getByRole("heading", { name: "Courts & Up next" })
+    .boundingBox())!.y;
+  const tabletCheckinsTop = (await page
+    .getByRole("region", { name: /^Check-ins waiting/ })
+    .boundingBox())!.y;
+  expect(tabletCourtsTop).toBeLessThan(tabletCheckinsTop);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(820);
+  await capture(page, "11-live-tablet");
 });

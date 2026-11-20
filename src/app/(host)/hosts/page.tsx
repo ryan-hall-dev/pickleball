@@ -50,7 +50,7 @@ async function HostsManagement() {
       >
         <h2
           id="hosts-list-heading"
-          className="text-xl font-bold max-sm:text-base"
+          className="text-xl font-bold compact:text-base"
         >
           {text.whoCanHost}
         </h2>
@@ -112,7 +112,7 @@ async function HostsManagement() {
             >
               <h2
                 id="invite-host-heading"
-                className="text-xl font-bold max-sm:text-base"
+                className="text-xl font-bold compact:text-base"
               >
                 {text.inviteHeading}
               </h2>
@@ -124,7 +124,7 @@ async function HostsManagement() {
             >
               <h2
                 id="social-name-heading"
-                className="text-xl font-bold max-sm:text-base"
+                className="text-xl font-bold compact:text-base"
               >
                 {text.socialNameHeading}
               </h2>

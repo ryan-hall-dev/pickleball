@@ -58,7 +58,7 @@ async function StickerAndQrContent() {
   return (
     <>
       <div>
-        <h1 className="text-[32px] font-extrabold tracking-[-0.01em] max-sm:text-[17px] max-sm:font-bold max-sm:tracking-normal">
+        <h1 className="text-[32px] font-extrabold tracking-[-0.01em] compact:text-[17px] compact:font-bold compact:tracking-normal">
           {text.title}
         </h1>
         <p className="mt-1 max-w-[720px] text-muted">
@@ -72,7 +72,7 @@ async function StickerAndQrContent() {
         >
           <h2
             id="checkin-link-heading"
-            className="text-xl font-bold max-sm:text-base"
+            className="text-xl font-bold compact:text-base"
           >
             {text.checkinLink}
           </h2>
@@ -109,7 +109,7 @@ async function StickerAndQrContent() {
         >
           <h2
             id="qr-code-heading"
-            className="self-start text-xl font-bold max-sm:text-base"
+            className="self-start text-xl font-bold compact:text-base"
           >
             {text.qrCode}
           </h2>

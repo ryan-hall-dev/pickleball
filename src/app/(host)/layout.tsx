@@ -59,63 +59,66 @@ async function HostGate({ children }: { children: ReactNode }) {
 
   return (
     <LocaleProvider initialLocale={locale}>
-      {/* Phones: a 52px sticky bar with the ☰ menu (docs/plans/mobile-compact-ui.md). */}
-      <header className="border-b border-card-border bg-bg-header max-sm:sticky max-sm:top-0 max-sm:z-20">
-        <div className="relative mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-6 gap-y-3 px-7 py-3 max-sm:h-[52px] max-sm:flex-nowrap max-sm:gap-2 max-sm:py-0 max-sm:pr-2 max-sm:pl-3.5">
-          <Link
-            href="/setup"
-            className="flex min-h-11 min-w-0 items-center gap-3 rounded-xl max-sm:flex-1 max-sm:gap-2.5"
-          >
-            <ClubLogo className="max-sm:size-7" />
-            {/* The social's own name (decision D1); the app name stays on
+      {/* Below 1024px: compact sizes and a 52px sticky bar with the ☰ menu
+          (docs/plans/mobile-compact-ui.md). */}
+      <div className="host-compact flex flex-1 flex-col">
+        <header className="border-b border-card-border bg-bg-header compact:sticky compact:top-0 compact:z-20">
+          <div className="relative mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-6 gap-y-3 px-7 py-3 compact:h-[52px] compact:flex-nowrap compact:gap-2 compact:py-0 compact:pr-2 compact:pl-3.5">
+            <Link
+              href="/setup"
+              className="flex min-h-11 min-w-0 items-center gap-3 rounded-xl compact:flex-1 compact:gap-2.5"
+            >
+              <ClubLogo className="compact:size-7" />
+              {/* The social's own name (decision D1); the app name stays on
                 /login and in tab titles. */}
-            <span className="text-[19px] font-bold max-sm:truncate max-sm:text-base">
-              {host.socialName}
-            </span>
-          </Link>
-          <div className="max-sm:hidden">
-            <HostNav />
-          </div>
-          <div className="ml-auto flex flex-wrap items-center gap-3 max-sm:flex-nowrap max-sm:gap-1">
-            <LanguageSwitch compactOnPhones />
-            <div className="contents max-sm:hidden">
-              <HostIdentity
-                displayName={host.displayName}
-                roleLabel={
-                  host.role === "manager" ? text.socialManager : text.host
-                }
-              />
-              <form action={signOut}>
-                <button type="submit" className={OUTLINE_BUTTON_CLASS_NAME}>
-                  {text.signOut}
-                </button>
-              </form>
+              <span className="text-[19px] font-bold compact:truncate compact:text-base">
+                {host.socialName}
+              </span>
+            </Link>
+            <div className="compact:hidden">
+              <HostNav />
             </div>
-            <HostMenu>
-              <HostNav layout="column" />
-              <div className="flex items-center gap-3 border-t border-card-border px-1 pt-3">
+            <div className="ml-auto flex flex-wrap items-center gap-3 compact:flex-nowrap compact:gap-1">
+              <LanguageSwitch compactBelowDesktop />
+              <div className="contents compact:hidden">
                 <HostIdentity
                   displayName={host.displayName}
                   roleLabel={
                     host.role === "manager" ? text.socialManager : text.host
                   }
                 />
+                <form action={signOut}>
+                  <button type="submit" className={OUTLINE_BUTTON_CLASS_NAME}>
+                    {text.signOut}
+                  </button>
+                </form>
               </div>
-              <form action={signOut}>
-                <button
-                  type="submit"
-                  className={`${OUTLINE_BUTTON_CLASS_NAME} w-full`}
-                >
-                  {text.signOut}
-                </button>
-              </form>
-            </HostMenu>
+              <HostMenu>
+                <HostNav layout="column" />
+                <div className="flex items-center gap-3 border-t border-card-border px-1 pt-3">
+                  <HostIdentity
+                    displayName={host.displayName}
+                    roleLabel={
+                      host.role === "manager" ? text.socialManager : text.host
+                    }
+                  />
+                </div>
+                <form action={signOut}>
+                  <button
+                    type="submit"
+                    className={`${OUTLINE_BUTTON_CLASS_NAME} w-full`}
+                  >
+                    {text.signOut}
+                  </button>
+                </form>
+              </HostMenu>
+            </div>
           </div>
-        </div>
-      </header>
-      <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-4 px-7 pt-6 pb-12 max-sm:gap-2.5 max-sm:px-3 max-sm:pt-3 max-sm:pb-8">
-        {children}
-      </main>
+        </header>
+        <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-4 px-7 pt-6 pb-12 compact:gap-2.5 compact:px-3 compact:pt-3 compact:pb-8">
+          {children}
+        </main>
+      </div>
     </LocaleProvider>
   );
 }
@@ -155,7 +158,7 @@ function NotAHostNotice({
         <ClubLogo />
         <h1
           id="not-a-host-heading"
-          className="text-[32px] font-extrabold tracking-[-0.01em] max-sm:text-[17px] max-sm:font-bold max-sm:tracking-normal"
+          className="text-[32px] font-extrabold tracking-[-0.01em] compact:text-[17px] compact:font-bold compact:tracking-normal"
         >
           {text.title}
         </h1>

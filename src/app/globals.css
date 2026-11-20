@@ -72,9 +72,19 @@ body {
   line-height: 1.4;
 }
 
-/* Compact phone layout (docs/plans/mobile-compact-ui.md): 14px base. */
-@media (width < 40rem) {
-  body {
+/* Compact layout for phones and tablets (docs/plans/mobile-compact-ui.md):
+   host screens and sign-in only (inside .host-compact), below 1024px. The
+   player check-in page keeps its own sizes. */
+@custom-variant compact {
+  @media (width < 64rem) {
+    :where(.host-compact) & {
+      @slot;
+    }
+  }
+}
+
+@media (width < 64rem) {
+  .host-compact {
     font-size: 14px;
     line-height: 1.35;
   }

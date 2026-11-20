@@ -150,13 +150,13 @@ export function DiscardDraftButton({
         onCancel={cancelWithEscape}
         onClose={resetAfterClose}
         onClick={closeOnBackdropClick}
-        className="m-auto max-h-[calc(100%-32px)] w-[calc(100%-32px)] max-w-[560px] overflow-y-auto rounded-[28px] border border-card-border bg-card p-0 text-text shadow-[0_24px_64px_rgba(0,0,0,0.5)] backdrop:bg-bg-backdrop/90 max-sm:rounded-2xl"
+        className="m-auto max-h-[calc(100%-32px)] w-[calc(100%-32px)] max-w-[560px] overflow-y-auto rounded-[28px] border border-card-border bg-card p-0 text-text shadow-[0_24px_64px_rgba(0,0,0,0.5)] backdrop:bg-bg-backdrop/90 compact:rounded-2xl"
       >
         <div className="flex flex-col gap-4 p-6">
           <div className="flex flex-col gap-1.5">
             <h2
               id={titleId}
-              className="text-[26px] font-extrabold break-words max-sm:text-xl"
+              className="text-[26px] font-extrabold break-words compact:text-xl"
             >
               {title}
             </h2>

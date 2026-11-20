@@ -151,7 +151,7 @@ export function LoginForm() {
         <div className="flex flex-col gap-1.5">
           <h1
             id="login-heading"
-            className="text-[32px] font-extrabold tracking-[-0.01em] max-sm:text-2xl"
+            className="text-[32px] font-extrabold tracking-[-0.01em] compact:text-2xl"
           >
             {text.title}
           </h1>
@@ -197,7 +197,7 @@ export function LoginForm() {
       <div className="flex flex-col gap-1.5">
         <h1
           id="login-heading"
-          className="text-[32px] font-extrabold tracking-[-0.01em] max-sm:text-2xl"
+          className="text-[32px] font-extrabold tracking-[-0.01em] compact:text-2xl"
         >
           {text.checkEmailTitle}
         </h1>
@@ -225,7 +225,7 @@ export function LoginForm() {
           disabled={isPending}
           aria-invalid={hasError || undefined}
           aria-describedby={hasError ? feedbackId : undefined}
-          className={`${TEXT_INPUT_CLASS_NAME} text-xl font-bold tracking-[0.3em] tabular-nums max-sm:text-base`}
+          className={`${TEXT_INPUT_CLASS_NAME} text-xl font-bold tracking-[0.3em] tabular-nums compact:text-base`}
         />
       </div>
       {feedbackRegion}

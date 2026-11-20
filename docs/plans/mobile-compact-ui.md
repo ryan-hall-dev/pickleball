@@ -69,3 +69,12 @@ Lint, typecheck, Vitest, build, Playwright against a production build. Then the 
 - One new string: `host.header.menu` ("Menu" in both languages; Vietnamese to confirm).
 - "Updates every 5 seconds" moved into the session card (all sizes).
 - Tests: `e2e/phoneLayout.spec.ts` (390 px, both languages: no sideways scroll, no tap area under 44 px, order, counts, menu, sheet; `PHONE_SCREENSHOT_DIR` saves screenshots); `HostMenu.test.tsx`; existing tests updated for the phone order and the menu.
+
+## Tablets and 8 courts (2026-11-21)
+
+An 8-court, 46-player local rehearsal (36 phone check-ins, 48 game starts) found no double-bookings or invalid groups, but the Live screen was too long at 8 courts: phones needed about 3½ screens to reach the waiting list, and tablets still had the old layout with check-ins and large waiting rows above the courts. Ryan approved two fixes:
+
+- The compact layout now applies below 1024 px (phones and tablets) through a `compact:` variant scoped to `.host-compact` (host layout and sign-in). This also stops the shared control styles from shrinking the player check-in page, which had happened since the 2026-11-20 deploy; `e2e/phoneLayout.spec.ts` checks its 56 px main button.
+- A playing court with nothing prepared shows Court options and an outline Prepare next four side by side (`playingNothingNext`); tablets (768 px up) show courts two per row.
+
+Measured at the same moment (all 8 courts playing): the courts section is about 1,760 px on a 390 px phone (was about 2,180) and about 890 px on an 820 px tablet.

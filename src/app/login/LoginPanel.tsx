@@ -25,7 +25,7 @@ function NoHostsYet({ messages }: { messages: Messages }) {
     <>
       <h1
         id="login-heading"
-        className="text-[32px] font-extrabold tracking-[-0.01em] max-sm:text-2xl"
+        className="text-[32px] font-extrabold tracking-[-0.01em] compact:text-2xl"
       >
         {text.title}
       </h1>

@@ -68,7 +68,7 @@ async function SessionSetupContent() {
           <>
             <h2
               id="no-draft-heading"
-              className="text-xl font-bold max-sm:text-base"
+              className="text-xl font-bold compact:text-base"
             >
               {text.isLive(openSession.name)}
             </h2>
@@ -84,7 +84,7 @@ async function SessionSetupContent() {
           <>
             <h2
               id="no-draft-heading"
-              className="text-xl font-bold max-sm:text-base"
+              className="text-xl font-bold compact:text-base"
             >
               {text.noSession}
             </h2>

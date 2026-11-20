@@ -109,7 +109,7 @@ export function LiveAddPlayer({
       <button
         type="button"
         // Phones use the + beside the section links instead.
-        className={`${OUTLINE_BUTTON_CLASS_NAME} self-start max-sm:hidden`}
+        className={`${OUTLINE_BUTTON_CLASS_NAME} self-start compact:hidden`}
         disabled={disabled}
         onClick={() => onOpenChange(true)}
       >
@@ -122,7 +122,7 @@ export function LiveAddPlayer({
           unless an add is still unresolved. */}
       <div
         aria-hidden="true"
-        className="fixed inset-0 z-30 bg-bg-backdrop/80 sm:hidden"
+        className="fixed inset-0 z-30 bg-bg-backdrop/80 lg:hidden"
         onClick={() => {
           if (!unresolved && !saving) close();
         }}
@@ -134,7 +134,7 @@ export function LiveAddPlayer({
         }}
         aria-label={text.button}
         noValidate
-        className="w-full rounded-[20px] border border-inner-border bg-inner p-4 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-40 max-sm:max-h-[85dvh] max-sm:overflow-y-auto max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0 max-sm:bg-card max-sm:pb-[max(16px,env(safe-area-inset-bottom))]"
+        className="w-full rounded-[20px] border border-inner-border bg-inner p-4 compact:fixed compact:inset-x-0 compact:bottom-0 compact:z-40 compact:max-h-[85dvh] compact:overflow-y-auto compact:rounded-b-none compact:border-x-0 compact:border-b-0 compact:bg-card compact:pb-[max(16px,env(safe-area-inset-bottom))]"
       >
         <h3 className="text-base font-bold">{text.button}</h3>
         <p className="mt-1 text-[13px] text-muted">{text.intro}</p>
