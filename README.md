@@ -4,6 +4,12 @@ A court-rotation and check-in app for pickleball club socials. The host enters h
 
 Built for real use: it runs a live club pilot, on phones and tablets, courtside.
 
+<p align="center">
+  <img src="docs/screenshots/live-screen.png" alt="Live host screen: waiting list, courts and up-next groups" width="48%">
+  &nbsp;
+  <img src="docs/screenshots/checkin-qr.png" alt="Sticker and QR check-in page" width="48%">
+</p>
+
 ## What it does
 
 - **Fair court rotation.** A scheduling engine recommends the next group for every free court, balancing games played, waiting time, court time, rest and repeat partners/opponents, and explains each pick in plain words ("Waiting ~14 min", "No repeat partners").
