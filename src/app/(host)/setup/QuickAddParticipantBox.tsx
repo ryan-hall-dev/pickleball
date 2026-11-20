@@ -249,13 +249,19 @@ function ParticipantChip({
     ? messages.levels[participant.skillLevel]
     : text.noLevel;
   return (
-    <li className="flex max-w-full min-w-0 items-center gap-2 rounded-full border border-blue-edge bg-blue-surface p-1">
+    // The name gets its own line and wraps rather than being cut off; the
+    // level and gender sit under it (Vietnamese labels are longer).
+    <li className="flex max-w-full min-w-0 items-center gap-2 rounded-[22px] border border-blue-edge bg-blue-surface p-1">
       <InitialsAvatar name={fullName} tone="next" size="chip" />
-      <span className="min-w-0 truncate text-sm font-semibold">{fullName}</span>
-      <span className="shrink-0 text-[11px] font-bold tracking-[0.08em] text-link uppercase">
-        {isPending
-          ? text.adding
-          : `${label} · ${participant.gender ? messages.genders[participant.gender] : text.genderMissing}`}
+      <span className="flex min-w-0 flex-col py-0.5">
+        <span className="text-sm leading-tight font-semibold break-words">
+          {fullName}
+        </span>
+        <span className="text-[11px] leading-tight font-bold tracking-[0.08em] text-link uppercase">
+          {isPending
+            ? text.adding
+            : `${label} · ${participant.gender ? messages.genders[participant.gender] : text.genderMissing}`}
+        </span>
       </span>
       <button
         type="button"

@@ -78,6 +78,17 @@ test("a Vietnamese phone signs in, sets up and runs a game in Vietnamese, then s
       page.getByRole("button", { name: `Xóa ${firstName} Nguyễn` }),
     ).toBeEnabled();
   }
+  // The longer Vietnamese level label used to squeeze names to "An …".
+  const clippedChipText = await page
+    .getByRole("list", { name: "Người chơi" })
+    .locator("li span")
+    .evaluateAll((spans) =>
+      spans
+        .filter((span) => span.scrollWidth > span.clientWidth + 1)
+        .map((span) => span.textContent),
+    );
+  expect(clippedChipText).toEqual([]);
+  await expect(page.getByText("An Nguyễn", { exact: true })).toBeVisible();
   await expectNoSidewaysScroll(page);
   await page
     .getByRole("button", { name: "Bắt đầu buổi chơi", exact: true })
