@@ -16,4 +16,4 @@ Status: draft | planned | in-progress | blocked | done
 
 | English / Tiếng Việt switch | [plans/bilingual-ui.md](plans/bilingual-ui.md) | in-progress; phase 1 (check-in) deployed 2026-11-20; phase 2 (host screens) built, review passed, not deployed | feature/bilingual-host-screens |
 
-| Compact phone layout | [plans/mobile-compact-ui.md](plans/mobile-compact-ui.md) | built 2026-11-20; screenshot review pending; not deployed | feature/mobile-compact-ui |
+| Compact phone layout | [plans/mobile-compact-ui.md](plans/mobile-compact-ui.md) | built; screenshot review passed 2026-11-20; not deployed | feature/mobile-compact-ui |

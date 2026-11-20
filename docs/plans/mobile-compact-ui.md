@@ -1,6 +1,6 @@
 # Compact phone layout for host screens
 
-Status: built 2026-11-20, awaiting Ryan's screenshot review (approved plan 2026-11-20). Branch: `feature/mobile-compact-ui` (on top of `feature/bilingual-host-screens`).
+Status: built 2026-11-20; Ryan's screenshot review passed 2026-11-20 (all 11 screens, no changes); not deployed. Branch: `feature/mobile-compact-ui` (on top of `feature/bilingual-host-screens`).
 
 ## Why
 
