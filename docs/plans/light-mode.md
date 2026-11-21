@@ -107,5 +107,5 @@ Make every screen readable under bright court lighting. Ryan saw it at a social 
   - Unit tests: 970 pass.
   - e2e:
     - 70 passed.
-    - `live.spec.ts:244` (mobile) failed intermittently, 1 run in 3, on a Rest-button count timeout. Being checked against `efa08ff`.
+    - `live.spec.ts:244` (mobile) is flaky on a Rest-button count timeout. It fails 1 run in 15 both on `efa08ff` and on this branch, so the flakiness predates light mode. Left for a separate fix.
   - Screenshot review: https://claude.ai/artifact/NtGCczUh9nEHyoL3WQDZTu
