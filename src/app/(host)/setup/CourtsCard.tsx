@@ -213,7 +213,9 @@ export function CourtsCard({
             </span>{" "}
             {capacity.playersPerCourt}{" "}
             <span className="font-medium text-muted">players =</span>{" "}
-            <span className="text-lime">{capacity.seatsOnCourts} on court</span>
+            <span className="text-lime-ink">
+              {capacity.seatsOnCourts} on court
+            </span>
           </p>
           <p className="text-[15px] text-muted tabular-nums">
             {attendingPlayerCount === 0 ? (

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro, Outfit } from "next/font/google";
+import { THEME_BOOT_SCRIPT } from "@/components/themeScript";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -22,10 +23,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
+    // The boot script sets data-theme before React hydrates.
     <html
       lang="en"
+      data-theme="light"
+      suppressHydrationWarning
       className={`${outfit.variable} ${beVietnamPro.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="flex min-h-full flex-col font-sans">{children}</body>
     </html>
   );

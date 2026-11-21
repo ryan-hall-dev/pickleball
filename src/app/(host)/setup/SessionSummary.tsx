@@ -108,7 +108,7 @@ export function SessionSummary({
           </SummaryRow>
           <SummaryRow
             term="On court at once"
-            valueClassName="font-bold text-lime"
+            valueClassName="font-bold text-lime-ink"
           >
             <span className="tabular-nums">{capacity.onCourtAtStart}</span>
           </SummaryRow>

@@ -316,7 +316,7 @@ export function LiveSession({
         className={`${CARD_CLASS_NAME} flex flex-wrap items-center justify-between gap-4 compact:gap-x-2.5 compact:gap-y-1 compact:py-2.5 compact:pl-3.5`}
       >
         <div className="min-w-0 compact:flex-1">
-          <p className="text-xs font-bold tracking-widest text-lime uppercase compact:text-[11px]">
+          <p className="text-xs font-bold tracking-widest text-lime-ink uppercase compact:text-[11px]">
             {ended
               ? text.sessionEnded
               : timeIsUp

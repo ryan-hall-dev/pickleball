@@ -31,7 +31,8 @@ const ICON_TONE_CLASS_NAMES = {
   blue: "border-2 border-blue-edge bg-blue-surface text-link",
   lime: "bg-lime text-on-lime",
   neutral: "border-2 border-outline bg-inner text-text-soft",
-  orange: "border-2 border-orange-edge bg-orange-surface-strong text-orange",
+  orange:
+    "border-2 border-orange-edge bg-orange-surface-strong text-orange-ink",
 } as const;
 
 function StateScreen({

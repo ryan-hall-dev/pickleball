@@ -115,7 +115,7 @@ export function SessionDetailsCard({
           <span id="session-duration-label" className={FIELD_LABEL_CLASS_NAME}>
             Duration
             {hasValidDuration && (
-              <span className="font-semibold text-lime tabular-nums">
+              <span className="font-semibold text-lime-ink tabular-nums">
                 {" "}
                 · {durationMinutes} minutes, calculated from start and end
               </span>

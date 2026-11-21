@@ -19,6 +19,15 @@ test.afterAll(deleteCreatedLogins);
 
 const SCREENSHOT_DIR = process.env.PHONE_SCREENSHOT_DIR;
 
+// PHONE_SCREENSHOT_THEME=dark shoots the host screens in dark mode
+// (docs/plans/light-mode.md); the player page is always light.
+test.beforeEach(async ({ page }) => {
+  if (process.env.PHONE_SCREENSHOT_THEME !== "dark") return;
+  await page.addInitScript(() =>
+    window.localStorage.setItem("pickleball-theme", "dark"),
+  );
+});
+
 async function capture(page: Page, name: string, fullPage = true) {
   if (!SCREENSHOT_DIR) return;
   mkdirSync(SCREENSHOT_DIR, { recursive: true });

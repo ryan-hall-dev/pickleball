@@ -25,7 +25,7 @@ export function LiveSessionCard({ page }: { page: OpenCheckinPage }) {
       aria-labelledby="checkin-session-name"
       className="rounded-card border border-card-border bg-card p-[18px]"
     >
-      <p className="flex items-center gap-2 text-xs font-bold tracking-[0.12em] text-lime uppercase">
+      <p className="flex items-center gap-2 text-xs font-bold tracking-[0.12em] text-lime-ink uppercase">
         <span aria-hidden="true" className="size-[7px] rounded-full bg-lime" />
         {session.status === "draft" ? copy.notStarted : copy.liveNow}
       </p>

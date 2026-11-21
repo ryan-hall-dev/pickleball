@@ -25,7 +25,10 @@ export const viewport: Viewport = { viewportFit: "cover" };
 
 export default function CheckinPage({ params }: PageProps<"/t/[tag]">) {
   return (
-    <main className="mx-auto flex w-full max-w-[440px] flex-1 flex-col gap-4 px-5 pt-5">
+    <main
+      data-theme-lock="light"
+      className="mx-auto flex w-full max-w-[440px] flex-1 flex-col gap-4 px-5 pt-5"
+    >
       {/* The read depends on this phone's cookie, so it streams in (cacheComponents). */}
       <Suspense
         fallback={

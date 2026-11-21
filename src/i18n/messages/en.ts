@@ -10,6 +10,9 @@ export const en = {
   languageSwitch: {
     label: "Language",
   },
+  themeSwitch: {
+    darkMode: "Dark mode",
+  },
   loading: {
     checkin: "Loading check-in…",
   },

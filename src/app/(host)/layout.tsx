@@ -10,6 +10,7 @@ import {
 import { readHostAccess } from "@/server/auth/currentHost";
 import { signOut } from "@/server/auth/loginActions";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
+import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { getLocale } from "@/i18n/getLocale";
 import { LocaleProvider } from "@/i18n/LocaleProvider";
 import { MESSAGES, type Messages } from "@/i18n/messages";
@@ -79,6 +80,7 @@ async function HostGate({ children }: { children: ReactNode }) {
               <HostNav />
             </div>
             <div className="ml-auto flex flex-wrap items-center gap-3 compact:flex-nowrap compact:gap-1">
+              <ThemeSwitch compactBelowDesktop />
               <LanguageSwitch compactBelowDesktop />
               <div className="contents compact:hidden">
                 <HostIdentity

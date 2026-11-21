@@ -10,6 +10,9 @@ export const vi: Messages = {
   languageSwitch: {
     label: "Ngôn ngữ",
   },
+  themeSwitch: {
+    darkMode: "Chế độ tối",
+  },
   loading: {
     checkin: "Đang tải trang điểm danh…",
   },

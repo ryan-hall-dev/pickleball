@@ -14,6 +14,17 @@ The new host workflow follows `docs/designs/simple-social/phone-review.html` and
 
 Below 1024 px (the `compact:` variant in `globals.css`, scoped to `.host-compact`: host screens and sign-in, never the player check-in page; extended from phones to tablets 2026-11-21 after the 8-court rehearsal), host screens follow Ryan's Design A (`docs/designs/mobile-compact/mobile-live-compact-A.html`); 1024 px and up keep the sizes below. Phones: 52 px sticky top bar (logo 28, social name 16/700, EN/VN, ☰ menu holding Session setup, Live courts, Hosts, the host and Sign out); page padding 12 px, 10 px gaps; cards 16 px radius, 12 px padding; page/session titles 17/700, section headings 16/700; body 14 px; buttons 44 px, 12 px radius, 13 px labels; primary CTA 48 px. Live order on phones is Courts, Waiting, Check-ins, with a jump bar (counts) and a lime + that opens Add player as a bottom sheet. Tablets (768 px up) show courts two per row. A playing court with nothing prepared shows Court options and an outline Prepare next four side by side. A ready court is one blue card ("Ready to start" pill); a free court is one row with Prepare next four on the right; waiting rows are list rows divided by 1 px lines with their buttons on the right. Things drawn under 44 px (EN/VN 32, jump links 38, End 40) keep a 44 px tap area (`tap-area-44`). Wording is unchanged; long names wrap, never truncate.
 
+## Light mode (approved 2026-11-21, `docs/plans/light-mode.md`)
+
+Light is the default on every screen: dark screens were hard to read under bright court lights. The colour tables below are the **dark** palette, unchanged; it is now the `:root[data-theme="dark"]` override in `globals.css`. The light values sit in `@theme`, and `src/app/themeContrast.test.ts` holds them to 7:1 for text and status text and 4.5:1 for secondary text.
+
+- **Status colours as text use the `*-ink` tokens** (`text-lime-ink`, `text-blue-ink`, `text-orange-ink`): deep green, blue and orange in light, and the solids in dark. `lime`, `blue` and `orange` are for fills only, with their `on-*` text.
+- **Modal shadow** is the `shadow-modal` token. It is softer in light.
+- **Focus ring** is `lime-ink`.
+- **The switch:** a moon/sun button (`ThemeSwitch`, `aria-pressed`, "Dark mode") sits before EN | VN in the host header and on sign-in. It is 44 px, or 32 px with `tap-area-44` on compact screens. Each device remembers its choice in `localStorage`, and an inline script in `<head>` applies it before the first paint.
+- **The player check-in page is always light** and has no switch.
+- **QR codes stay black on white** in both themes.
+
 ## Principles
 
 - Dark, high-contrast, glanceable from a distance: hosts use this standing at the courts, often on a tablet.
@@ -23,7 +34,7 @@ Below 1024 px (the `compact:` variant in `globals.css`, scoped to `.host-compact
 - Desktop-first, wraps cleanly to tablet and phone (flex-wrap and auto-fit grids, no fixed widths except modals).
 - Numbers are tabular (`font-variant-numeric: tabular-nums`) so timers and counts don't jitter.
 
-## Color tokens (dark only)
+## Color tokens (dark theme; light values in `globals.css` `@theme`)
 
 | Token                       | Value                       | Use                                                                 |
 | --------------------------- | --------------------------- | ------------------------------------------------------------------- |

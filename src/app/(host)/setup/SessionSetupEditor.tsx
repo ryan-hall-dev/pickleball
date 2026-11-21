@@ -854,7 +854,7 @@ function SessionSetupForm({
           event.preventDefault();
           closeStartDialog();
         }}
-        className="m-auto w-[calc(100%-32px)] max-w-[560px] rounded-[28px] border border-card-border bg-card p-6 text-text shadow-[0_24px_64px_rgba(0,0,0,0.5)] backdrop:bg-bg-backdrop/90 compact:rounded-2xl compact:p-4"
+        className="m-auto w-[calc(100%-32px)] max-w-[560px] rounded-[28px] border border-card-border bg-card p-6 text-text shadow-modal backdrop:bg-bg-backdrop/90 compact:rounded-2xl compact:p-4"
       >
         <h2
           id="confirm-start-heading"

@@ -1,7 +1,70 @@
 @import "tailwindcss";
 
-/* Design tokens (dark only). Utilities: bg-bg, bg-card, border-card-border, text-muted, rounded-card, etc. */
+/* Design tokens. Utilities: bg-bg, bg-card, border-card-border, text-muted, rounded-card, etc.
+   Light is the default (docs/plans/light-mode.md); the dark values are the
+   [data-theme="dark"] override below. `*-ink` = a status colour used as text. */
 @theme {
+  --color-bg: #eef1f4;
+  --color-card: #ffffff;
+  --color-card-border: #c3ccd6;
+  --color-inner: #f4f6f8;
+  --color-inner-border: #cfd7df;
+  --color-text: #0b1117;
+  --color-muted: #46535f;
+  --color-lime: #c6e62a;
+  --color-blue: #5aa9ff;
+  --color-orange: #ff9f43;
+
+  --color-bg-header: #ffffff;
+  --color-bg-backdrop: #1b232b;
+  --color-nav-active: #e3e8ed;
+  --color-text-soft: #26323e;
+  --color-placeholder: #5f6b77;
+  --color-outline: #8794a1;
+  --color-link: #0a4f9c;
+  --color-link-hover: #083d79;
+  --color-on-lime: #18200a;
+  --color-on-blue: #06182b;
+  --color-lime-surface: #eef7d2;
+  --color-lime-edge: #8fae1a;
+  --color-lime-soft: #2e4206;
+  --color-on-orange: #2a1606;
+  --color-orange-surface: #fff3e4;
+  --color-orange-edge: #d9954a;
+  --color-orange-soft: #743800;
+  --color-orange-text: #663100;
+  /* Stepper item that needs attention ("Players · 1 to fix"). */
+  --color-orange-surface-strong: #ffe7cc;
+  /* Attention rows (behind-average table rows, check-in tray rows) and their avatars. */
+  --color-orange-surface-row: #fff0df;
+  --color-orange-avatar: #ffd9b0;
+  --color-orange-avatar-text: #663100;
+  /* Court tile captions on lime surfaces; waiting dots in the capacity diagram. */
+  --color-lime-caption: #46581a;
+  --color-drag-handle: #8794a1;
+  /* Attending member rows: avatar fill and the "Attending" caption. */
+  --color-lime-avatar: #d9ec99;
+  --color-lime-status: #3d5410;
+  /* Next / guest (blue) surfaces: guest chips. */
+  --color-blue-surface: #e2eefc;
+  --color-blue-edge: #7aaae2;
+  --color-blue-avatar: #c7ddf7;
+  --color-blue-soft: #0b3a6b;
+
+  /* Status colours used as text: deep in light, the solids in dark. */
+  --color-lime-ink: #3a5800;
+  --color-blue-ink: #08478c;
+  --color-orange-ink: #743800;
+
+  --shadow-modal: 0 24px 64px rgba(15, 20, 25, 0.18);
+
+  --radius-card: 24px;
+}
+
+/* Dark theme: the original palette (DESIGN.md), chosen with the header switch.
+   Never on the player check-in page, which locks itself to light. */
+:root[data-theme="dark"]:not(:has([data-theme-lock="light"])) {
+  color-scheme: dark;
   --color-bg: #0f1419;
   --color-card: #182028;
   --color-card-border: #24303b;
@@ -12,7 +75,6 @@
   --color-lime: #d4f23a;
   --color-blue: #5aa9ff;
   --color-orange: #ff9f43;
-
   --color-bg-header: #121a21;
   --color-bg-backdrop: #080b0e;
   --color-nav-active: #222d37;
@@ -31,25 +93,22 @@
   --color-orange-edge: #5a4220;
   --color-orange-soft: #ffb877;
   --color-orange-text: #ffd6ae;
-  /* Stepper item that needs attention ("Players · 1 to fix"). */
   --color-orange-surface-strong: #2b2114;
-  /* Attention rows (behind-average table rows, check-in tray rows) and their avatars. */
   --color-orange-surface-row: #251c12;
   --color-orange-avatar: #3a2612;
   --color-orange-avatar-text: #ffc48f;
-  /* Court tile captions on lime surfaces; waiting dots in the capacity diagram. */
   --color-lime-caption: #c9d6a0;
   --color-drag-handle: #5b6b7a;
-  /* Attending member rows: avatar fill and the "Attending" caption. */
   --color-lime-avatar: #2b3a12;
   --color-lime-status: #c9e86a;
-  /* Next / guest (blue) surfaces: guest chips. */
   --color-blue-surface: #13263c;
   --color-blue-edge: #2f5e8f;
   --color-blue-avatar: #1d3550;
   --color-blue-soft: #cfe6ff;
-
-  --radius-card: 24px;
+  --color-lime-ink: #d4f23a;
+  --color-blue-ink: #5aa9ff;
+  --color-orange-ink: #ff9f43;
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.5);
 }
 
 /* `inline` so the utility resolves the next/font variable set on <html> at runtime. */
@@ -61,7 +120,7 @@
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 /* DESIGN.md Typography: base 15px / 1.4. */
@@ -106,6 +165,6 @@ body {
 
 /* Visible focus ring on every interactive element (DESIGN.md States: decision to confirm). */
 :focus-visible {
-  outline: 2px solid var(--color-lime);
+  outline: 2px solid var(--color-lime-ink);
   outline-offset: 2px;
 }

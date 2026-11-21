@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { ClubLogo } from "@/components/ClubLogo";
 import { CARD_CLASS_NAME } from "@/components/controlStyles";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
+import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { getLocale, hostPageTitle } from "@/i18n/getLocale";
 import { LocaleProvider } from "@/i18n/LocaleProvider";
 import { LoginPanel } from "./LoginPanel";
@@ -40,7 +41,10 @@ async function LoginContent() {
             Pickleball Social Manager
           </span>
         </div>
-        <LanguageSwitch />
+        <div className="flex items-center gap-2">
+          <ThemeSwitch />
+          <LanguageSwitch />
+        </div>
       </div>
       <section
         aria-labelledby="login-heading"
