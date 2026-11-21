@@ -1,6 +1,6 @@
 # Light mode
 
-Status: in-progress
+Status: done
 Branch: feature/light-mode
 
 ## Goal
@@ -110,3 +110,4 @@ Make every screen readable under bright court lighting. Ryan saw it at a social 
     - `live.spec.ts:244` (mobile) is flaky on a Rest-button count timeout. It fails 1 run in 15 both on `efa08ff` and on this branch, so the flakiness predates light mode. Left for a separate fix.
   - Screenshot review: https://claude.ai/artifact/NtGCczUh9nEHyoL3WQDZTu
 - 2026-11-21: Ryan marked all 14 review screens "Looks right". Next: deploy approval.
+- 2026-11-21: Deployed a clean export of `f2201f2` to production (`pickleball-pilot-9y4667qo9`); smoke checks passed. Rollback: promote `pickleball-pilot-hgals2y0b`.
