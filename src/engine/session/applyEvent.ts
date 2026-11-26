@@ -4,7 +4,9 @@ import { StateDraft, type EventHandler } from "./draft";
 import {
   handleNextGroupCalled,
   handleNextGroupChanged,
+  handleNextGroupMoved,
   handleNextGroupReleased,
+  handleNextGroupSeatConfirmed,
 } from "./calledGroupHandlers";
 import { isSimpleSocial, simpleSessionTimeIsUp } from "./simplePolicy";
 import { sessionError, type SessionError } from "./errors";
@@ -40,6 +42,8 @@ import {
 import {
   handleCourtAdded,
   handleCourtAddReverted,
+  handleCourtCloseCancelled,
+  handleCourtCloseScheduled,
   handleCourtClosed,
   handleCourtReopened,
   handlePaused,
@@ -64,6 +68,10 @@ const HANDLERS: { [TType in SessionEventType]: EventHandler<TType> } = {
   NextGroupCalled: handleNextGroupCalled,
   NextGroupChanged: handleNextGroupChanged,
   NextGroupReleased: handleNextGroupReleased,
+  NextGroupSeatConfirmed: handleNextGroupSeatConfirmed,
+  NextGroupMoved: handleNextGroupMoved,
+  CourtCloseScheduled: handleCourtCloseScheduled,
+  CourtCloseCancelled: handleCourtCloseCancelled,
   SessionStarted: handleSessionStarted,
   PlayerJoined: handlePlayerJoined,
   PlayerJoinReverted: handlePlayerJoinReverted,
@@ -170,7 +178,9 @@ function validateEnvelope(
   if (
     event.type === "NextGroupCalled" ||
     event.type === "NextGroupChanged" ||
-    event.type === "NextGroupReleased"
+    event.type === "NextGroupReleased" ||
+    event.type === "NextGroupSeatConfirmed" ||
+    event.type === "NextGroupMoved"
   ) {
     if (!isSimpleSocial(state.config)) {
       return sessionError(
@@ -179,7 +189,7 @@ function validateEnvelope(
       );
     }
     if (
-      event.type !== "NextGroupReleased" &&
+      (event.type === "NextGroupCalled" || event.type === "NextGroupChanged") &&
       simpleSessionTimeIsUp(state, event.at)
     ) {
       return sessionError(

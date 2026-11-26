@@ -104,6 +104,7 @@ describe("compensate builds the right event", () => {
       PlayerLocked: "PlayerUnlocked",
       CourtAdded: "CourtAddReverted",
       CourtClosed: "CourtReopened",
+      CourtCloseScheduled: "CourtCloseCancelled",
       MatchStarted: "MatchStartReverted",
       MatchCompleted: "MatchCompletionReverted",
       PlayerReplaced: "PlayerReplacementReverted",

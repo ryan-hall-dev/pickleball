@@ -4,7 +4,12 @@ import { sessionError, type SessionError } from "./errors";
 import { startMatch } from "./matchHandlers";
 import { requireManualAssignments } from "./playerHandlers";
 import { isCourtClosed, type HistoryEntry, type SessionState } from "./state";
-import { isSimpleSocial, validateSimpleParticipant } from "./simplePolicy";
+import {
+  isSimpleSocial,
+  isSimpleSocialV2,
+  MAX_UP_NEXT_AFTER_MINUTES,
+  validateSimpleParticipant,
+} from "./simplePolicy";
 import {
   PLAYERS_PER_MATCH,
   type CourtConfig,
@@ -80,9 +85,28 @@ function validateConfig(
   }
   if (
     config.policyVersion !== undefined &&
-    config.policyVersion !== "simple-social-v1"
+    config.policyVersion !== "simple-social-v1" &&
+    config.policyVersion !== "simple-social-v2"
   )
     return sessionError("INVALID_CONFIG", "Unknown session policy.");
+  if (
+    isSimpleSocialV2(config) &&
+    config.upNextAfterMinutes !== undefined &&
+    !(
+      Number.isInteger(config.upNextAfterMinutes) &&
+      config.upNextAfterMinutes >= 1 &&
+      config.upNextAfterMinutes <= MAX_UP_NEXT_AFTER_MINUTES
+    )
+  )
+    return sessionError(
+      "INVALID_CONFIG",
+      `Ask the next four after 1 to ${MAX_UP_NEXT_AFTER_MINUTES} whole minutes.`,
+    );
+  if (!isSimpleSocialV2(config) && config.upNextAfterMinutes !== undefined)
+    return sessionError(
+      "INVALID_CONFIG",
+      "Only the newer simple-social policy asks the next four on a timer.",
+    );
   if (isSimpleSocial(config)) {
     for (const participant of config.participants) {
       const error = validateSimpleParticipant(participant);
@@ -470,11 +494,68 @@ export const handleCourtClosed: EventHandler<"CourtClosed"> = (
   draft.set("courts", courtId, {
     ...courtState,
     ...(isSimpleSocial(draft.next.config) ? { nextGroup: null } : {}),
+    ...(isSimpleSocialV2(draft.next.config)
+      ? { closeScheduledBySeq: null }
+      : {}),
     closures: [
       ...courtState.closures,
       { from: event.at, to: null, closedBySeq: event.seq },
     ],
   });
+  return null;
+};
+
+/**
+ * simple-social-v2 "Close after this game": the court's Up next group goes
+ * back to Ready at once (their waits continue) and nothing new is prepared
+ * there. The server closes the court when its game ends.
+ */
+export const handleCourtCloseScheduled: EventHandler<"CourtCloseScheduled"> = (
+  draft,
+  event,
+) => {
+  if (!isSimpleSocialV2(draft.next.config))
+    return sessionError(
+      "POLICY_ACTION_NOT_ALLOWED",
+      "This needs the newer simple-social policy.",
+    );
+  const { courtId } = event.payload;
+  const courtState = draft.next.courts[courtId];
+  const label = draft.courtLabel(courtId);
+  if (!courtState)
+    return sessionError("UNKNOWN_COURT", `${label} is not in this session.`);
+  if (isCourtClosed(courtState) || courtState.closeScheduledBySeq)
+    return sessionError(
+      "COURT_CLOSED",
+      `${label} is already closed or closing.`,
+    );
+  if (courtState.activeMatchId === null)
+    return sessionError(
+      "MATCH_NOT_ACTIVE",
+      `${label} has no game in progress; close it straight away instead.`,
+    );
+  draft.set("courts", courtId, {
+    ...courtState,
+    nextGroup: null,
+    closeScheduledBySeq: event.seq,
+  });
+  return null;
+};
+
+/** Undoes a "Close after this game" still in effect. The released group stays released. */
+export const handleCourtCloseCancelled: EventHandler<"CourtCloseCancelled"> = (
+  draft,
+  event,
+  target,
+) => {
+  const { courtId } = targetEvent(target, "CourtCloseScheduled").payload;
+  const courtState = draft.next.courts[courtId];
+  if (!courtState || courtState.closeScheduledBySeq !== target.event.seq)
+    return sessionError(
+      "COURT_NOT_CLOSING",
+      `${draft.courtLabel(courtId)} isn't set to close by that action.`,
+    );
+  draft.set("courts", courtId, { ...courtState, closeScheduledBySeq: null });
   return null;
 };
 

@@ -107,8 +107,18 @@ export const RECOMMENDED_ROTATION_PREFERENCES: Readonly<RotationPreferences> =
 
 /** Everything about a session that is fixed when it starts (`sessions.config_snapshot`). */
 export interface SessionConfig {
-  /** Absent preserves the historical weighted policy and replay rules. */
-  policyVersion?: "simple-social-v1";
+  /**
+   * Absent preserves the historical weighted policy and replay rules.
+   * simple-social-v2 adds Up next confirmations, open breaks, group moves and
+   * close-after-this-game (docs/plans/reclub-to-court-v1.md); v1 logs replay
+   * unchanged.
+   */
+  policyVersion?: "simple-social-v1" | "simple-social-v2";
+  /**
+   * simple-social-v2: minutes after a game starts when its court's next four
+   * are asked to get ready (whole minutes, 1-30).
+   */
+  upNextAfterMinutes?: number;
   /** Courts enabled at start. More can be added mid-session with `CourtAdded`. */
   courts: CourtConfig[];
   targetMatchMinutes: number;

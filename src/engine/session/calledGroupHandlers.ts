@@ -3,10 +3,13 @@ import { sessionError, type SessionError } from "./errors";
 import { isCourtClosed } from "./state";
 import { isSessionError, requireAvailableParticipant } from "./playerHandlers";
 import {
+  calledSeats,
   isSimpleSocial,
+  isSimpleSocialV2,
   reservedCourtId,
   validateSimpleTeams,
 } from "./simplePolicy";
+import type { CalledGroup, CourtState } from "./state";
 
 function validateCall(
   draft: StateDraft,
@@ -51,12 +54,18 @@ export const handleNextGroupCalled: EventHandler<"NextGroupCalled"> = (
     );
   const error = validateCall(draft, courtId, teamA, teamB, event.at);
   if (error) return error;
+  if (draft.next.courts[courtId].closeScheduledBySeq)
+    return sessionError(
+      "COURT_CLOSED",
+      "This court closes after its game; nothing new is prepared there.",
+    );
   draft.set("courts", courtId, {
     ...draft.next.courts[courtId],
     nextGroup: {
       calledEventId: event.eventId,
       teamA: [...teamA],
       teamB: [...teamB],
+      ...(isSimpleSocialV2(draft.next.config) ? { confirmedIds: [] } : {}),
     },
   });
   return null;
@@ -82,16 +91,113 @@ export const handleNextGroupChanged: EventHandler<"NextGroupChanged"> = (
     event.at,
   );
   if (error) return error;
+  // v2: whoever stays keeps their confirmation; a newcomer starts unconfirmed.
+  const kept = new Set([...teamA, ...teamB]);
   draft.set("courts", court.court.courtId, {
     ...court,
     nextGroup: {
       calledEventId: event.payload.calledEventId,
       teamA: [...teamA],
       teamB: [...teamB],
+      ...(court.nextGroup?.confirmedIds
+        ? {
+            confirmedIds: court.nextGroup.confirmedIds.filter((id) =>
+              kept.has(id),
+            ),
+          }
+        : {}),
     },
   });
   return null;
 };
+
+function findCalledCourt(
+  draft: StateDraft,
+  calledEventId: string,
+): CourtState | SessionError {
+  return (
+    Object.values(draft.next.courts).find(
+      (court) => court.nextGroup?.calledEventId === calledEventId,
+    ) ??
+    sessionError(
+      "UNKNOWN_CALLED_GROUP",
+      "That called group has been released or started.",
+    )
+  );
+}
+
+function requireV2(draft: StateDraft): SessionError | null {
+  return isSimpleSocialV2(draft.next.config)
+    ? null
+    : sessionError(
+        "POLICY_ACTION_NOT_ALLOWED",
+        "This needs the newer simple-social policy.",
+      );
+}
+
+export const handleNextGroupSeatConfirmed: EventHandler<
+  "NextGroupSeatConfirmed"
+> = (draft, event) => {
+  const policyError = requireV2(draft);
+  if (policyError) return policyError;
+  const court = findCalledCourt(draft, event.payload.calledEventId);
+  if ("code" in court) return court;
+  const group = court.nextGroup!;
+  const { participantId } = event.payload;
+  if (!calledSeats(group).includes(participantId))
+    return sessionError(
+      "NOT_IN_CALLED_GROUP",
+      `${draft.participantLabel(participantId)} is not in this group any more.`,
+    );
+  if (group.confirmedIds?.includes(participantId))
+    return sessionError(
+      "ALREADY_CONFIRMED",
+      `${draft.participantLabel(participantId)} has already confirmed.`,
+    );
+  draft.set("courts", court.court.courtId, {
+    ...court,
+    nextGroup: {
+      ...group,
+      confirmedIds: [...(group.confirmedIds ?? []), participantId],
+    },
+  });
+  return null;
+};
+
+/** Moves a group to an open court with no game; swaps with a group there. */
+export const handleNextGroupMoved: EventHandler<"NextGroupMoved"> = (
+  draft,
+  event,
+) => {
+  const policyError = requireV2(draft);
+  if (policyError) return policyError;
+  const from = findCalledCourt(draft, event.payload.calledEventId);
+  if ("code" in from) return from;
+  const to = draft.next.courts[event.payload.toCourtId];
+  if (!to)
+    return sessionError(
+      "UNKNOWN_COURT",
+      `${draft.courtLabel(event.payload.toCourtId)} is not in this session.`,
+    );
+  if (to.court.courtId === from.court.courtId)
+    return sessionError("INVALID_MOVE", "The group is already on that court.");
+  if (isCourtClosed(to) || to.closeScheduledBySeq)
+    return sessionError(
+      "COURT_CLOSED",
+      `${draft.courtLabel(to.court.courtId)} is closed or closing.`,
+    );
+  if (to.activeMatchId !== null)
+    return sessionError(
+      "COURT_BUSY",
+      `${draft.courtLabel(to.court.courtId)} has a game in progress.`,
+    );
+  const moving: CalledGroup = from.nextGroup!;
+  const swapped: CalledGroup | null = to.nextGroup ?? null;
+  draft.set("courts", from.court.courtId, { ...from, nextGroup: swapped });
+  draft.set("courts", to.court.courtId, { ...to, nextGroup: moving });
+  return null;
+};
+
 export const handleNextGroupReleased: EventHandler<"NextGroupReleased"> = (
   draft,
   event,
@@ -125,6 +231,13 @@ export function invalidateCalledSeat(
         ...group,
         teamA: vacate(group.teamA),
         teamB: vacate(group.teamB),
+        ...(group.confirmedIds
+          ? {
+              confirmedIds: group.confirmedIds.filter(
+                (id) => id !== participantId,
+              ),
+            }
+          : {}),
       },
     });
   }

@@ -42,7 +42,15 @@ export type SessionErrorCode =
   /** Locks and manual reordering are switched off in this session's rotation rules. */
   | "MANUAL_ASSIGNMENTS_OFF"
   /** A court already has as many locked players as it has seats. */
-  | "COURT_FULL";
+  | "COURT_FULL"
+  /** simple-social-v2: the player is no longer in that Up next group. */
+  | "NOT_IN_CALLED_GROUP"
+  /** simple-social-v2: the player already said they're ready. */
+  | "ALREADY_CONFIRMED"
+  /** simple-social-v2: a group can't move to the court it is already on. */
+  | "INVALID_MOVE"
+  /** simple-social-v2: no "Close after this game" is in effect there. */
+  | "COURT_NOT_CLOSING";
 
 export interface SessionError {
   code: SessionErrorCode;

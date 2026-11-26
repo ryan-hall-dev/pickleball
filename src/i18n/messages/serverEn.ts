@@ -155,4 +155,8 @@ export const engineErrorsEn: Record<SessionErrorCode, string> = {
   UNDO_BLOCKED: "A later action must be undone first.",
   MANUAL_ASSIGNMENTS_OFF: "Manual changes are switched off for this session.",
   COURT_FULL: "That court has no free seats.",
+  NOT_IN_CALLED_GROUP: "That player is no longer in this group. Refresh.",
+  ALREADY_CONFIRMED: "Already confirmed.",
+  INVALID_MOVE: "The group is already on that court.",
+  COURT_NOT_CLOSING: "That court isn't set to close. Refresh.",
 };

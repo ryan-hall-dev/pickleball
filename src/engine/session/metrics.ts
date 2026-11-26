@@ -1,5 +1,6 @@
 // Derived measurements at a moment in time. Every duration excludes paused
 // time; nothing accrues after the session ends.
+import { isSimpleSocial } from "./simplePolicy";
 import { compensationTargetSeq, type SessionEventType } from "./events";
 import { intervalsFrom, measureMs } from "./intervals";
 import {
@@ -158,7 +159,7 @@ function participantMetrics(
   let currentWaitMs: number | null = null;
   if (
     status === "waiting" ||
-    (status === "skipped" && state.config?.policyVersion === "simple-social-v1")
+    (status === "skipped" && isSimpleSocial(state.config))
   ) {
     const latestJoin = participantState.presence.findLast(
       (interval) => interval.startKind === "joined",

@@ -1,6 +1,6 @@
 // The derived session state: `state = replay(events)`. Treat every value as
 // immutable; `applyEvent` returns a new state and never mutates its input.
-import type { SessionEvent } from "./events";
+import type { SessionEvent, SkipReason } from "./events";
 import type {
   CourtConfig,
   CourtId,
@@ -28,8 +28,10 @@ export interface PresenceInterval extends TimeInterval {
 /** A skip; `to: null` while still skipped. */
 export interface SkipInterval extends TimeInterval {
   skippedBySeq: number;
-  /** Real-time automatic return; missing means a legacy indefinite skip. */
+  /** Real-time automatic return; missing means an open skip (legacy, or a v2 break). */
   returnsAt?: EpochMs;
+  /** simple-social-v2: a break, or paused for not replying. */
+  reason?: SkipReason;
 }
 
 export interface PlayerLock {
@@ -96,11 +98,15 @@ export interface CalledGroup {
   /** Vacancies persist until the host explicitly changes or releases the call. */
   teamA: Array<ParticipantId | null>;
   teamB: Array<ParticipantId | null>;
+  /** simple-social-v2: players in the group who said they're ready. */
+  confirmedIds?: ParticipantId[];
 }
 
 export interface CourtState {
   /** Present only in new-policy sessions; absent preserves old state shapes. */
   nextGroup?: CalledGroup | null;
+  /** simple-social-v2: seq of a "Close after this game" still in effect. */
+  closeScheduledBySeq?: number | null;
   court: CourtConfig;
   addedAt: EpochMs;
   addedBySeq: number;

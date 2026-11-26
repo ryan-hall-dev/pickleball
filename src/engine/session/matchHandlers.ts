@@ -78,6 +78,11 @@ export function startMatch(
         "SESSION_TIME_UP",
         "Session time is up; finish the active games.",
       );
+    if (courtState.closeScheduledBySeq)
+      return sessionError(
+        "COURT_CLOSED",
+        "This court closes after its game; no new game starts there.",
+      );
     const error = validateSimpleTeams(teamA, teamB, draft.next.participants);
     if (error) return error;
     const call = courtState.nextGroup;

@@ -1,6 +1,11 @@
 // Wait-first selection is independent of grouping: variety cannot displace a player.
 import { playerMetrics } from "../session/metrics";
-import { isSimpleSocial, simpleSessionTimeIsUp } from "../session/simplePolicy";
+import {
+  isSimpleSocial,
+  isSimpleSocialV2,
+  simpleSessionTimeIsUp,
+  validateSimpleTeams,
+} from "../session/simplePolicy";
 import {
   currentLineup,
   isCourtClosed,
@@ -173,32 +178,8 @@ function regroupForVariety(
   return bestGroups;
 }
 
-/**
- * Prepare groups from players available NOW, including for a busy requested court.
- * Gender prefixes enumerate O(players) feasible sets, never four-player combinations.
- * Requested court order is preserved; called groups are reserved on every court.
- */
-export function simpleRecommend(
-  state: SessionState,
-  now: EpochMs,
-  requestedCourtIds: readonly CourtId[],
-): SimpleSuggestion[] {
-  if (
-    !isSimpleSocial(state.config) ||
-    state.phase !== "live" ||
-    state.pausedBySeq !== null ||
-    simpleSessionTimeIsUp(state, now)
-  )
-    return [];
-  const courtIds = [...new Set(requestedCourtIds)].filter((id) => {
-    const court = state.courts[id];
-    return (
-      court &&
-      court.court.format === "doubles" &&
-      !isCourtClosed(court) &&
-      !court.nextGroup
-    );
-  });
+/** Present, free, unreserved players with a gender, longest current wait first. */
+function rankedCandidates(state: SessionState, now: EpochMs): Candidate[] {
   const reserved = new Set(
     Object.values(state.courts).flatMap((court) =>
       court.nextGroup
@@ -206,7 +187,7 @@ export function simpleRecommend(
         : [],
     ),
   );
-  const candidates = playerMetrics(state, now)
+  return playerMetrics(state, now)
     .filter((player) => {
       const participant = state.participants[player.participantId];
       return (
@@ -232,6 +213,36 @@ export function simpleRecommend(
       rank,
       male: player.participant.gender === "male",
     }));
+}
+
+/**
+ * Prepare groups from players available NOW, including for a busy requested court.
+ * Gender prefixes enumerate O(players) feasible sets, never four-player combinations.
+ * Requested court order is preserved; called groups are reserved on every court.
+ */
+export function simpleRecommend(
+  state: SessionState,
+  now: EpochMs,
+  requestedCourtIds: readonly CourtId[],
+): SimpleSuggestion[] {
+  if (
+    !isSimpleSocial(state.config) ||
+    state.phase !== "live" ||
+    state.pausedBySeq !== null ||
+    simpleSessionTimeIsUp(state, now)
+  )
+    return [];
+  const courtIds = [...new Set(requestedCourtIds)].filter((id) => {
+    const court = state.courts[id];
+    return (
+      court &&
+      court.court.format === "doubles" &&
+      !isCourtClosed(court) &&
+      !court.closeScheduledBySeq &&
+      !court.nextGroup
+    );
+  });
+  const candidates = rankedCandidates(state, now);
   let remaining = oldestFeasibleSet(candidates, courtIds.length);
   const groups: Candidate[][] = [];
   while (remaining.length > 0) {
@@ -265,4 +276,98 @@ export function simpleRecommend(
     teamB: group.slice(2).map((player) => player.id),
     reason: "Longest eligible waits; variety within the selected players.",
   }));
+}
+
+/** Where to fill a group's empty seats (a `NextGroupChanged`). */
+export interface SimpleRefill {
+  courtId: CourtId;
+  calledEventId: string;
+  teamA: ParticipantId[];
+  teamB: ParticipantId[];
+}
+
+/** How far down the waiting order to look for a valid fill. */
+const REFILL_CANDIDATE_LIMIT = 12;
+
+/**
+ * simple-social-v2 (D9): fills each Up next group's empty seats with the
+ * longest-waiting valid players, keeping everyone else in their seat. The
+ * earliest-ranked fill that makes a valid game wins; with none, the seat
+ * stays open and visible (h12). Groups are filled in court order of their
+ * call, so one player is never offered to two groups.
+ */
+export function simpleRefill(
+  state: SessionState,
+  now: EpochMs,
+): SimpleRefill[] {
+  if (
+    !isSimpleSocialV2(state.config) ||
+    state.phase !== "live" ||
+    simpleSessionTimeIsUp(state, now)
+  )
+    return [];
+  let candidates = rankedCandidates(state, now).slice(
+    0,
+    REFILL_CANDIDATE_LIMIT,
+  );
+  const refills: SimpleRefill[] = [];
+  const courts = Object.values(state.courts).filter(
+    (court) =>
+      court.nextGroup &&
+      !isCourtClosed(court) &&
+      [...court.nextGroup.teamA, ...court.nextGroup.teamB].includes(null),
+  );
+  for (const court of courts) {
+    const group = court.nextGroup!;
+    const seats = [...group.teamA, ...group.teamB];
+    const open = seats.flatMap((id, index) => (id === null ? [index] : []));
+    const fill = firstValidFill(state, seats, open, candidates);
+    if (!fill) continue;
+    const filled = [...seats];
+    open.forEach((seatIndex, index) => {
+      filled[seatIndex] = fill[index].id;
+    });
+    const used = new Set(fill.map((player) => player.id));
+    candidates = candidates.filter((player) => !used.has(player.id));
+    refills.push({
+      courtId: court.court.courtId,
+      calledEventId: group.calledEventId,
+      teamA: filled.slice(0, 2) as ParticipantId[],
+      teamB: filled.slice(2) as ParticipantId[],
+    });
+  }
+  return refills;
+}
+
+/** Earliest-ranked candidates (lexicographic by rank) that make a valid game. */
+function firstValidFill(
+  state: SessionState,
+  seats: Array<ParticipantId | null>,
+  open: number[],
+  candidates: Candidate[],
+): Candidate[] | null {
+  const chosen: Candidate[] = [];
+  const search = (from: number): Candidate[] | null => {
+    if (chosen.length === open.length) {
+      const filled = [...seats];
+      open.forEach((seatIndex, index) => {
+        filled[seatIndex] = chosen[index].id;
+      });
+      return validateSimpleTeams(
+        filled.slice(0, 2) as ParticipantId[],
+        filled.slice(2) as ParticipantId[],
+        state.participants,
+      )
+        ? null
+        : [...chosen];
+    }
+    for (let index = from; index < candidates.length; index += 1) {
+      chosen.push(candidates[index]);
+      const found = search(index + 1);
+      chosen.pop();
+      if (found) return found;
+    }
+    return null;
+  };
+  return search(0);
 }

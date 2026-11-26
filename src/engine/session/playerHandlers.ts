@@ -13,6 +13,7 @@ import { PLAYERS_PER_MATCH, type ParticipantId } from "./types";
 import { invalidateCalledSeat } from "./calledGroupHandlers";
 import {
   isSimpleSocial,
+  isSimpleSocialV2,
   reservedCourtId,
   SIMPLE_SOCIAL_REST_MS,
   validateSimpleParticipant,
@@ -255,7 +256,16 @@ export const handlePlayerSkipped: EventHandler<"PlayerSkipped"> = (
     event.at,
   );
   if (isSessionError(participantState)) return participantState;
-  if (
+  if (isSimpleSocialV2(draft.next.config)) {
+    if (
+      event.payload.returnsAt !== undefined ||
+      (event.payload.reason !== "break" && event.payload.reason !== "noReply")
+    )
+      return sessionError(
+        "MALFORMED_EVENT",
+        "A break lasts until Ready and needs a reason (break or noReply).",
+      );
+  } else if (
     isSimpleSocial(draft.next.config) &&
     event.payload.returnsAt !== event.at + SIMPLE_SOCIAL_REST_MS
   ) {
@@ -281,6 +291,9 @@ export const handlePlayerSkipped: EventHandler<"PlayerSkipped"> = (
         ...(event.payload.returnsAt === undefined
           ? {}
           : { returnsAt: event.payload.returnsAt }),
+        ...(isSimpleSocialV2(draft.next.config)
+          ? { reason: event.payload.reason }
+          : {}),
       },
     ],
   });

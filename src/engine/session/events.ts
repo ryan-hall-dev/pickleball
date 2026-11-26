@@ -12,6 +12,9 @@ import type {
   SessionConfig,
 } from "./types";
 
+/** Why a simple-social-v2 player is paused. */
+export type SkipReason = "break" | "noReply";
+
 /** Payload of every pure compensating event: which action it undoes. */
 export interface CompensationPayload {
   /** Seq of the action being undone. */
@@ -47,8 +50,17 @@ export interface SessionEventPayloads {
   /** A participant leaves (the host's "remove"). Not allowed while playing. */
   PlayerLeft: { participantId: ParticipantId };
   PlayerLeaveReverted: CompensationPayload;
-  /** Skip until un-skipped. Skipped time is not presence. Not allowed while playing. */
-  PlayerSkipped: { participantId: ParticipantId; returnsAt?: EpochMs };
+  /**
+   * Skip until un-skipped. Skipped time is not presence. Not allowed while playing.
+   * simple-social-v1: a ten-minute rest (`returnsAt`). simple-social-v2: an
+   * open break until the player or a host says Ready (no `returnsAt`), with
+   * why: the player's own break, or paused by a host for not replying.
+   */
+  PlayerSkipped: {
+    participantId: ParticipantId;
+    returnsAt?: EpochMs;
+    reason?: SkipReason;
+  };
   /** Ends a skip (the host's "un-skip" and the undo of a skip are the same action). */
   PlayerUnskipped: CompensationPayload;
   /** Pins a participant to the next match, optionally on one court. Consumed when they start a match. */
@@ -70,6 +82,28 @@ export interface SessionEventPayloads {
     teamB: ParticipantId[];
   };
   NextGroupReleased: { calledEventId: EventId };
+  /**
+   * simple-social-v2: a player in an Up next group says they're ready (or a
+   * host confirms them in person). Only someone in the group now; a
+   * replacement starts unconfirmed.
+   */
+  NextGroupSeatConfirmed: {
+    calledEventId: EventId;
+    participantId: ParticipantId;
+  };
+  /**
+   * simple-social-v2: a host moves an Up next group to another open court with
+   * no game in progress; if that court has a group, the two swap. Confirmations
+   * move with their group.
+   */
+  NextGroupMoved: { calledEventId: EventId; toCourtId: CourtId };
+  /**
+   * simple-social-v2: "Close after this game". The court's Up next group goes
+   * back to Ready (wait kept) and nothing new is prepared there; the court
+   * closes when its game ends. Requires a game in progress.
+   */
+  CourtCloseScheduled: { courtId: CourtId };
+  CourtCloseCancelled: CompensationPayload;
   MatchStarted: MatchAssignment;
   /**
    * Undoes a match start: `targetSeq` is the `MatchStarted`, or, for a match
@@ -165,6 +199,7 @@ export const COMPENSATING_EVENT_TYPE = {
   PlayerLocked: "PlayerUnlocked",
   CourtAdded: "CourtAddReverted",
   CourtClosed: "CourtReopened",
+  CourtCloseScheduled: "CourtCloseCancelled",
   MatchStarted: "MatchStartReverted",
   MatchCompleted: "MatchCompletionReverted",
   PlayerReplaced: "PlayerReplacementReverted",

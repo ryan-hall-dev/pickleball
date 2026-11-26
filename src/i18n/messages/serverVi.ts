@@ -154,4 +154,8 @@ export const engineErrorsVi: typeof engineErrorsEn = {
   UNDO_BLOCKED: "Cần hoàn tác thao tác sau trước.",
   MANUAL_ASSIGNMENTS_OFF: "Buổi chơi này đã tắt việc xếp người thủ công.",
   COURT_FULL: "Sân này đã hết chỗ.",
+  NOT_IN_CALLED_GROUP: "Người chơi này không còn trong nhóm. Hãy tải lại.",
+  ALREADY_CONFIRMED: "Đã xác nhận rồi.",
+  INVALID_MOVE: "Nhóm đã ở sân đó rồi.",
+  COURT_NOT_CLOSING: "Sân đó không được đặt để đóng. Hãy tải lại.",
 };
