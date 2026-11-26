@@ -19,6 +19,7 @@ import type {
   LiveTeams,
 } from "@/server/live/liveTypes";
 import { CourtRecovery } from "./CourtRecovery";
+import { CourtOptionsV2, UpNextConfirmations } from "./LiveCourtV2";
 
 function Teams({
   teams,
@@ -72,7 +73,12 @@ export function LiveCourtCard({
   onPrepare,
   onAction,
   undoOptions,
+  courts = [],
+  isV2 = false,
 }: {
+  /** Every court, for Move (simple-social-v2). */
+  courts?: LiveCourt[];
+  isV2?: boolean;
   court: LiveCourt;
   players: LivePlayer[];
   now: number;
@@ -92,6 +98,30 @@ export function LiveCourtCard({
     court.called &&
     [...court.called.teamA, ...court.called.teamB].some((id) => id === null);
   const compactLayout = compactCourtLayout(court, group, timeIsUp);
+  if (isV2 && court.isClosed) {
+    return (
+      <article
+        className={`${CARD_CLASS_NAME} opacity-80`}
+        aria-label={shownCourtName}
+      >
+        <header className="flex items-center justify-between gap-2">
+          <h3 className="text-lg font-bold compact:text-base">
+            {shownCourtName}
+          </h3>
+          <span className="rounded-full bg-inner-border px-2 py-0.5 text-xs font-bold text-text-soft">
+            {messages.host.live.v2.closed}
+          </span>
+        </header>
+        <CourtOptionsV2
+          court={court}
+          courts={courts}
+          disabled={disabled}
+          onAction={onAction}
+          undoOptions={undoOptions}
+        />
+      </article>
+    );
+  }
   return (
     <article
       className={`${CARD_CLASS_NAME} ${COMPACT_ARTICLE_CLASS_NAMES[compactLayout]}`}
@@ -114,16 +144,18 @@ export function LiveCourtCard({
               : "text-muted compact:bg-inner-border compact:text-text-soft"
           } ${compactLayout === "group" ? "compact:hidden" : ""}`}
         >
-          {court.activeMatch
-            ? text.playingMinutes(
-                Math.max(
-                  0,
-                  Math.floor((now - court.activeMatch.startedAt) / 60_000),
-                ),
-              )
-            : court.called
-              ? text.groupPrepared
-              : text.courtFree}
+          {isV2 && court.closesAfterGame
+            ? messages.host.live.v2.closesAfterGame
+            : court.activeMatch
+              ? text.playingMinutes(
+                  Math.max(
+                    0,
+                    Math.floor((now - court.activeMatch.startedAt) / 60_000),
+                  ),
+                )
+              : court.called
+                ? text.groupPrepared
+                : text.courtFree}
         </span>
       </header>
       {court.activeMatch ? (
@@ -147,7 +179,9 @@ export function LiveCourtCard({
         key={court.activeMatch?.matchId ?? "idle"}
         court={court}
         players={players}
-        undoOptions={undoOptions}
+        undoOptions={undoOptions.filter(
+          (option) => option.kind === "start" || option.kind === "finish",
+        )}
         disabled={disabled}
         onAction={onAction}
       />
@@ -169,10 +203,22 @@ export function LiveCourtCard({
           </p>
         ) : group ? (
           <>
-            <Teams teams={group} players={players} />
-            <p className="mt-2 text-xs text-blue-soft compact:mt-1.5">
-              {court.called ? text.fixed : text.longestWaitsFirst}
-            </p>
+            {isV2 && court.called ? (
+              <UpNextConfirmations
+                court={court}
+                players={players}
+                now={now}
+                disabled={disabled}
+                onAction={onAction}
+              />
+            ) : (
+              <>
+                <Teams teams={group} players={players} />
+                <p className="mt-2 text-xs text-blue-soft compact:mt-1.5">
+                  {court.called ? text.fixed : text.longestWaitsFirst}
+                </p>
+              </>
+            )}
             {vacancy && (
               <div className="mt-2">
                 <AttentionMessage>
@@ -296,6 +342,15 @@ export function LiveCourtCard({
           </>
         )}
       </section>
+      {isV2 && (
+        <CourtOptionsV2
+          court={court}
+          courts={courts}
+          disabled={disabled}
+          onAction={onAction}
+          undoOptions={undoOptions}
+        />
+      )}
     </article>
   );
 }

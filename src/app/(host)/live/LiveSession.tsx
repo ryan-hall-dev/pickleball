@@ -32,6 +32,7 @@ import { LiveAddPlayer, type AddPlayerOutcome } from "./LiveAddPlayer";
 import { failureText, type ShownFailure } from "./liveFailure";
 import { TimeUpNotice } from "./TimeUpNotice";
 import { LiveCourtCard } from "./LiveCourtCard";
+import { CallOverList } from "./LiveCourtV2";
 import { LiveWaiting } from "./LiveWaiting";
 
 const TIMEOUT_MS = 15_000;
@@ -444,6 +445,7 @@ export function LiveSession({
               check-ins first: hosts approve arrivals and show the QR code most
               in the first hour. */}
           <div className="flex flex-col gap-4 compact:gap-2.5">
+            {session.isV2 && <CallOverList session={session} now={now} />}
             <section
               id="courts"
               aria-labelledby="courts-heading"
@@ -473,6 +475,8 @@ export function LiveSession({
                     undoOptions={session.undoOptions.filter(
                       (option) => option.courtId === court.courtId,
                     )}
+                    courts={session.courts}
+                    isV2={!!session.isV2}
                   />
                 ))}
               </div>
@@ -482,6 +486,7 @@ export function LiveSession({
                 players={session.players}
                 now={now}
                 disabled={disabled}
+                isV2={!!session.isV2}
                 onAction={act}
               />
             </div>

@@ -324,6 +324,45 @@ export const hostEn = {
       stillOnCourt: (courtNames: string) =>
         `Still on court: ${courtNames}. Nothing is ended for you. Tap Game finished on each when it ends (or use Court options), then End session unlocks.`,
     },
+    v2: {
+      nobodyPaused: "Nobody paused.",
+      breakButton: "Break",
+      pausedHeading: "Paused",
+      pausedHint: "Wait time is kept until they, or you, say Ready.",
+      callOver: (count: number) => `Call over (${count})`,
+      callNoReply: (name: string, court: string, minutes: number) =>
+        `${name} · ${court} · no reply ${minutes} min`,
+      callNoPhone: (name: string, court: string) =>
+        `${name} · ${court} · no phone`,
+      confirmed: "✓ Confirmed",
+      noReply: (minutes: number) => `! No reply · ${minutes} min`,
+      confirmedCount: (count: number) => `${count} of 4 confirmed`,
+      seatActions: (name: string) => `Options for ${name}`,
+      confirmInPerson: "Confirm in person",
+      replaceNext: "Replace with next player",
+      replaceAndLeft: "Replace and mark as left",
+      replacedNote:
+        "Replaced for no reply: they are paused and keep their waiting time.",
+      courtOptions: "Court",
+      moveTo: (court: string) => `Move Up next to ${court}`,
+      moveNote: "If that court has a group, the two swap. Confirmations stay.",
+      closeAfterGame: "Close after this game",
+      closeAfterGameNote: "They finish. Nobody new is sent here.",
+      stopAndClose: "Stop game and close",
+      stopAndCloseNote:
+        "No score or completed game. All four start a new wait.",
+      closeNow: "Close court",
+      closed: "Closed",
+      reopen: "Reopen court",
+      closesAfterGame: "Closes after this game",
+      keepOpen: "Keep court open",
+      noPhone: "No phone",
+      breakFor: (minutes: number) => `Break · ${minutes} min`,
+      noReplyFor: (minutes: number) => `No reply · ${minutes} min`,
+      friendsWith: (name: string) => `Friends with ${name} · same team`,
+      friendAsked: (name: string) => `Friend request with ${name}`,
+      endPair: "End pair",
+    },
     court: {
       /** Generated court names ("Court 3") are shown in the chosen language. */
       numbered: (courtNumber: string) => `Court ${courtNumber}`,

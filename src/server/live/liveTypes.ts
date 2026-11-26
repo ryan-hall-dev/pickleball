@@ -15,6 +15,14 @@ export interface LivePlayer {
   skipSeq: number | null;
   calledCourtId: string | null;
   calledCourtName: string | null;
+  /** simple-social-v2: false for someone checked in with no phone (call them in person). */
+  hasPhone?: boolean;
+  /** simple-social-v2: why they are paused. */
+  skipReason?: "break" | "noReply" | null;
+  /** simple-social-v2: when the current break began. */
+  skipSince?: number | null;
+  /** simple-social-v2: their friend pair (requested or teamed). */
+  pair?: { requestSeq: number; friendName: string; isTeamed: boolean } | null;
 }
 export interface LiveTeams {
   teamA: Array<string | null>;
@@ -24,13 +32,26 @@ export interface LiveCourt {
   courtId: string;
   name: string;
   activeMatch: (LiveTeams & { matchId: string; startedAt: number }) | null;
-  called: (LiveTeams & { calledEventId: string }) | null;
+  called:
+    | (LiveTeams & {
+        calledEventId: string;
+        /** simple-social-v2: who has said they're ready. */
+        confirmedIds?: string[];
+        /** simple-social-v2: when each seated player was asked. */
+        askedAt?: Record<string, number>;
+      })
+    | null;
+  /** simple-social-v2 */
+  isClosed?: boolean;
+  closesAfterGame?: boolean;
   suggestion: (LiveTeams & { reason: string }) | null;
 }
 export interface LiveSessionView {
   sessionId: string;
   name: string;
   phase: "live" | "ended";
+  /** simple-social-v2: confirmations, Call over, court options. */
+  isV2?: boolean;
   lastSeq: number;
   now: number;
   startedAt: number;
@@ -43,9 +64,10 @@ export interface LiveSessionView {
 }
 export interface LiveUndoOption {
   courtId: string;
+  /** Empty for a court closing. */
   matchId: string;
   targetSeq: number;
-  kind: "start" | "finish";
+  kind: "start" | "finish" | "close" | "closeAfterGame";
 }
 export type ReadLiveResult =
   | { ok: true; status: "session"; session: LiveSessionView }
@@ -99,6 +121,12 @@ export const liveCommandSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("closeAfterGame"), courtId: z.uuid() }),
   z.object({ kind: z.literal("closeNow"), courtId: z.uuid() }),
+  /** "Stop game and close": abandon the game (no score, no completed game), then close. */
+  z.object({
+    kind: z.literal("stopAndClose"),
+    courtId: z.uuid(),
+    matchId: z.uuid(),
+  }),
   z.object({
     kind: z.literal("endPair"),
     requestSeq: z.number().int().positive(),

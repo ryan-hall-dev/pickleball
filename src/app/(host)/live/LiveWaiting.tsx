@@ -51,11 +51,14 @@ export function LiveWaiting({
   now,
   disabled,
   onAction,
+  isV2 = false,
 }: {
   players: LivePlayer[];
   now: number;
   disabled: boolean;
   onAction: (command: LiveCommand) => void;
+  /** simple-social-v2: open breaks (Break / Paused) instead of 10-minute rests. */
+  isV2?: boolean;
 }) {
   const messages = useMessages();
   const text = messages.host.live.waitingList;
@@ -118,7 +121,38 @@ export function LiveWaiting({
                     ? text.calledTo(courtName(player.calledCourtName, messages))
                     : text.waiting}
                 </span>
+                {player.hasPhone === false && (
+                  <span className="font-semibold text-orange-ink">
+                    {messages.host.live.v2.noPhone}
+                  </span>
+                )}
               </div>
+              {player.pair && (
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs compact:col-start-1">
+                  <span className="font-semibold text-blue-ink">
+                    {player.pair.isTeamed
+                      ? messages.host.live.v2.friendsWith(
+                          player.pair.friendName,
+                        )
+                      : messages.host.live.v2.friendAsked(
+                          player.pair.friendName,
+                        )}
+                  </span>
+                  <button
+                    type="button"
+                    className="tap-area-44 font-semibold text-link"
+                    disabled={disabled}
+                    onClick={() =>
+                      onAction({
+                        kind: "endPair",
+                        requestSeq: player.pair!.requestSeq,
+                      })
+                    }
+                  >
+                    {messages.host.live.v2.endPair}
+                  </button>
+                </div>
+              )}
               <div className={BUTTONS_CLASS_NAME}>
                 <button
                   type="button"
@@ -132,7 +166,7 @@ export function LiveWaiting({
                     })
                   }
                 >
-                  {text.rest}
+                  {isV2 ? messages.host.live.v2.breakButton : text.rest}
                 </button>
                 <button
                   type="button"
@@ -165,10 +199,11 @@ export function LiveWaiting({
         onToggle={() => setWaitingExpanded((open) => !open)}
       />
       <h3 className="mt-5 text-lg font-bold compact:mt-3 compact:px-3 compact:text-[15px]">
-        {text.resting} <span className="text-muted">({resting.length})</span>
+        {isV2 ? messages.host.live.v2.pausedHeading : text.resting}{" "}
+        <span className="text-muted">({resting.length})</span>
       </h3>
       <p className="mt-1 text-xs text-muted compact:mt-0 compact:px-3">
-        {text.restingHint}
+        {isV2 ? messages.host.live.v2.pausedHint : text.restingHint}
       </p>
       {resting.length ? (
         <ul className={`mt-3 flex flex-col gap-2 ${PHONE_LIST_CLASS_NAME}`}>
@@ -182,7 +217,17 @@ export function LiveWaiting({
                   ? text.returnsIn(
                       Math.max(0, Math.ceil((player.returnsAt - now) / 60_000)),
                     )
-                  : text.resting}{" "}
+                  : player.skipReason === "noReply"
+                    ? messages.host.live.v2.noReplyFor(
+                        Math.floor((now - (player.skipSince ?? now)) / 60_000),
+                      )
+                    : player.skipReason === "break"
+                      ? messages.host.live.v2.breakFor(
+                          Math.floor(
+                            (now - (player.skipSince ?? now)) / 60_000,
+                          ),
+                        )
+                      : text.resting}{" "}
                 ·{" "}
                 {text.waitKept(
                   Math.floor((player.currentWaitMs ?? 0) / 60_000),
@@ -224,7 +269,7 @@ export function LiveWaiting({
         </ul>
       ) : (
         <p className="mt-3 text-muted compact:mt-1 compact:px-3 compact:pb-3">
-          {text.nobodyResting}
+          {isV2 ? messages.host.live.v2.nobodyPaused : text.nobodyResting}
         </p>
       )}
       <FoldButton

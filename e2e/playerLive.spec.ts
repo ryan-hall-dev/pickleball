@@ -92,7 +92,19 @@ test("players confirm on their phones, head to court and start their own game", 
     path: testInfo.outputPath("p6-up-next.png"),
     fullPage: true,
   });
-  for (const phone of phones)
+  for (const phone of phones.slice(0, 2))
+    await phone.getByRole("button", { name: "I'm ready" }).click();
+  // Host: the Up next group shows who has confirmed, with options per seat.
+  await page.reload();
+  await expect(page.getByText("2 of 4 confirmed")).toBeVisible();
+  await expect(
+    page.getByRole("group").or(page.locator("details")).first(),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("h7-host-confirmations.png"),
+    fullPage: true,
+  });
+  for (const phone of phones.slice(2))
     await phone.getByRole("button", { name: "I'm ready" }).click();
   await expect(
     phones[0].getByRole("heading", { name: "Head to Court 1" }),

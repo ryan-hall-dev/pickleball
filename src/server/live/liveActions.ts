@@ -1,6 +1,6 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   findHistoryEntry,
@@ -94,6 +94,9 @@ export async function readLiveSession(
           actorId: authorization.host.userId,
         },
         parsed.data.prepareCourtId,
+        isSimpleSocialV2(state.config)
+          ? await phoneParticipantIds(client, row.id)
+          : new Set(),
       ),
     };
   } catch (error) {
@@ -105,6 +108,18 @@ export async function readLiveSession(
   }
 }
 
+/** A second action's id derived from the first, so a retry repeats it exactly. */
+function followUpEventId(eventId: string, step: string): string {
+  const bytes = createHash("sha256")
+    .update(`${step}|${eventId}`)
+    .digest()
+    .subarray(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 /** Host undos on the live screen: a start, a finish, or a court closing. */
 const UNDO_TYPES = {
   MatchStarted: "MatchStartReverted",
@@ -112,6 +127,36 @@ const UNDO_TYPES = {
   CourtClosed: "CourtReopened",
   CourtCloseScheduled: "CourtCloseCancelled",
 } as const;
+
+/**
+ * Who checked in on a phone (a roster claim or an approved walk-in); anyone
+ * else was checked in by a host and is called over in person. Read under
+ * the host's RLS: only their own social's rows.
+ */
+async function phoneParticipantIds(
+  client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  sessionId: string,
+): Promise<Set<string>> {
+  const [claims, requests] = await Promise.all([
+    client
+      .from("session_roster_entries")
+      .select("session_participant_id")
+      .eq("session_id", sessionId)
+      .not("claimed_device_token_hash", "is", null),
+    client
+      .from("checkin_requests")
+      .select("session_participant_id")
+      .eq("session_id", sessionId)
+      .eq("status", "approved"),
+  ]);
+  if (claims.error) throw new Error(claims.error.message);
+  if (requests.error) throw new Error(requests.error.message);
+  return new Set(
+    [...claims.data, ...requests.data].flatMap((row) =>
+      row.session_participant_id ? [row.session_participant_id] : [],
+    ),
+  );
+}
 
 function commandAction(
   command: LiveCommand,
@@ -224,6 +269,9 @@ function commandAction(
         type: "FriendPairEnded",
         payload: { requestSeq: command.requestSeq },
       };
+    case "stopAndClose":
+      // First the game ends with no credit; the close follows (writeLiveAction).
+      return { type: "MatchAbandoned", payload: { matchId: command.matchId } };
     case "ready": {
       const skip = state.participants[command.participantId]?.skips.at(-1);
       if (!skip || skip.skippedBySeq !== command.targetSeq) return null;
@@ -325,6 +373,7 @@ export async function writeLiveAction(
         closeAfterGame: "CourtCloseScheduled",
         closeNow: "CourtClosed",
         endPair: "FriendPairEnded",
+        stopAndClose: "MatchAbandoned",
       } as const;
       if (landed && landed.type !== eventTypes[command.kind]) {
         return {
@@ -355,6 +404,28 @@ export async function writeLiveAction(
       },
       { now: () => at },
     );
+    if (result.ok && command.kind === "stopAndClose") {
+      // The close after a stopped game, with a repeatable id so a retry of
+      // the same tap never closes twice.
+      const closed = await submitSessionAction(
+        client,
+        {
+          sessionId: parsed.data.sessionId,
+          eventId: followUpEventId(parsed.data.eventId, "close"),
+          expectedLastSeq: result.seq,
+          request: {
+            kind: "action",
+            action: {
+              type: "CourtClosed",
+              payload: { courtId: command.courtId },
+            },
+          },
+        },
+        { now: () => Math.max(Date.now(), at) },
+      );
+      if (closed.ok)
+        return { ok: true, seq: closed.seq, wasDuplicate: closed.wasDuplicate };
+    }
     if (result.ok)
       return { ok: true, seq: result.seq, wasDuplicate: result.wasDuplicate };
     return result.reason === "UPDATED_BY_ANOTHER_HOST"

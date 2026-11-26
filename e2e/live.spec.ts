@@ -623,9 +623,10 @@ test("a stale live approval shows a conflict, stays pending and approves exactly
     await expect(
       coHostWaiting.getByRole("button", { name: "Rest Zoe Park", exact: true }),
     ).toBeVisible({ timeout: 12_000 });
-    await expect(
-      phone.getByRole("heading", { name: "You're in, Zoe" }),
-    ).toBeVisible({ timeout: 12_000 });
+    // In a live session an approved phone follows its own game (Ready).
+    await expect(phone.getByText("You've been ready for")).toBeVisible({
+      timeout: 12_000,
+    });
     expect(await participantsNamed()).toBe(1);
     expect(await joinedEventCount()).toBe(1);
     const { data: events, error: eventsError } = await adminClient

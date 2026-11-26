@@ -328,6 +328,46 @@ export const hostVi: typeof hostEn = {
       stillOnCourt: (courtNames: string) =>
         `Còn đang chơi: ${courtNames}. Ứng dụng không tự kết thúc trận. Bấm Trận đã xong ở từng sân khi trận kết thúc (hoặc dùng Tùy chọn sân), rồi nút Kết thúc buổi chơi sẽ mở.`,
     },
+    v2: {
+      nobodyPaused: "Không ai đang tạm dừng.",
+      breakButton: "Nghỉ",
+      pausedHeading: "Tạm dừng",
+      pausedHint:
+        "Thời gian chờ được giữ cho đến khi họ hoặc bạn bấm Sẵn sàng.",
+      callOver: (count: number) => `Gọi vào sân (${count})`,
+      callNoReply: (name: string, court: string, minutes: number) =>
+        `${name} · ${court} · chưa trả lời ${minutes} phút`,
+      callNoPhone: (name: string, court: string) =>
+        `${name} · ${court} · không có điện thoại`,
+      confirmed: "✓ Đã xác nhận",
+      noReply: (minutes: number) => `! Chưa trả lời · ${minutes} phút`,
+      confirmedCount: (count: number) => `${count}/4 đã xác nhận`,
+      seatActions: (name: string) => `Tuỳ chọn cho ${name}`,
+      confirmInPerson: "Xác nhận trực tiếp",
+      replaceNext: "Thay bằng người tiếp theo",
+      replaceAndLeft: "Thay và đánh dấu đã về",
+      replacedNote:
+        "Bị thay vì không trả lời: họ được tạm dừng và giữ thời gian chờ.",
+      courtOptions: "Sân",
+      moveTo: (court: string) => `Chuyển nhóm tiếp theo sang ${court}`,
+      moveNote: "Nếu sân đó đã có nhóm, hai nhóm đổi chỗ. Xác nhận được giữ.",
+      closeAfterGame: "Đóng sau trận này",
+      closeAfterGameNote: "Trận này chơi tiếp. Không xếp thêm ai vào sân.",
+      stopAndClose: "Dừng trận và đóng sân",
+      stopAndCloseNote:
+        "Không ghi điểm, không tính trận. Cả bốn người chờ lại từ đầu.",
+      closeNow: "Đóng sân",
+      closed: "Đã đóng",
+      reopen: "Mở lại sân",
+      closesAfterGame: "Đóng sau trận này",
+      keepOpen: "Giữ sân mở",
+      noPhone: "Không có điện thoại",
+      breakFor: (minutes: number) => `Nghỉ · ${minutes} phút`,
+      noReplyFor: (minutes: number) => `Chưa trả lời · ${minutes} phút`,
+      friendsWith: (name: string) => `Ghép đội với ${name} · cùng đội`,
+      friendAsked: (name: string) => `Lời mời ghép đội với ${name}`,
+      endPair: "Huỷ ghép đội",
+    },
     court: {
       numbered: (courtNumber: string) => `Sân ${courtNumber}`,
       replacementNeeded: "Cần người thay",
