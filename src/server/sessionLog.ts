@@ -68,6 +68,8 @@ function sessionEventFromRow(row: SessionEventRow): SessionEvent {
 export async function loadSessionLog(
   client: DatabaseClient,
   sessionId: string,
+  /** Only events after this seq (the log is append-only; see nonHostSessionAction). */
+  afterSeq = 0,
 ): Promise<LoadedSessionLog | null> {
   const { data: session, error: sessionError } = await client
     .from("sessions")
@@ -89,6 +91,7 @@ export async function loadSessionLog(
         "seq, event_id, type, payload, occurred_at, actor_user_id, actor_session_participant_id",
       )
       .eq("session_id", sessionId)
+      .gt("seq", afterSeq)
       .order("seq", { ascending: true })
       .range(offset, offset + EVENTS_PAGE_SIZE - 1);
     if (eventsError) {

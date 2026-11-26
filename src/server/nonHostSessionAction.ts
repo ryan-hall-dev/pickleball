@@ -37,20 +37,60 @@ export interface NonHostActionInput {
   action: NewSessionAction;
 }
 
+type LoadedState = { events: SessionEvent[]; state: SessionState };
+
+/**
+ * What this server instance has already read, per session. Phones poll every
+ * 5 s, so re-reading the whole log each time would move gigabytes a social.
+ * The log is append-only and its rows never change, so only newer events are
+ * fetched and applied. Callers have already established the session.
+ */
+const loadedBySession = new Map<string, LoadedState>();
+const MAX_CACHED_SESSIONS = 20;
+
 /** The log and its replayed state, read with the secret key (no host session). */
 export async function loadReplayedState(
   sessionId: string,
   client: DatabaseClient = createSupabaseAdminClient(),
-): Promise<{ events: SessionEvent[]; state: SessionState } | null> {
-  const log = await loadSessionLog(client, sessionId);
+): Promise<LoadedState | null> {
+  const cached = loadedBySession.get(sessionId);
+  const log = await loadSessionLog(
+    client,
+    sessionId,
+    cached?.state.lastSeq ?? 0,
+  );
   if (!log) return null;
-  const replayed = replay(log.events);
-  if (!replayed.ok) {
-    throw new Error(
-      `Session ${sessionId} log fails to replay at seq ${replayed.failedSeq}: ${replayed.error.code}`,
-    );
+  let loaded: LoadedState;
+  if (cached) {
+    let state = cached.state;
+    for (const event of log.events) {
+      // applyEvent never mutates its input, so a shared cache stays safe.
+      const result = applyEvent(state, event);
+      if (!result.ok) {
+        loadedBySession.delete(sessionId);
+        throw new Error(
+          `Session ${sessionId} log fails to apply at seq ${event.seq}: ${result.error.code}`,
+        );
+      }
+      state = result.state;
+    }
+    loaded = log.events.length
+      ? { events: [...cached.events, ...log.events], state }
+      : cached;
+  } else {
+    const replayed = replay(log.events);
+    if (!replayed.ok) {
+      throw new Error(
+        `Session ${sessionId} log fails to replay at seq ${replayed.failedSeq}: ${replayed.error.code}`,
+      );
+    }
+    loaded = { events: log.events, state: replayed.state };
   }
-  return { events: log.events, state: replayed.state };
+  loadedBySession.delete(sessionId);
+  loadedBySession.set(sessionId, loaded);
+  if (loadedBySession.size > MAX_CACHED_SESSIONS)
+    loadedBySession.delete(loadedBySession.keys().next().value!);
+  return loaded;
 }
 
 function actorIdOf(actor: NonHostActor): string {
