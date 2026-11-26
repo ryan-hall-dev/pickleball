@@ -25,6 +25,17 @@ Light is the default on every screen: dark screens were hard to read under brigh
 - **The player check-in page is always light** and has no switch.
 - **QR codes stay black on white** in both themes.
 
+## Reclub to court (approved 2026-11-26, `docs/plans/reclub-to-court-v1.md`)
+
+Source: `docs/designs/reclub-to-court/review.html` (31 phone screens, all approved by Ryan). Not built yet; light theme and phone only were drawn, so dark mode, tablet and the Vietnamese wording (native check needed) follow the rules above when built.
+
+- **Import:** the host pastes the Reclub text; only Confirmed names are read, the waitlist is left out, `(+1)` adds "Guest of <name>". Every line gets its own UUID. One-word names are accepted. A name listed twice shows as "Name (1)" / "Name (2)" with an optional host note. Pasting again only adds new names and never removes or resets anyone.
+- **Arrivals:** listed players claim their name on their phone and go straight into Ready. Only walk-ins (Approve / Reject) and "That's my name" (Move to new phone / Keep as it is) need the host. The host can check in a player with no phone and can close walk-ins.
+- **Player search:** at least 2 letters, at most 5 results, names only, never who has arrived; the one exception is a numbered twin already taken, shown greyed "In use".
+- **Wording:** the next group for a court is **"Up next"** everywhere (never "On Deck").
+- **Live courts (compact, 5 to 10 courts):** a "Call over" box at the top lists who to find and where; one short card per court (name, status pill, players on one line, Game finished or Start game); its Up next group sits inside the card as one line of names with ✓ or !. The host can also tap Start game.
+- **Player states:** Ready (waiting time, Play with a friend, Take a break, I'm leaving) → Up next (blue, "I'm ready" / "Need a rest", with "Give up this spot?") → Confirmed, wait → Head to court (any of the four taps Game started) → Playing → optional score. Change, moved court, friend request, break and score-recorded states as drawn.
+
 ## Principles
 
 - Dark, high-contrast, glanceable from a distance: hosts use this standing at the courts, often on a tablet.

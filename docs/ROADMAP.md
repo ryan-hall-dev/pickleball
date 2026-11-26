@@ -19,3 +19,5 @@ Status: draft | planned | in-progress | blocked | done
 | Compact phone layout | [plans/mobile-compact-ui.md](plans/mobile-compact-ui.md) | deployed 2026-11-21 (`86ac1ae`); screenshot review passed 2026-11-20 | feature/mobile-compact-ui |
 
 | Light mode | [plans/light-mode.md](plans/light-mode.md) | built 2026-11-21, screenshot review passed (14/14); deployed 2026-11-21 (`f2201f2`) | feature/light-mode |
+
+| Reclub roster to court to score · v1 | [plans/reclub-to-court-v1.md](plans/reclub-to-court-v1.md) | planned; Phase 0 done, screens approved 2026-11-26 | codex/reclub-to-court-v1 |
