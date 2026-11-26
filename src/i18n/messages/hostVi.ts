@@ -14,7 +14,6 @@ export const hostVi: typeof hostEn = {
     reload: "Tải lại",
   },
   titles: {
-    arrivals: "Người đến",
     signIn: "Đăng nhập",
     setup: "Chuẩn bị buổi chơi",
     live: "Sân đang chơi",
@@ -25,7 +24,6 @@ export const hostVi: typeof hostEn = {
   header: {
     navLabel: "Người tổ chức",
     nav: {
-      arrivals: "Người đến",
       setup: "Chuẩn bị buổi chơi",
       live: "Sân đang chơi",
       hosts: "Người tổ chức",
@@ -37,10 +35,7 @@ export const hostVi: typeof hostEn = {
     menu: "Menu",
   },
   arrivals: {
-    loading: "Đang tải danh sách đến…",
     heading: "Người đến",
-    noSession: "Chưa có buổi chơi nào mở. Hãy tạo buổi chơi trước.",
-    openSetup: "Mở thiết lập buổi chơi",
     arrivedCount: (arrived: number, total: number) =>
       `${arrived}/${total} người đã đến`,
     needsYou: (count: number) => `Cần bạn xử lý (${count})`,
@@ -54,7 +49,7 @@ export const hostVi: typeof hostEn = {
     moveToNewPhone: "Chuyển sang điện thoại mới",
     keepAsItIs: "Giữ nguyên",
     walkInsHint:
-      "Người ngoài danh sách được duyệt ở mục Điểm danh trong Thiết lập buổi chơi và Sân đang chơi.",
+      "Người ngoài danh sách hiện phía trên mục này khi có người yêu cầu.",
     notArrived: (count: number) => `Chưa đến (${count})`,
     everyoneArrived: "Mọi người trong danh sách đã đến.",
     arrived: (count: number) => `Đã đến (${count})`,

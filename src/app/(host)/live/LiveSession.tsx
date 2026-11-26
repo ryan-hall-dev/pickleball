@@ -31,6 +31,7 @@ import { PendingCheckinTray } from "../setup/PendingCheckinTray";
 import { LiveAddPlayer, type AddPlayerOutcome } from "./LiveAddPlayer";
 import { failureText, type ShownFailure } from "./liveFailure";
 import { TimeUpNotice } from "./TimeUpNotice";
+import { ArrivalsBoard } from "../setup/ArrivalsBoard";
 import { LiveCourtCard } from "./LiveCourtCard";
 import { CallOverList } from "./LiveCourtV2";
 import { RecentGames } from "./RecentGames";
@@ -515,6 +516,9 @@ export function LiveSession({
                 onAttendanceChangedElsewhere={() => void refresh()}
                 onWaitingCountChange={setPendingCheckinCount}
               />
+              {session.isV2 && (
+                <ArrivalsBoard onArrivedChanged={() => void refresh()} />
+              )}
             </div>
           </div>
         </>

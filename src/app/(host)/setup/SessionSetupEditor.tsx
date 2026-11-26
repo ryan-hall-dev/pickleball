@@ -36,6 +36,7 @@ import {
   saveSimpleSessionDraftInputSchema,
   type SaveSimpleSessionDraftInput,
 } from "@/server/setup/setupRules";
+import { ArrivalsBoard } from "./ArrivalsBoard";
 import { CoHostDraftNotice } from "./CoHostDraftNotice";
 import { DiscardDraftButton } from "./DiscardDraftButton";
 import { PendingCheckinTray } from "./PendingCheckinTray";
@@ -895,8 +896,13 @@ function SessionSetupForm({
           </div>
         </section>
         <PendingCheckinTray
+          hideWhenEmpty
           onParticipantApproved={showApprovedCheckin}
           onAttendanceChangedElsewhere={showAttendanceChangedElsewhere}
+        />
+        <ArrivalsBoard
+          showQrLink
+          onArrivedChanged={showAttendanceChangedElsewhere}
         />
         <WhosPlayingCard
           attendance={attendance}

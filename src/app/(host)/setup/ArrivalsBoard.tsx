@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { AttentionMessage } from "@/components/AttentionMessage";
 import {
   CARD_CLASS_NAME,
@@ -14,6 +14,7 @@ import {
   TEXT_INPUT_CLASS_NAME,
   UNSELECTED_OPTION_BUTTON_CLASS_NAME,
 } from "@/components/controlStyles";
+import { STICKER_AND_QR_PAGE_PATH } from "../checkin-link/checkinLinkPaths";
 import { useLocale } from "@/i18n/LocaleProvider";
 import { translateMessage } from "@/i18n/messages";
 import { GENDERS, type Gender } from "@/server/participantRules";
@@ -42,7 +43,7 @@ import {
 } from "@/server/roster/rosterText";
 import { SKILL_LEVELS, type SkillLevel } from "@/server/skillLevels";
 
-// Arrivals (docs/designs/reclub-to-court/ h1-h6): paste the Reclub list,
+// Arrivals, a section of Session setup and Live courts (h1-h6): paste the Reclub list,
 // answer "That's my name", check in people with no phone, close walk-ins.
 // Listed players check themselves in; only exceptions need the host.
 
@@ -66,29 +67,49 @@ function formatTime(iso: string, locale: string) {
 }
 
 export function ArrivalsBoard({
-  initialRead,
+  showQrLink = false,
+  onArrivedChanged,
 }: {
-  initialRead: ReadHostRosterResult;
+  /** Setup shows the check-in QR code here; Live has it with Check-ins. */
+  showQrLink?: boolean;
+  /** Someone checked in (or was removed): the page re-reads its players. */
+  onArrivedChanged?: () => void;
 }) {
   const { messages, text } = useText();
-  const [read, setRead] = useState(initialRead);
+  const [read, setRead] = useState<ReadHostRosterResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await readHostRoster().catch((): ReadHostRosterResult => ({
       ok: false,
-      message: messages.host.arrivals.loading,
+      message: messages.serverMessages.offline,
     }));
-    if (result.ok) setRead(result);
+    // A failed poll keeps what is already shown.
+    setRead((current) => (result.ok || !current?.ok ? result : current));
   }, [messages]);
+
+  const arrivedIds = (read?.ok ? (read.roster?.entries ?? []) : [])
+    .flatMap((entry) => entry.participant?.participantId ?? [])
+    .sort()
+    .join();
+  const onArrivedChangedRef = useRef(onArrivedChanged);
+  useEffect(() => {
+    onArrivedChangedRef.current = onArrivedChanged;
+  });
+  // The first read counts too: players may have arrived before this page.
+  useEffect(() => {
+    if (arrivedIds) onArrivedChangedRef.current?.();
+  }, [arrivedIds]);
 
   useEffect(() => {
     const poll = () => {
       if (!document.hidden) void refresh();
     };
+    const firstRead = setTimeout(poll, 0);
     const interval = setInterval(poll, POLL_INTERVAL_MS);
     document.addEventListener("visibilitychange", poll);
     return () => {
+      clearTimeout(firstRead);
       clearInterval(interval);
       document.removeEventListener("visibilitychange", poll);
     };
@@ -109,6 +130,7 @@ export function ArrivalsBoard({
     [messages, refresh],
   );
 
+  if (!read) return null;
   if (!read.ok) {
     return (
       <AttentionMessage>
@@ -117,31 +139,29 @@ export function ArrivalsBoard({
     );
   }
   const roster = read.roster;
-  if (!roster) {
-    return (
-      <section className={`${CARD_CLASS_NAME} flex flex-col items-start gap-3`}>
-        <h1 className={SECTION_HEADING_CLASS_NAME}>{text.heading}</h1>
-        <p className="text-muted">{text.noSession}</p>
-        <Link href="/setup" className={LINK_BUTTON_CLASS_NAME}>
-          {text.openSetup}
-        </Link>
-      </section>
-    );
-  }
+  if (!roster) return null;
 
   const arrivedCount = roster.entries.filter(
     (entry) => entry.participant,
   ).length;
   return (
     <div className="flex flex-col gap-4 compact:gap-2.5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-[32px] font-extrabold tracking-[-0.01em] compact:text-[17px] compact:font-bold">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="min-w-0 flex-1 text-xl font-bold compact:text-base">
           {text.heading}
-        </h1>
+        </h2>
         {roster.entries.length > 0 && (
           <span className="rounded-full bg-inner-border px-3 py-1 text-[13px] font-bold text-text-soft tabular-nums">
             {text.arrivedCount(arrivedCount, roster.entries.length)}
           </span>
+        )}
+        {showQrLink && (
+          <Link
+            href={STICKER_AND_QR_PAGE_PATH}
+            className={OUTLINE_BUTTON_CLASS_NAME}
+          >
+            {messages.host.tray.showQrCode}
+          </Link>
         )}
       </div>
       {message && (

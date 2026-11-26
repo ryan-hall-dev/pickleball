@@ -77,7 +77,10 @@ export function PendingCheckinTray({
   onAttendanceChangedElsewhere,
   approveDecision = approveCheckin,
   onWaitingCountChange,
+  hideWhenEmpty = false,
 }: {
+  /** Setup: show walk-in requests only while there are some (it keeps polling). */
+  hideWhenEmpty?: boolean;
   onParticipantApproved: (participant: DraftParticipant | null) => void;
   onAttendanceChangedElsewhere: () => void;
   /** Live supplies client event metadata; draft approval keeps its existing path. */
@@ -141,6 +144,9 @@ export function PendingCheckinTray({
   return (
     <section
       aria-labelledby={HEADING_ID}
+      hidden={
+        hideWhenEmpty && state.rows.length === 0 && !state.isRefreshFailing
+      }
       className={`rounded-card border bg-card px-4 py-4 lg:px-[22px] lg:py-5 compact:rounded-2xl compact:p-3 ${
         isWaiting ? "border-blue-edge" : "border-card-border"
       }`}

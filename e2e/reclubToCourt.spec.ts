@@ -112,7 +112,7 @@ test("a whole social: arrivals, two courts turning over out of order, and a late
     .single();
   if (error) throw error;
   const listed = [...PHONE_NAMES, NO_PHONE_NAME, ABSENT_NAME];
-  await page.goto("/arrivals");
+  await page.goto("/setup");
   await page.getByLabel("Reclub list").fill(listed.join("\n"));
   await page.getByRole("button", { name: "Check names" }).click();
   await page
@@ -163,7 +163,7 @@ test("a whole social: arrivals, two courts turning over out of order, and a late
   ).toBeVisible({
     timeout: POLL_TIMEOUT_MS,
   });
-  await page.goto("/arrivals");
+  await page.goto("/setup");
   const row = page.getByRole("listitem").filter({ hasText: NO_PHONE_NAME });
   await row.getByRole("button", { name: "Check in" }).click();
   await pickDetails(row);

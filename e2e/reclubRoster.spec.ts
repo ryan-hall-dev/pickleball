@@ -79,7 +79,7 @@ test("a host pastes the Reclub list and listed players check themselves in", asy
   if (error) throw error;
 
   // Host: paste, check, add.
-  await page.goto("/arrivals");
+  await page.goto("/setup");
   await page.getByLabel("Reclub list").fill(RECLUB_PASTE);
   await page.getByRole("button", { name: "Check names" }).click();
   await expect(page.getByText("7 new names found")).toBeVisible();

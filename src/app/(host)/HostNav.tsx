@@ -7,7 +7,6 @@ import { useMessages } from "@/i18n/LocaleProvider";
 // Phone workflow; manager tools stay outside ordinary game turnover.
 const HOST_NAV_ITEMS = [
   { href: "/setup", labelKey: "setup" },
-  { href: "/arrivals", labelKey: "arrivals" },
   { href: "/live", labelKey: "live" },
   { href: "/hosts", labelKey: "hosts" },
 ] as const;

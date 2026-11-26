@@ -176,12 +176,8 @@ test("players check in, hosts approve and reject from the tray, and a second hos
     hostPage.getByRole("heading", { name: "A simple start" }),
   ).toBeVisible();
 
-  // Empty to start with, for every host.
-  await expect(
-    tray(managerPage).getByText(
-      "No check-ins waiting. Players scan the social's QR code or tap the sticker to check in.",
-    ),
-  ).toBeVisible();
+  // Nothing waiting: Setup shows no check-ins box.
+  await expect(tray(managerPage)).toHaveCount(0);
 
   // A player submits their required level: the row shows within a poll.
   const peterPhone = await newPhone(browser, draft.checkinTag);

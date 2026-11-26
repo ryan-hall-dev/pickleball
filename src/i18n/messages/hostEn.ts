@@ -13,7 +13,6 @@ export const hostEn = {
     reload: "Reload",
   },
   titles: {
-    arrivals: "Arrivals",
     signIn: "Sign in",
     setup: "Session setup",
     live: "Live courts",
@@ -24,7 +23,6 @@ export const hostEn = {
   header: {
     navLabel: "Host",
     nav: {
-      arrivals: "Arrivals",
       setup: "Session setup",
       live: "Live courts",
       hosts: "Hosts",
@@ -36,10 +34,7 @@ export const hostEn = {
     menu: "Menu",
   },
   arrivals: {
-    loading: "Loading arrivals…",
     heading: "Arrivals",
-    noSession: "No social is open. Set one up first.",
-    openSetup: "Open session setup",
     arrivedCount: (arrived: number, total: number) =>
       `${arrived} of ${total} arrived`,
     needsYou: (count: number) => `Needs you (${count})`,
@@ -53,7 +48,7 @@ export const hostEn = {
     moveToNewPhone: "Move to new phone",
     keepAsItIs: "Keep as it is",
     walkInsHint:
-      "Walk-ins (not on the list) are approved under Check-ins on Session setup and Live courts.",
+      "Walk-ins (not on the list) appear above this section when someone asks.",
     notArrived: (count: number) => `Not arrived (${count})`,
     everyoneArrived: "Everyone on the list has arrived.",
     arrived: (count: number) => `Arrived (${count})`,

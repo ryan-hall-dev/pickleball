@@ -22,6 +22,7 @@ import type {
 } from "@/server/live/liveTypes";
 import { LiveSession } from "./LiveSession";
 
+vi.mock("../setup/ArrivalsBoard", () => ({ ArrivalsBoard: () => null }));
 vi.mock("@/server/live/liveActions", () => ({
   readLiveSession: vi.fn(),
   writeLiveAction: vi.fn(),

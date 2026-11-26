@@ -65,7 +65,7 @@ test("players confirm on their phones, head to court and start their own game", 
     .single();
   if (error) throw error;
 
-  await page.goto("/arrivals");
+  await page.goto("/setup");
   await page.getByLabel("Reclub list").fill(NAMES.join("\n"));
   await page.getByRole("button", { name: "Check names" }).click();
   await page.getByRole("button", { name: "Add 4 players" }).click();
