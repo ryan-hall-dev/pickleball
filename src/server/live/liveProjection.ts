@@ -161,6 +161,10 @@ export function liveProjection(
               : {}),
           }
         : null,
+      freeSince: Math.max(
+        0,
+        ...courtState.matchIds.map((id) => state.matches[id]?.endedAt ?? 0),
+      ),
       isClosed: isCourtClosed(courtState),
       closesAfterGame: !!courtState.closeScheduledBySeq,
       suggestion:

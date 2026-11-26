@@ -41,6 +41,8 @@ export interface LiveCourt {
         askedAt?: Record<string, number>;
       })
     | null;
+  /** simple-social-v2: when the last game on this court ended, or null. */
+  freeSince?: number | null;
   /** simple-social-v2 */
   isClosed?: boolean;
   closesAfterGame?: boolean;

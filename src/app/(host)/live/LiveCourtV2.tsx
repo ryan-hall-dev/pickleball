@@ -20,8 +20,34 @@ import type {
 /** Unconfirmed this long: the host goes and finds them (D1). */
 const CALL_OVER_AFTER_MS = 60_000;
 
-const minutesSince = (now: number, at: number | undefined) =>
-  Math.max(0, Math.floor((now - (at ?? now)) / 60_000));
+/**
+ * How long the court has been waiting for this player, or null when it isn't:
+ * the host is only prompted once the court is free and the player hasn't
+ * confirmed. While a game is on there is nobody to chase.
+ */
+function waitingFor(court: LiveCourt, id: string, now: number): number | null {
+  if (court.activeMatch || court.called?.confirmedIds?.includes(id))
+    return null;
+  const since = Math.max(
+    court.called?.askedAt?.[id] ?? now,
+    court.freeSince ?? 0,
+  );
+  return Math.max(0, now - since);
+}
+
+/** A free court's player to chase: no phone at once, others after a minute. */
+function isOverdue(
+  court: LiveCourt,
+  player: LivePlayer | undefined,
+  id: string,
+  now: number,
+): boolean {
+  const waited = waitingFor(court, id, now);
+  return (
+    waited !== null &&
+    (player?.hasPhone === false || waited >= CALL_OVER_AFTER_MS)
+  );
+}
 
 function nameOf(players: LivePlayer[], id: string) {
   return players.find((player) => player.participantId === id)?.name ?? "";
@@ -45,17 +71,13 @@ export function UpNextConfirmations({
   const called = court.called!;
   const confirmed = new Set(called.confirmedIds ?? []);
   const seats = [...called.teamA, ...called.teamB];
-  // Options per seat once a reply is overdue (as Call over), so a group just
-  // asked stays one line; someone with no phone never replies, so their
-  // options show straight away.
-  const hasNoPhone = (id: string) =>
-    players.find((player) => player.participantId === id)?.hasPhone === false;
+  // Options per seat only when the court is waiting for that player.
+  const playerOf = (id: string) =>
+    players.find((player) => player.participantId === id);
+  const hasNoPhone = (id: string) => playerOf(id)?.hasPhone === false;
   const unconfirmed = seats.filter(
     (id): id is string =>
-      id !== null &&
-      !confirmed.has(id) &&
-      (hasNoPhone(id) ||
-        now - (called.askedAt?.[id] ?? now) >= CALL_OVER_AFTER_MS),
+      id !== null && isOverdue(court, playerOf(id), id, now),
   );
   return (
     <div className="mt-2 flex flex-col gap-2">
@@ -68,10 +90,10 @@ export function UpNextConfirmations({
             <span
               key={id}
               className={
-                confirmed.has(id) ? "" : "font-semibold text-orange-ink"
+                unconfirmed.includes(id) ? "font-semibold text-orange-ink" : ""
               }
             >
-              {confirmed.has(id) ? "" : "! "}
+              {unconfirmed.includes(id) ? "! " : ""}
               {nameOf(players, id)}
               {confirmed.has(id) ? " ✓" : ""}
               {index < seats.length - 1 ? " ·" : ""}
@@ -92,7 +114,9 @@ export function UpNextConfirmations({
             <span className="text-xs font-bold text-orange-ink">
               {hasNoPhone(id)
                 ? text.noPhone
-                : text.noReply(minutesSince(now, called.askedAt?.[id]))}
+                : text.noReply(
+                    Math.floor((waitingFor(court, id, now) ?? 0) / 60_000),
+                  )}
             </span>
           </summary>
           <div className="flex flex-col gap-2 px-3 pb-3">
@@ -276,25 +300,19 @@ export function CallOverList({
     const called = court.called;
     if (!called) continue;
     const name = courtName(court.name, messages);
-    const confirmed = new Set(called.confirmedIds ?? []);
-    const readyToGo =
-      !court.activeMatch &&
-      [...called.teamA, ...called.teamB].every((id) => id !== null);
     for (const id of [...called.teamA, ...called.teamB]) {
       if (id === null) continue;
       const player = session.players.find((p) => p.participantId === id);
-      if (!player) continue;
-      const askedAt = called.askedAt?.[id];
-      if (
-        !confirmed.has(id) &&
-        askedAt !== undefined &&
-        now - askedAt >= CALL_OVER_AFTER_MS
-      )
-        rows.push(
-          text.callNoReply(player.name, name, minutesSince(now, askedAt)),
-        );
-      else if (readyToGo && player.hasPhone === false)
-        rows.push(text.callNoPhone(player.name, name));
+      if (!player || !isOverdue(court, player, id, now)) continue;
+      rows.push(
+        player.hasPhone === false
+          ? text.callNoPhone(player.name, name)
+          : text.callNoReply(
+              player.name,
+              name,
+              Math.floor(waitingFor(court, id, now)! / 60_000),
+            ),
+      );
     }
   }
   if (rows.length === 0) return null;
