@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   calledSeats,
+  friendPairOf,
   isSkipped,
   isUpNextReadyToPlay,
   type SessionState,
@@ -19,7 +20,13 @@ export type PlayerIntent =
   /** "I'm leaving". */
   | "leave"
   /** "Game started": all four confirmed and on the free court. */
-  | "gameStarted";
+  | "gameStarted"
+  /** "Play with a friend" → Ask (p12). */
+  | "askFriend"
+  /** "Team up" on a request made to this player (p13). */
+  | "acceptFriend"
+  /** "No thanks", or cancelling one's own request or pair. */
+  | "endFriend";
 
 /** A repeatable id for one group's start: several taps make one game. */
 function startId(kind: string, calledEventId: string, lastSeq: number) {
@@ -45,7 +52,9 @@ export function planPlayerAction(
   participantId: string,
   intent: PlayerIntent,
   eventId: string,
+  friendId: string | null = null,
 ): Planned {
+  const pair = friendPairOf(state, participantId);
   const participant = state.participants[participantId];
   if (!participant) return { kind: "impossible" };
   const court = Object.values(state.courts).find(
@@ -97,6 +106,40 @@ export function planPlayerAction(
         kind: "write",
         eventId,
         action: { type: "PlayerLeft", payload: { participantId } },
+      };
+    case "askFriend":
+      if (!friendId) return { kind: "impossible" };
+      if (pair?.participantId === participantId && pair.friendId === friendId)
+        return { kind: "nothing" };
+      return {
+        kind: "write",
+        eventId,
+        action: {
+          type: "FriendPairRequested",
+          payload: { participantId, friendId },
+        },
+      };
+    case "acceptFriend":
+      if (pair?.status === "accepted") return { kind: "nothing" };
+      if (!pair || pair.friendId !== participantId)
+        return { kind: "impossible" };
+      return {
+        kind: "write",
+        eventId,
+        action: {
+          type: "FriendPairAccepted",
+          payload: { requestSeq: pair.requestSeq },
+        },
+      };
+    case "endFriend":
+      if (!pair) return { kind: "nothing" };
+      return {
+        kind: "write",
+        eventId,
+        action: {
+          type: "FriendPairEnded",
+          payload: { requestSeq: pair.requestSeq },
+        },
       };
     case "gameStarted": {
       if (participant.activeMatchId !== null) return { kind: "nothing" };

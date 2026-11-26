@@ -104,6 +104,19 @@ export interface SessionEventPayloads {
    */
   CourtCloseScheduled: { courtId: CourtId };
   CourtCloseCancelled: CompensationPayload;
+  /**
+   * simple-social-v2 friend pair (D4): `participantId` asks `friendId` to be
+   * on the same team for their next game. Both must be Ready and in no other
+   * pair or request.
+   */
+  FriendPairRequested: {
+    participantId: ParticipantId;
+    friendId: ParticipantId;
+  };
+  /** The friend agrees; the pair waits as one, ranked by the shorter wait. */
+  FriendPairAccepted: { requestSeq: number };
+  /** Declined, cancelled, or ended by a host. A break or leaving ends it by itself. */
+  FriendPairEnded: { requestSeq: number };
   MatchStarted: MatchAssignment;
   /**
    * Undoes a match start: `targetSeq` is the `MatchStarted`, or, for a match

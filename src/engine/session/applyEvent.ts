@@ -18,6 +18,11 @@ import {
   type SessionEventType,
 } from "./events";
 import {
+  handleFriendPairAccepted,
+  handleFriendPairEnded,
+  handleFriendPairRequested,
+} from "./pairHandlers";
+import {
   handleMatchAbandoned,
   handleMatchAbandonReverted,
   handleMatchCompleted,
@@ -72,6 +77,9 @@ const HANDLERS: { [TType in SessionEventType]: EventHandler<TType> } = {
   NextGroupMoved: handleNextGroupMoved,
   CourtCloseScheduled: handleCourtCloseScheduled,
   CourtCloseCancelled: handleCourtCloseCancelled,
+  FriendPairRequested: handleFriendPairRequested,
+  FriendPairAccepted: handleFriendPairAccepted,
+  FriendPairEnded: handleFriendPairEnded,
   SessionStarted: handleSessionStarted,
   PlayerJoined: handlePlayerJoined,
   PlayerJoinReverted: handlePlayerJoinReverted,

@@ -81,6 +81,8 @@ export interface MatchState {
   segments: PlaySegment[];
   /** Locks used up by this match start, restored if the start is undone. */
   consumedLocks: Record<ParticipantId, PlayerLock>;
+  /** simple-social-v2: friend pairs this start used up, restored if it is undone. */
+  consumedPairs?: FriendPair[];
   /**
    * The manual order just before this start, kept only when it cleared a
    * starter's rank (else empty), so an undo can put each rank back after the
@@ -114,6 +116,15 @@ export interface CourtState {
   activeMatchId: MatchId | null;
   /** Every match (active or finished) played on this court, in start order. */
   matchIds: MatchId[];
+}
+
+/** simple-social-v2 friend pair, keyed by the seq of its request. */
+export interface FriendPair {
+  requestSeq: number;
+  /** Who asked. */
+  participantId: ParticipantId;
+  friendId: ParticipantId;
+  status: "requested" | "accepted";
 }
 
 export interface PauseInterval extends TimeInterval {
@@ -162,6 +173,8 @@ export interface SessionState {
    * undone start leaves its id here.
    */
   startedMatchIds: Record<MatchId, true>;
+  /** simple-social-v2 friend pairs requested or accepted, by request seq. */
+  friendPairs?: Record<number, FriendPair>;
   /** Host's manual order; may contain ids of players who have since left. */
   queueOrder: ParticipantId[];
   queueOrderSetBySeq: number | null;

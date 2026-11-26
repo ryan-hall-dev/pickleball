@@ -3,6 +3,7 @@ import { targetEvent, type EventHandler, type StateDraft } from "./draft";
 import { sessionError, type SessionError } from "./errors";
 import type { MatchAssignment, SessionEventOf } from "./events";
 import { isSessionError, requireAvailableParticipant } from "./playerHandlers";
+import { restorePairs, takePairsOf } from "./pairHandlers";
 import {
   currentLineup,
   hasPlayedSince,
@@ -17,6 +18,7 @@ import {
 import { PLAYERS_PER_TEAM, type MatchId, type ParticipantId } from "./types";
 import {
   isSimpleSocial,
+  isSimpleSocialV2,
   reservedCourtId,
   simpleSessionTimeIsUp,
   validateSimpleTeams,
@@ -149,6 +151,10 @@ export function startMatch(
     endedBySeq: null,
     segments,
     consumedLocks,
+    // A start uses up every friend pair of its players (one game, D4).
+    ...(isSimpleSocialV2(draft.next.config)
+      ? { consumedPairs: takePairsOf(draft, playerIds) }
+      : {}),
     ...(isSimpleSocial(draft.next.config) && courtState.nextGroup
       ? {
           consumedCall: {
@@ -280,6 +286,7 @@ export const handleMatchStartReverted: EventHandler<"MatchStartReverted"> = (
     }
   }
   draft.remove("matches", matchId);
+  restorePairs(draft, match.consumedPairs ?? []);
   draft.set("courts", match.courtId, {
     ...courtState,
     activeMatchId: null,

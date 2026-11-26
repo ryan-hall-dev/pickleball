@@ -18,7 +18,12 @@ import {
   TestSession,
 } from "./testing/fixtures";
 import type { Participant, SessionConfig } from "./types";
-import { simpleRefill } from "../schedule/simpleRecommend";
+import {
+  arrangeTeams,
+  simpleRecommend,
+  simpleRefill,
+} from "../schedule/simpleRecommend";
+import { friendPairOf } from "./pairHandlers";
 
 function v2Session(courts = 2, overrides: Partial<SessionConfig> = {}) {
   const participants: Participant[] = makeParticipants(16).map((player, i) => ({
@@ -435,6 +440,112 @@ describe("simple-social-v2", () => {
       session.apply("PlayerLeft", { participantId: ids[3] });
       // Only a woman is free: three men and a woman is never valid.
       expect(simpleRefill(session.state, session.now)).toEqual([]);
+    });
+  });
+
+  describe("friend pairs (D4) and teams (D7)", () => {
+    it("needs both to agree; a break ends the pair and the friend keeps their place", () => {
+      const { session, ids } = v2Session(1);
+      expect(
+        code(
+          session.tryApply("FriendPairRequested", {
+            participantId: ids[0],
+            friendId: ids[0],
+          }),
+        ),
+      ).toBe("INVALID_PAIR");
+      const asked = session.apply("FriendPairRequested", {
+        participantId: ids[0],
+        friendId: ids[8],
+      });
+      expect(
+        code(
+          session.tryApply("FriendPairRequested", {
+            participantId: ids[1],
+            friendId: ids[8],
+          }),
+        ),
+      ).toBe("ALREADY_PAIRED");
+      session.apply("FriendPairAccepted", { requestSeq: asked.seq });
+      expect(friendPairOf(session.state, ids[8])?.status).toBe("accepted");
+      session.apply("PlayerSkipped", {
+        participantId: ids[0],
+        reason: "break",
+      });
+      expect(friendPairOf(session.state, ids[8])).toBeNull();
+    });
+
+    it("a pair waits as its shorter wait and plays on one team", () => {
+      const { session, ids } = v2Session(1);
+      // Everyone but man 7 and woman 15 plays first, so those two wait longest.
+      session.apply("MatchStarted", {
+        matchId: "warmup",
+        courtId: fixtureCourtId(1),
+        teamA: [ids[0], ids[1]],
+        teamB: [ids[2], ids[3]],
+      });
+      session.advanceMinutes(10);
+      session.apply("MatchCompleted", { matchId: "warmup" });
+      session.advanceMinutes(1);
+      // Man 0 (just played) and woman 15 (waited longest) team up.
+      const asked = session.apply("FriendPairRequested", {
+        participantId: ids[0],
+        friendId: ids[15],
+      });
+      session.apply("FriendPairAccepted", { requestSeq: asked.seq });
+      const [group] = simpleRecommend(session.state, session.now, [
+        fixtureCourtId(1),
+      ]);
+      const four = [...group.teamA, ...group.teamB];
+      // Ranked by man 0's shorter wait, the pair loses to four who waited longer.
+      expect(four).not.toContain(ids[0]);
+      expect(four).not.toContain(ids[15]);
+    });
+
+    it("keeps a pair together on one team when they are picked, and a start uses the pair up", () => {
+      const { session, ids } = v2Session(3);
+      const asked = session.apply("FriendPairRequested", {
+        participantId: ids[4],
+        friendId: ids[12],
+      });
+      session.apply("FriendPairAccepted", { requestSeq: asked.seq });
+      const groups = simpleRecommend(session.state, session.now, [
+        fixtureCourtId(1),
+        fixtureCourtId(2),
+        fixtureCourtId(3),
+      ]);
+      const group = groups.find((candidate) =>
+        [...candidate.teamA, ...candidate.teamB].includes(ids[4]),
+      )!;
+      const team = group.teamA.includes(ids[4]) ? group.teamA : group.teamB;
+      expect(team).toContain(ids[12]);
+      session.apply("MatchStarted", {
+        matchId: "with-friend",
+        courtId: group.courtId,
+        teamA: group.teamA,
+        teamB: group.teamB,
+      });
+      expect(friendPairOf(session.state, ids[4])).toBeNull();
+    });
+
+    it("splits four into teams with the fewest repeat partners, then the closest skill", () => {
+      const { session, ids } = v2Session(1);
+      // Men 0 and 1 partner once.
+      session.apply("MatchStarted", {
+        matchId: "first",
+        courtId: fixtureCourtId(1),
+        teamA: [ids[0], ids[1]],
+        teamB: [ids[2], ids[3]],
+      });
+      session.apply("MatchCompleted", { matchId: "first" });
+      const [teamA, teamB] = arrangeTeams(
+        session.state,
+        session.now,
+        [ids[0], ids[1], ids[2], ids[3]],
+        [],
+      );
+      expect(teamA).not.toEqual([ids[0], ids[1]]);
+      expect([...teamA, ...teamB].sort()).toEqual(ids.slice(0, 4).sort());
     });
   });
 });

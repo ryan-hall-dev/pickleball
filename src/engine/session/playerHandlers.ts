@@ -11,6 +11,7 @@ import {
 } from "./state";
 import { PLAYERS_PER_MATCH, type ParticipantId } from "./types";
 import { invalidateCalledSeat } from "./calledGroupHandlers";
+import { takePairsOf } from "./pairHandlers";
 import {
   isSimpleSocial,
   isSimpleSocialV2,
@@ -211,6 +212,8 @@ export const handlePlayerLeft: EventHandler<"PlayerLeft"> = (draft, event) => {
   };
   draft.set("participants", participantId, { ...participantState, presence });
   invalidateCalledSeat(draft, participantId);
+  // Leaving ends a friend pair; the friend keeps their own place (p14).
+  if (isSimpleSocialV2(draft.next.config)) takePairsOf(draft, [participantId]);
   return null;
 };
 
@@ -298,6 +301,9 @@ export const handlePlayerSkipped: EventHandler<"PlayerSkipped"> = (
     ],
   });
   invalidateCalledSeat(draft, event.payload.participantId);
+  // A break ends a friend pair; the friend keeps their own place (p14).
+  if (isSimpleSocialV2(draft.next.config))
+    takePairsOf(draft, [event.payload.participantId]);
   return null;
 };
 

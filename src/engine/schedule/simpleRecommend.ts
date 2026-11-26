@@ -1,5 +1,6 @@
 // Wait-first selection is independent of grouping: variety cannot displace a player.
 import { playerMetrics } from "../session/metrics";
+import { acceptedFriendPairs } from "../session/pairHandlers";
 import {
   isSimpleSocial,
   isSimpleSocialV2,
@@ -243,6 +244,15 @@ export function simpleRecommend(
     );
   });
   const candidates = rankedCandidates(state, now);
+  const pairs = isSimpleSocialV2(state.config)
+    ? acceptedFriendPairs(state).filter(
+        (pair) =>
+          candidates.some((player) => player.id === pair.participantId) &&
+          candidates.some((player) => player.id === pair.friendId),
+      )
+    : [];
+  if (pairs.length > 0)
+    return withFriendPairs(state, now, courtIds, candidates, pairs);
   let remaining = oldestFeasibleSet(candidates, courtIds.length);
   const groups: Candidate[][] = [];
   while (remaining.length > 0) {
@@ -270,12 +280,176 @@ export function simpleRecommend(
       groups[groupIndex] = regrouped[index];
     });
   }
-  return groups.map((group, index) => ({
-    courtId: courtIds[index],
-    teamA: group.slice(0, 2).map((player) => player.id),
-    teamB: group.slice(2).map((player) => player.id),
-    reason: "Longest eligible waits; variety within the selected players.",
-  }));
+  return groups.map((group, index) => {
+    const ids = group.map((player) => player.id);
+    const [teamA, teamB] = isSimpleSocialV2(state.config)
+      ? arrangeTeams(state, now, ids, [])
+      : [ids.slice(0, 2), ids.slice(2)];
+    return {
+      courtId: courtIds[index],
+      teamA,
+      teamB,
+      reason: "Longest eligible waits; variety within the selected players.",
+    };
+  });
+}
+
+const SKILL_POINTS = { beginner: 1, intermediate: 2, advanced: 3 } as const;
+
+/**
+ * simple-social-v2 (D7): wait picks the four; this only splits them into
+ * teams. Among the valid splits (the doubles rule, a friend pair together),
+ * fewest repeat partnerships first, then the closest skill, then the given
+ * order.
+ */
+export function arrangeTeams(
+  state: SessionState,
+  now: EpochMs,
+  four: readonly ParticipantId[],
+  keepTogether: ReadonlyArray<readonly [ParticipantId, ParticipantId]>,
+): [ParticipantId[], ParticipantId[]] {
+  const [a, b, c, d] = four;
+  const splits: Array<[ParticipantId[], ParticipantId[]]> = [
+    [
+      [a, b],
+      [c, d],
+    ],
+    [
+      [a, c],
+      [b, d],
+    ],
+    [
+      [a, d],
+      [b, c],
+    ],
+  ];
+  const metrics = new Map(
+    playerMetrics(state, now).map((player) => [player.participantId, player]),
+  );
+  const together = (team: ParticipantId[], pair: readonly ParticipantId[]) =>
+    pair.every((id) => team.includes(id));
+  const partners = (team: ParticipantId[]) =>
+    metrics.get(team[0])?.partnerCounts[team[1]] ?? 0;
+  const skill = (team: ParticipantId[]) =>
+    team.reduce((sum, id) => {
+      const level = state.participants[id]?.participant.skill;
+      return sum + (level ? SKILL_POINTS[level] : 2);
+    }, 0);
+  let best: [ParticipantId[], ParticipantId[]] | null = null;
+  let bestScore: [number, number] = [Infinity, Infinity];
+  for (const split of splits) {
+    if (validateSimpleTeams(split[0], split[1], state.participants)) continue;
+    if (
+      keepTogether.some(
+        (pair) => !together(split[0], pair) && !together(split[1], pair),
+      )
+    )
+      continue;
+    const score: [number, number] = [
+      partners(split[0]) + partners(split[1]),
+      Math.abs(skill(split[0]) - skill(split[1])),
+    ];
+    if (
+      score[0] < bestScore[0] ||
+      (score[0] === bestScore[0] && score[1] < bestScore[1])
+    ) {
+      best = split;
+      bestScore = score;
+    }
+  }
+  return (
+    best ?? [
+      [a, b],
+      [c, d],
+    ]
+  );
+}
+
+/** A player alone, or an accepted friend pair (two seats, one team). */
+interface WaitingUnit {
+  ids: ParticipantId[];
+  /** The pair's rank is the better (shorter-wait) of the two (D4). */
+  rank: number;
+}
+
+/**
+ * Wait-first groups when friend pairs are waiting: each pair is one unit
+ * ranked by the shorter of the two waits, and stays on one team. Court by
+ * court, the earliest-ranked units that make a valid game of four are
+ * chosen; a pair that can't fit yet keeps waiting.
+ */
+function withFriendPairs(
+  state: SessionState,
+  now: EpochMs,
+  courtIds: readonly CourtId[],
+  candidates: readonly Candidate[],
+  pairs: ReadonlyArray<{
+    participantId: ParticipantId;
+    friendId: ParticipantId;
+  }>,
+): SimpleSuggestion[] {
+  const rankOf = new Map(candidates.map((player) => [player.id, player.rank]));
+  const paired = new Set(
+    pairs.flatMap((pair) => [pair.participantId, pair.friendId]),
+  );
+  let units: WaitingUnit[] = [
+    ...candidates
+      .filter((player) => !paired.has(player.id))
+      .map((player) => ({ ids: [player.id], rank: player.rank })),
+    ...pairs.map((pair) => ({
+      ids: [pair.participantId, pair.friendId],
+      // Ranks are wait order: the lower rank is the longer wait, so the
+      // pair counts as its shorter wait (D4): the higher rank of the two.
+      rank: Math.max(
+        rankOf.get(pair.participantId)!,
+        rankOf.get(pair.friendId)!,
+      ),
+    })),
+  ].sort((left, right) => left.rank - right.rank);
+
+  const suggestions: SimpleSuggestion[] = [];
+  for (const courtId of courtIds) {
+    const chosen: WaitingUnit[] = [];
+    const search = (from: number, seats: number): boolean => {
+      if (seats === 4) {
+        const four = chosen.flatMap((unit) => unit.ids);
+        const keep = chosen
+          .filter((unit) => unit.ids.length === 2)
+          .map((unit) => unit.ids as [ParticipantId, ParticipantId]);
+        const [teamA, teamB] = arrangeTeams(state, now, four, keep);
+        return (
+          !validateSimpleTeams(teamA, teamB, state.participants) &&
+          keep.every(
+            (pair) =>
+              pair.every((id) => teamA.includes(id)) ||
+              pair.every((id) => teamB.includes(id)),
+          )
+        );
+      }
+      for (let index = from; index < units.length; index += 1) {
+        if (seats + units[index].ids.length > 4) continue;
+        chosen.push(units[index]);
+        if (search(index + 1, seats + units[index].ids.length)) return true;
+        chosen.pop();
+      }
+      return false;
+    };
+    if (!search(0, 0)) break;
+    const four = chosen.flatMap((unit) => unit.ids);
+    const keep = chosen
+      .filter((unit) => unit.ids.length === 2)
+      .map((unit) => unit.ids as [ParticipantId, ParticipantId]);
+    const [teamA, teamB] = arrangeTeams(state, now, four, keep);
+    suggestions.push({
+      courtId,
+      teamA,
+      teamB,
+      reason: "Longest eligible waits; friends on one team.",
+    });
+    const used = new Set(four);
+    units = units.filter((unit) => !unit.ids.some((id) => used.has(id)));
+  }
+  return suggestions;
 }
 
 /** Where to fill a group's empty seats (a `NextGroupChanged`). */
@@ -306,10 +480,16 @@ export function simpleRefill(
     simpleSessionTimeIsUp(state, now)
   )
     return [];
-  let candidates = rankedCandidates(state, now).slice(
-    0,
-    REFILL_CANDIDATE_LIMIT,
+  // A friend pair waits as one: never split it to fill a single seat.
+  const paired = new Set(
+    acceptedFriendPairs(state).flatMap((pair) => [
+      pair.participantId,
+      pair.friendId,
+    ]),
   );
+  let candidates = rankedCandidates(state, now)
+    .filter((player) => !paired.has(player.id))
+    .slice(0, REFILL_CANDIDATE_LIMIT);
   const refills: SimpleRefill[] = [];
   const courts = Object.values(state.courts).filter(
     (court) =>

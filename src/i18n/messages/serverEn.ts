@@ -160,4 +160,7 @@ export const engineErrorsEn: Record<SessionErrorCode, string> = {
   ALREADY_CONFIRMED: "Already confirmed.",
   INVALID_MOVE: "The group is already on that court.",
   COURT_NOT_CLOSING: "That court isn't set to close. Refresh.",
+  ALREADY_PAIRED: "Already teamed up with someone for the next game.",
+  UNKNOWN_PAIR: "That friend request has ended. Refresh.",
+  INVALID_PAIR: "That friend pair isn't possible.",
 };

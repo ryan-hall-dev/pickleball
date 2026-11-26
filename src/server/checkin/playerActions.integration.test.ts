@@ -351,6 +351,48 @@ describe.skipIf(!localStack)(
       expect(replay(log).ok).toBe(true);
     });
 
+    it("two players team up from their phones, only the one asked can accept, either can end it", async () => {
+      const live = await state();
+      const reserved = new Set(
+        Object.values(live.courts).flatMap((court) =>
+          court.nextGroup
+            ? [...court.nextGroup.teamA, ...court.nextGroup.teamB]
+            : [],
+        ),
+      );
+      const free = Object.values(live.participants)
+        .filter(
+          (participant) =>
+            participant.activeMatchId === null &&
+            !reserved.has(participant.participant.participantId) &&
+            participant.skips.every((skip) => skip.to !== null),
+        )
+        .map((participant) => nameOf(participant.participant.participantId)!);
+      const [asker, friend, other] = free;
+      currentPhone = players.get(asker)!.phone;
+      expect(
+        await submitPlayerAction(checkinTag, {
+          sessionId,
+          eventId: randomUUID(),
+          intent: "askFriend",
+          friendId: players.get(friend)!.participantId,
+        }),
+      ).toEqual({ ok: true });
+      expect(await act(other, "acceptFriend")).toEqual({
+        ok: false,
+        failure: "no_longer_possible",
+      });
+      expect(await act(friend, "acceptFriend")).toEqual({ ok: true });
+      const pair = Object.values((await state()).friendPairs ?? {})[0];
+      expect(pair).toMatchObject({
+        participantId: players.get(asker)!.participantId,
+        friendId: players.get(friend)!.participantId,
+        status: "accepted",
+      });
+      expect(await act(friend, "endFriend")).toEqual({ ok: true });
+      expect(Object.values((await state()).friendPairs ?? {})).toEqual([]);
+    });
+
     it("the database refuses a player acting for someone else", async () => {
       const live = await state();
       const [first, second] = Object.values(live.participants).filter(

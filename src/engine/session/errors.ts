@@ -50,7 +50,13 @@ export type SessionErrorCode =
   /** simple-social-v2: a group can't move to the court it is already on. */
   | "INVALID_MOVE"
   /** simple-social-v2: no "Close after this game" is in effect there. */
-  | "COURT_NOT_CLOSING";
+  | "COURT_NOT_CLOSING"
+  /** simple-social-v2: a player is already in a friend pair or request. */
+  | "ALREADY_PAIRED"
+  /** simple-social-v2: no such friend pair (or it already ended). */
+  | "UNKNOWN_PAIR"
+  /** simple-social-v2: a friend pair can't be made (e.g. asking yourself). */
+  | "INVALID_PAIR";
 
 export interface SessionError {
   code: SessionErrorCode;

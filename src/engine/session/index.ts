@@ -31,6 +31,7 @@ export type {
 export { applyEvent, replay } from "./applyEvent";
 export type { ApplyEventResult, ReplayResult } from "./applyEvent";
 export { compensate } from "./compensate";
+export { acceptedFriendPairs, friendPairOf } from "./pairHandlers";
 export type { CompensateResult } from "./compensate";
 export { measureMs } from "./intervals";
 export * from "./metrics";

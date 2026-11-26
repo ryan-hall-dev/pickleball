@@ -219,6 +219,11 @@ function commandAction(
       };
     case "closeNow":
       return { type: "CourtClosed", payload: { courtId: command.courtId } };
+    case "endPair":
+      return {
+        type: "FriendPairEnded",
+        payload: { requestSeq: command.requestSeq },
+      };
     case "ready": {
       const skip = state.participants[command.participantId]?.skips.at(-1);
       if (!skip || skip.skippedBySeq !== command.targetSeq) return null;
@@ -319,6 +324,7 @@ export async function writeLiveAction(
         move: "NextGroupMoved",
         closeAfterGame: "CourtCloseScheduled",
         closeNow: "CourtClosed",
+        endPair: "FriendPairEnded",
       } as const;
       if (landed && landed.type !== eventTypes[command.kind]) {
         return {

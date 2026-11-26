@@ -99,6 +99,10 @@ export const liveCommandSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("closeAfterGame"), courtId: z.uuid() }),
   z.object({ kind: z.literal("closeNow"), courtId: z.uuid() }),
+  z.object({
+    kind: z.literal("endPair"),
+    requestSeq: z.number().int().positive(),
+  }),
 ]);
 export type LiveCommand = z.infer<typeof liveCommandSchema>;
 export const liveWriteSchema = z.object({

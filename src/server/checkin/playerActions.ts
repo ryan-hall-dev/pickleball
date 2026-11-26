@@ -30,7 +30,12 @@ const inputSchema = z.object({
     "readyAgain",
     "leave",
     "gameStarted",
+    "askFriend",
+    "acceptFriend",
+    "endFriend",
   ]),
+  /** For askFriend: the participant asked. */
+  friendId: z.uuid().nullable().default(null),
 });
 
 export type PlayerActionResult =
@@ -83,7 +88,7 @@ export async function submitPlayerAction(
   const parsed = inputSchema.safeParse(input);
   if (!parsedTag.success || !parsed.success)
     return { ok: false, failure: "no_longer_possible" };
-  const { sessionId, eventId, intent } = parsed.data;
+  const { sessionId, eventId, intent, friendId } = parsed.data;
   try {
     const participantId = await checkedInParticipantId(
       parsedTag.data,
@@ -104,6 +109,7 @@ export async function submitPlayerAction(
         participantId,
         intent,
         eventId,
+        friendId,
       );
       if (planned.kind === "nothing") return { ok: true };
       if (planned.kind === "impossible")

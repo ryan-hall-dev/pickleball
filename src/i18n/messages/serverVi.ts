@@ -158,4 +158,7 @@ export const engineErrorsVi: typeof engineErrorsEn = {
   ALREADY_CONFIRMED: "Đã xác nhận rồi.",
   INVALID_MOVE: "Nhóm đã ở sân đó rồi.",
   COURT_NOT_CLOSING: "Sân đó không được đặt để đóng. Hãy tải lại.",
+  ALREADY_PAIRED: "Đã ghép đôi với người khác cho trận tiếp theo.",
+  UNKNOWN_PAIR: "Lời mời ghép đôi đó đã kết thúc. Hãy tải lại.",
+  INVALID_PAIR: "Không thể ghép đôi như vậy.",
 };
