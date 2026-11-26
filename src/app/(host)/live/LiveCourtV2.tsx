@@ -45,13 +45,17 @@ export function UpNextConfirmations({
   const called = court.called!;
   const confirmed = new Set(called.confirmedIds ?? []);
   const seats = [...called.teamA, ...called.teamB];
-  // Options per seat only once a reply is overdue (as Call over): a group
-  // just asked stays one line, so 5-10 courts fit on a phone.
+  // Options per seat once a reply is overdue (as Call over), so a group just
+  // asked stays one line; someone with no phone never replies, so their
+  // options show straight away.
+  const hasNoPhone = (id: string) =>
+    players.find((player) => player.participantId === id)?.hasPhone === false;
   const unconfirmed = seats.filter(
     (id): id is string =>
       id !== null &&
       !confirmed.has(id) &&
-      now - (called.askedAt?.[id] ?? now) >= CALL_OVER_AFTER_MS,
+      (hasNoPhone(id) ||
+        now - (called.askedAt?.[id] ?? now) >= CALL_OVER_AFTER_MS),
   );
   return (
     <div className="mt-2 flex flex-col gap-2">
@@ -86,7 +90,9 @@ export function UpNextConfirmations({
           >
             <span className="font-semibold">{nameOf(players, id)}</span>
             <span className="text-xs font-bold text-orange-ink">
-              {text.noReply(minutesSince(now, called.askedAt?.[id]))}
+              {hasNoPhone(id)
+                ? text.noPhone
+                : text.noReply(minutesSince(now, called.askedAt?.[id]))}
             </span>
           </summary>
           <div className="flex flex-col gap-2 px-3 pb-3">
