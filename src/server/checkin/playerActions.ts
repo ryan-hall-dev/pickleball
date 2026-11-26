@@ -9,6 +9,11 @@ import {
   submitNonHostSessionAction,
 } from "@/server/nonHostSessionAction";
 import { planPlayerAction } from "./playerActionPlan";
+import {
+  playerProjection,
+  readyFriendMatches,
+  type PlayerView,
+} from "./playerProjection";
 import { readDeviceTokenHash } from "./checkinDevice";
 import { checkinDatabaseTimeoutSignal, logCheckinFailure } from "./checkinPage";
 import { checkinTagSchema } from "./checkinRules";
@@ -138,5 +143,94 @@ export async function submitPlayerAction(
   } catch (error) {
     logCheckinFailure("A player action failed", error);
     return { ok: false, failure: "unavailable" };
+  }
+}
+
+export type ReadPlayerSessionResult =
+  | { ok: true; view: PlayerView }
+  | {
+      ok: false;
+      failure: "not_checked_in" | "session_changed" | "unavailable";
+    };
+
+const sessionInputSchema = z.object({ sessionId: z.uuid() });
+
+/**
+ * The player's own live view, polled every 5 s while the page is visible.
+ * A player's page read also lets the app do what is due (ask the next four,
+ * refill a seat), so nothing waits for a host's screen to be open (Phase 0
+ * finding 6). Only this player's own group and friend are named.
+ */
+export async function readPlayerSession(
+  checkinTag: unknown,
+  input: unknown,
+): Promise<ReadPlayerSessionResult> {
+  const parsedTag = checkinTagSchema.safeParse(checkinTag);
+  const parsed = sessionInputSchema.safeParse(input);
+  if (!parsedTag.success || !parsed.success)
+    return { ok: false, failure: "unavailable" };
+  try {
+    const participantId = await checkedInParticipantId(
+      parsedTag.data,
+      parsed.data.sessionId,
+    );
+    if (participantId === "session_changed")
+      return { ok: false, failure: "session_changed" };
+    if (!participantId) return { ok: false, failure: "not_checked_in" };
+    let loaded = await loadReplayedState(parsed.data.sessionId);
+    if (!loaded) return { ok: false, failure: "session_changed" };
+    const now = Math.max(Date.now(), loaded.state.lastAt ?? 0);
+    if (
+      isSimpleSocialV2(loaded.state.config) &&
+      (await runAutomaticActions(parsed.data.sessionId, loaded.state, now))
+    )
+      loaded = (await loadReplayedState(parsed.data.sessionId)) ?? loaded;
+    return {
+      ok: true,
+      view: playerProjection(loaded.state, participantId, now),
+    };
+  } catch (error) {
+    logCheckinFailure("Reading a player's session failed", error);
+    return { ok: false, failure: "unavailable" };
+  }
+}
+
+const friendSearchSchema = z.object({
+  sessionId: z.uuid(),
+  query: z.string().max(100),
+});
+
+/** "Play with a friend": at most 5 Ready players by name (p12). */
+export async function searchReadyFriends(
+  checkinTag: unknown,
+  input: unknown,
+): Promise<
+  | { ok: true; friends: Array<{ participantId: string; name: string }> }
+  | { ok: false }
+> {
+  const parsedTag = checkinTagSchema.safeParse(checkinTag);
+  const parsed = friendSearchSchema.safeParse(input);
+  if (!parsedTag.success || !parsed.success) return { ok: false };
+  try {
+    const participantId = await checkedInParticipantId(
+      parsedTag.data,
+      parsed.data.sessionId,
+    );
+    if (!participantId || participantId === "session_changed")
+      return { ok: false };
+    const loaded = await loadReplayedState(parsed.data.sessionId);
+    if (!loaded || !isSimpleSocialV2(loaded.state.config)) return { ok: false };
+    return {
+      ok: true,
+      friends: readyFriendMatches(
+        loaded.state,
+        participantId,
+        parsed.data.query,
+        Date.now(),
+      ),
+    };
+  } catch (error) {
+    logCheckinFailure("Friend search failed", error);
+    return { ok: false };
   }
 }

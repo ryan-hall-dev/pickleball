@@ -46,6 +46,7 @@ import {
   type CheckinState,
 } from "./checkinViewState";
 import { ParticipantCheckinForm } from "./ParticipantCheckinForm";
+import { PlayerLive } from "./PlayerLive";
 import {
   RosterCheckedInScreen,
   RosterDetailsScreen,
@@ -60,6 +61,17 @@ import { settleWithin } from "@/lib/settleWithin";
 const WAITING_POLL_INTERVAL_MS = 5_000;
 /** How often the welcome screen freshens "min left" and "to first game". */
 const HEADER_REFRESH_INTERVAL_MS = 60_000;
+/** How often a checked-in phone looks for the session start. */
+const SESSION_START_POLL_INTERVAL_MS = 15_000;
+
+function isCheckedInScreen(screen: CheckinState["screen"]): boolean {
+  return (
+    screen === "roster_checked_in" ||
+    screen === "approved" ||
+    screen === "already_checked_in_own_phone"
+  );
+}
+
 /** A server call with no answer by then shows P13 (Try again). */
 const SERVER_CALL_TIMEOUT_MS = 15_000;
 
@@ -143,6 +155,15 @@ function CheckinFlow({
     checkinTag,
     state.screen === "welcome" ? HEADER_REFRESH_INTERVAL_MS : null,
     (result) => dispatch({ type: "header_refreshed", result }),
+  );
+  // Checked in before the start: notice when the social goes live.
+  usePeriodicPageRead(
+    checkinTag,
+    isCheckedInScreen(state.screen) &&
+      state.openPage?.session.status === "draft"
+      ? SESSION_START_POLL_INTERVAL_MS
+      : null,
+    (result) => dispatch({ type: "page_read", result }),
   );
 
   const refreshPage = useCallback(() => {
@@ -243,6 +264,7 @@ function CheckinFlow({
       onRefresh={refreshPage}
       onSubmit={submit}
       roster={rosterActions}
+      checkinTag={checkinTag}
     />
   );
 }
@@ -338,7 +360,9 @@ function CheckinScreenView({
   onRefresh,
   onSubmit,
   roster,
+  checkinTag,
 }: {
+  checkinTag: string;
   state: CheckinState;
   dispatch: Dispatch<CheckinAction>;
   onRefresh: () => void;
@@ -389,6 +413,16 @@ function CheckinScreenView({
     throw new Error(`The ${screen} screen needs an open check-in page.`);
   }
 
+  // Live: a checked-in phone follows its own game (p5-p16).
+  if (isCheckedInScreen(screen) && openPage.session.status === "live") {
+    return (
+      <PlayerLive
+        checkinTag={checkinTag}
+        sessionId={openPage.session.sessionId}
+        socialName={openPage.socialName}
+      />
+    );
+  }
   const findYourName = () => dispatch({ type: "roster_find_again" });
   const selection = state.rosterSelection;
   switch (screen) {
