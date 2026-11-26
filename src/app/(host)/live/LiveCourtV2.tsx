@@ -45,8 +45,13 @@ export function UpNextConfirmations({
   const called = court.called!;
   const confirmed = new Set(called.confirmedIds ?? []);
   const seats = [...called.teamA, ...called.teamB];
+  // Options per seat only once a reply is overdue (as Call over): a group
+  // just asked stays one line, so 5-10 courts fit on a phone.
   const unconfirmed = seats.filter(
-    (id): id is string => id !== null && !confirmed.has(id),
+    (id): id is string =>
+      id !== null &&
+      !confirmed.has(id) &&
+      now - (called.askedAt?.[id] ?? now) >= CALL_OVER_AFTER_MS,
   );
   return (
     <div className="mt-2 flex flex-col gap-2">

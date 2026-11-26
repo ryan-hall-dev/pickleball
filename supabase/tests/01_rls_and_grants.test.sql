@@ -84,7 +84,8 @@ select set_eq(
     'import_roster_entries', 'remove_roster_entry', 'set_roster_entry_note',
     'set_walk_ins_open', 'list_roster_for_open_session', 'decide_roster_transfer',
     'host_check_in_roster_entry', 'search_roster_entries', 'claim_roster_entry',
-    'request_roster_transfer', 'get_checkin_participant', 'append_session_event_without_host'
+    'request_roster_transfer', 'get_checkin_participant', 'append_session_event_without_host',
+    'submit_player_score', 'host_set_match_score'
   ],
   'service_role executes exactly the public functions'
 );

@@ -33,6 +33,7 @@ import { failureText, type ShownFailure } from "./liveFailure";
 import { TimeUpNotice } from "./TimeUpNotice";
 import { LiveCourtCard } from "./LiveCourtCard";
 import { CallOverList } from "./LiveCourtV2";
+import { RecentGames } from "./RecentGames";
 import { LiveWaiting } from "./LiveWaiting";
 
 const TIMEOUT_MS = 15_000;
@@ -490,6 +491,14 @@ export function LiveSession({
                 onAction={act}
               />
             </div>
+            {session.isV2 && session.recentGames && (
+              <div className={SECTION_ORDER_ON_LARGER_SCREENS.waiting}>
+                <RecentGames
+                  games={session.recentGames}
+                  onSaved={() => void refresh()}
+                />
+              </div>
+            )}
             <div
               id="checkins"
               className={`flex scroll-mt-16 flex-col gap-3 compact:gap-2.5 ${SECTION_ORDER_ON_LARGER_SCREENS.checkins}`}

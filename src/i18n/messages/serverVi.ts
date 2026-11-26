@@ -41,6 +41,10 @@ export const serverMessagesVi: typeof serverMessagesEn = {
     sessionChanged: "Buổi chơi đã thay đổi. Hãy tải lại và thử lại.",
     couldNotSave: "Không lưu được. Hãy kiểm tra kết nối và thử lại.",
   },
+  scores: {
+    invalid: "Nhập hai số nguyên từ 0 đến 99, không hoà.",
+    notFinished: "Trận đó chưa kết thúc (hoặc việc kết thúc đã được hoàn tác).",
+  },
   start: {
     reloadSetupAndRetry: "Hãy tải lại trang chuẩn bị rồi thử lại.",
     sessionNotAvailable: "Buổi chơi này không còn. Hãy tải lại trang chuẩn bị.",

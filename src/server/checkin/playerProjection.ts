@@ -62,6 +62,25 @@ export type PlayerStatus =
   | "left"
   | "ended";
 
+/** A stored score, in matches.team_a / team_b orientation. */
+export interface StoredScore {
+  scoreTeamA: number;
+  scoreTeamB: number;
+  /** Who entered it: a player's name, or null for a host. */
+  enteredByName: string | null;
+}
+
+/** p16-p17: the player's most recent finished game and its score, if any. */
+export interface PlayerLastGame {
+  matchId: string;
+  courtName: string;
+  /** Your partner(s), never you. */
+  partners: string[];
+  otherTeam: string[];
+  /** In your orientation: your team first. */
+  score: { yours: number; theirs: number; enteredByName: string | null } | null;
+}
+
 export interface PlayerView {
   status: PlayerStatus;
   firstName: string;
@@ -74,6 +93,8 @@ export interface PlayerView {
   /** Playing: when the game started. */
   gameStartedAt: number | null;
   friend: PlayerFriendView | null;
+  /** Ready or on a break after a game: add (or see) its score. */
+  lastGame: PlayerLastGame | null;
   now: number;
 }
 
@@ -132,10 +153,50 @@ function friendView(
       };
 }
 
+/** The player's latest completed game (final lineup), if no newer game started. */
+function lastGameOf(
+  state: SessionState,
+  participantId: string,
+  scores: ReadonlyMap<string, StoredScore>,
+): PlayerLastGame | null {
+  const participant = state.participants[participantId];
+  const matchId = participant?.matchIds.at(-1);
+  const match = matchId ? state.matches[matchId] : undefined;
+  if (!match || match.status !== "completed") return null;
+  const lineup = currentLineup(match);
+  const mine = lineup.find((seat) => seat.participantId === participantId);
+  if (!mine) return null;
+  const names = (team: "A" | "B") =>
+    lineup
+      .filter(
+        (seat) => seat.team === team && seat.participantId !== participantId,
+      )
+      .map((seat) => {
+        const person = state.participants[seat.participantId];
+        return person ? participantName(person.participant) : "";
+      });
+  const other = mine.team === "A" ? "B" : "A";
+  const stored = scores.get(match.matchId);
+  return {
+    matchId: match.matchId,
+    courtName: state.courts[match.courtId]?.court.name ?? "",
+    partners: names(mine.team),
+    otherTeam: names(other),
+    score: stored
+      ? {
+          yours: mine.team === "A" ? stored.scoreTeamA : stored.scoreTeamB,
+          theirs: mine.team === "A" ? stored.scoreTeamB : stored.scoreTeamA,
+          enteredByName: stored.enteredByName,
+        }
+      : null,
+  };
+}
+
 export function playerProjection(
   state: SessionState,
   participantId: string,
   now: number,
+  scores: ReadonlyMap<string, StoredScore> = new Map(),
 ): PlayerView {
   const participant = state.participants[participantId];
   const base: PlayerView = {
@@ -147,6 +208,7 @@ export function playerProjection(
     group: null,
     gameStartedAt: null,
     friend: null,
+    lastGame: null,
     now,
   };
   if (state.phase === "notStarted" || !participant) return base;
@@ -161,6 +223,9 @@ export function playerProjection(
     ...base,
     waitMs: waits.get(participantId) ?? null,
     friend: friendView(state, participantId, waits),
+    lastGame: participant.activeMatchId
+      ? null
+      : lastGameOf(state, participantId, scores),
   };
 
   if (participant.activeMatchId) {

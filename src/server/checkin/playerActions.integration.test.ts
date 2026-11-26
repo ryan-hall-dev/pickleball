@@ -13,8 +13,12 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { replay, type SessionState } from "@/engine/session";
 import type { Database, Json } from "@/lib/database.types";
 import { claimRosterEntry } from "@/server/checkin/checkinActions";
-import { submitPlayerAction } from "@/server/checkin/playerActions";
-import { readLiveSession } from "@/server/live/liveActions";
+import {
+  submitPlayerAction,
+  submitScore,
+} from "@/server/checkin/playerActions";
+import { readLiveSession, writeLiveAction } from "@/server/live/liveActions";
+import { setMatchScore } from "@/server/live/scoreActions";
 import {
   loadSessionLog,
   PLAYER_ACTOR_PREFIX,
@@ -351,7 +355,116 @@ describe.skipIf(!localStack)(
       expect(replay(log).ok).toBe(true);
     });
 
+    it("scores: a player enters it, the first stands, only a host corrects, undoing the finish voids it", async () => {
+      const live = await state();
+      const match = Object.values(live.matches).find(
+        (m) => m.status === "active",
+      )!;
+      const four = match.segments.map((seat) => nameOf(seat.participantId)!);
+      const outsider = [...players.keys()].find(
+        (name) => !four.includes(name),
+      )!;
+      actingClient = host;
+      const finished = await writeLiveAction({
+        sessionId,
+        eventId: randomUUID(),
+        expectedLastSeq: live.lastSeq,
+        command: { kind: "finish", matchId: match.matchId },
+      });
+      expect(finished).toMatchObject({ ok: true });
+      const score = (name: string, yourScore: number, theirScore: number) => {
+        currentPhone = players.get(name)!.phone;
+        return submitScore(checkinTag, {
+          sessionId,
+          matchId: match.matchId,
+          yourScore,
+          theirScore,
+        });
+      };
+      expect(await score(outsider, 11, 5)).toEqual({
+        ok: false,
+        failure: "not_your_game",
+      });
+      expect(await score(four[0], 11, 8)).toEqual({
+        ok: true,
+        outcome: "recorded",
+      });
+      // The other team sees it from their side: the same score.
+      expect(await score(four[2], 8, 11)).toEqual({
+        ok: true,
+        outcome: "already_same",
+      });
+      expect(await score(four[1], 11, 9)).toEqual({
+        ok: false,
+        failure: "already_recorded",
+      });
+      expect(await score(four[1], 9, 9)).toEqual({
+        ok: false,
+        failure: "invalid",
+      });
+      actingClient = host;
+      expect(
+        await setMatchScore({
+          matchId: match.matchId,
+          scoreTeamA: 11,
+          scoreTeamB: 9,
+        }),
+      ).toEqual({ ok: true });
+      const stored = await admin
+        .from("match_scores")
+        .select("score_team_a, score_team_b, corrected_at, voided_at")
+        .eq("match_id", match.matchId);
+      expect(stored.data).toEqual([
+        expect.objectContaining({
+          score_team_a: 11,
+          score_team_b: 9,
+          voided_at: null,
+        }),
+      ]);
+      expect(stored.data![0].corrected_at).not.toBeNull();
+      // Undo the finish: the score is voided (kept for the record).
+      const afterFinish = await state();
+      const undo = await writeLiveAction({
+        sessionId,
+        eventId: randomUUID(),
+        expectedLastSeq: afterFinish.lastSeq,
+        command: {
+          kind: "undo",
+          targetSeq: afterFinish.matches[match.matchId].endedBySeq!,
+        },
+      });
+      expect(undo).toMatchObject({ ok: true });
+      const voided = await admin
+        .from("match_scores")
+        .select("voided_at")
+        .eq("match_id", match.matchId);
+      expect(voided.data![0].voided_at).not.toBeNull();
+      // Finish again so later tests have free players.
+      const again = await state();
+      await writeLiveAction({
+        sessionId,
+        eventId: randomUUID(),
+        expectedLastSeq: again.lastSeq,
+        command: { kind: "finish", matchId: match.matchId },
+      });
+    });
+
     it("two players team up from their phones, only the one asked can accept, either can end it", async () => {
+      // Close the only court, so the app prepares nobody mid-scenario (being
+      // called Up next would rightly stop a friend accepting).
+      const before = await state();
+      const court = Object.values(before.courts)[0];
+      if (!court.closures.some((closure) => closure.to === null)) {
+        actingClient = host;
+        expect(
+          await writeLiveAction({
+            sessionId,
+            eventId: randomUUID(),
+            expectedLastSeq: before.lastSeq,
+            command: { kind: "closeNow", courtId: court.court.courtId },
+          }),
+        ).toMatchObject({ ok: true });
+      }
       const live = await state();
       const reserved = new Set(
         Object.values(live.courts).flatMap((court) =>

@@ -27,6 +27,7 @@ vi.mock("@/server/live/liveActions", () => ({
   writeLiveAction: vi.fn(),
 }));
 vi.mock("@/server/live/liveAddPlayer", () => ({ addLivePlayer: vi.fn() }));
+vi.mock("@/server/live/scoreActions", () => ({ setMatchScore: vi.fn() }));
 vi.mock("@/server/checkin/hostCheckinActions", () => ({
   approveCheckin: vi.fn(),
 }));

@@ -61,6 +61,21 @@ export interface LiveSessionView {
   courts: LiveCourt[];
   players: LivePlayer[];
   undoOptions: LiveUndoOption[];
+  /** simple-social-v2 (h13): the latest finished games and their scores. */
+  recentGames?: LiveRecentGame[];
+}
+export interface LiveRecentGame {
+  matchId: string;
+  courtName: string;
+  endedAt: number;
+  teamA: string[];
+  teamB: string[];
+  score: {
+    scoreTeamA: number;
+    scoreTeamB: number;
+    /** A player's name, or null when a host entered it. */
+    enteredByName: string | null;
+  } | null;
 }
 export interface LiveUndoOption {
   courtId: string;

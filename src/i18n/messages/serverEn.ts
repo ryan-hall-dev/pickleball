@@ -43,6 +43,10 @@ export const serverMessagesEn = {
     sessionChanged: "The session changed. Reload and try again.",
     couldNotSave: "Couldn't save. Check your connection and try again.",
   },
+  scores: {
+    invalid: "Enter two whole numbers from 0 to 99, not a tie.",
+    notFinished: "That game isn't finished (or its finish was undone).",
+  },
   start: {
     reloadSetupAndRetry: "Reload the setup and try again.",
     sessionNotAvailable: "This session is not available. Reload the setup.",

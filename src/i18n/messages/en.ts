@@ -232,6 +232,21 @@ export const en = {
       updatesItself: "This page updates by itself.",
       failed: "That didn't work. Check your connection and try again.",
       changedMeanwhile: "That changed just now. Here's the latest.",
+      score: {
+        addTitle: "Add the score for your last game",
+        teams: (court: string, yours: string, theirs: string) =>
+          `${court} · ${yours} vs ${theirs}`,
+        yourTeam: (names: string) => `You + ${names}`,
+        save: "Save score",
+        skip: "Skip",
+        invalid: "Enter two whole numbers from 0 to 99, not a tie.",
+        saved: "Score saved. Thanks!",
+        recordedTitle: "Already recorded",
+        recordedBy: (name: string) =>
+          `${name} added this score. If it's wrong, tell the host.`,
+        recordedByHost: "The host added this score. If it's wrong, tell them.",
+        close: "Close",
+      },
       friend: {
         title: "Play with a friend",
         explain:

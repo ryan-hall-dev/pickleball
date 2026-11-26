@@ -126,4 +126,29 @@ test("players confirm on their phones, head to court and start their own game", 
     path: testInfo.outputPath("p16-playing.png"),
     fullPage: true,
   });
+
+  // The host finishes; a phone adds the score; the host sees it (h13).
+  await page.reload();
+  await page.getByRole("button", { name: "Game finished" }).click();
+  await expect(
+    phones[3].getByText("Add the score for your last game"),
+  ).toBeVisible({ timeout: POLL_TIMEOUT_MS });
+  const scoreInputs = phones[3].getByRole("textbox");
+  await scoreInputs.nth(0).fill("11");
+  await scoreInputs.nth(1).fill("8");
+  await phones[3].screenshot({
+    path: testInfo.outputPath("p16-score.png"),
+    fullPage: true,
+  });
+  await phones[3].getByRole("button", { name: "Save score" }).click();
+  await expect(phones[3].getByText("Already recorded")).toBeVisible({
+    timeout: POLL_TIMEOUT_MS,
+  });
+  await page.reload();
+  const recent = page.getByRole("region", { name: "Recent games" });
+  await expect(recent.getByText(/^(11–8|8–11)$/)).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("h13-recent-games.png"),
+    fullPage: true,
+  });
 });

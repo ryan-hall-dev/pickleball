@@ -234,6 +234,21 @@ export const vi: Messages = {
       updatesItself: "Trang này tự cập nhật.",
       failed: "Chưa thực hiện được. Hãy kiểm tra kết nối và thử lại.",
       changedMeanwhile: "Vừa có thay đổi. Đây là thông tin mới nhất.",
+      score: {
+        addTitle: "Nhập tỉ số trận vừa rồi",
+        teams: (court: string, yours: string, theirs: string) =>
+          `${court} · ${yours} gặp ${theirs}`,
+        yourTeam: (names: string) => `Bạn + ${names}`,
+        save: "Lưu tỉ số",
+        skip: "Bỏ qua",
+        invalid: "Nhập hai số nguyên từ 0 đến 99, không hoà.",
+        saved: "Đã lưu tỉ số. Cảm ơn bạn!",
+        recordedTitle: "Đã có tỉ số",
+        recordedBy: (name: string) =>
+          `${name} đã nhập tỉ số này. Nếu sai, hãy báo người tổ chức.`,
+        recordedByHost: "Người tổ chức đã nhập tỉ số này. Nếu sai, hãy báo họ.",
+        close: "Đóng",
+      },
       friend: {
         title: "Chơi cùng bạn",
         explain:

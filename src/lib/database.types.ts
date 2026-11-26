@@ -123,6 +123,38 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"match_scores": {
+                  Row: {
+                    "corrected_at": string | null,"corrected_by_user_id": string | null,"entered_at": string,"entered_by_participant_id": string | null,"entered_by_user_id": string | null,"id": string,"match_id": string,"score_team_a": number,"score_team_b": number,"session_id": string,"social_id": string,"voided_at": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "corrected_at"?: string | null,"corrected_by_user_id"?: string | null,"entered_at"?: string,"entered_by_participant_id"?: string | null,"entered_by_user_id"?: string | null,"id"?: string,"match_id": string,"score_team_a": number,"score_team_b": number,"session_id": string,"social_id": string,"voided_at"?: string | null
+                  }
+                  Update: {
+                    "corrected_at"?: string | null,"corrected_by_user_id"?: string | null,"entered_at"?: string,"entered_by_participant_id"?: string | null,"entered_by_user_id"?: string | null,"id"?: string,"match_id"?: string,"score_team_a"?: number,"score_team_b"?: number,"session_id"?: string,"social_id"?: string,"voided_at"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "match_scores_entered_by_participant_id_fkey"
+      columns: ["entered_by_participant_id"]
+isOneToOne: false
+      referencedRelation: "session_participants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "match_scores_match_id_fkey"
+      columns: ["match_id"]
+isOneToOne: false
+      referencedRelation: "matches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "match_scores_session_social_fkey"
+      columns: ["session_id","social_id"]
+isOneToOne: false
+      referencedRelation: "sessions"
+      referencedColumns: ["id","social_id"]
+    }
+                  ]
                 },"matches": {
                   Row: {
                     "court_id": string,"court_name": string,"created_at": string,"duration_seconds": number,"ended_at": string | null,"id": string,"session_id": string,"started_at": string,"status": Database["public"]['Enums']["match_row_status"],"team_a": (string)[],"team_b": (string)[],"updated_at": string
@@ -355,6 +387,9 @@ isOneToOne: false
 "host_check_in_roster_entry":
 { Args: { "p_actor_user_id": string,"p_event_id"?: string,"p_expected_last_seq"?: number,"p_first_name"?: string,"p_gender": string,"p_last_name"?: string,"p_occurred_at"?: string,"p_roster_entry_id": string,"p_session_id": string,"p_session_participant_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
                            },
+"host_set_match_score":
+{ Args: { "p_actor_user_id": string,"p_match_id": string,"p_score_team_a": number,"p_score_team_b": number }; Returns: Json
+                           },
 "import_roster_entries":
 { Args: { "p_actor_user_id": string,"p_entries": Json,"p_expected_entry_count": number,"p_session_id": string }; Returns: Json
                            },
@@ -407,6 +442,9 @@ isOneToOne: false
                            },
 "submit_checkin":
 { Args: { "p_checkin_tag": string,"p_device_token_hash": string,"p_expected_session_id": string,"p_first_name": string,"p_gender": string,"p_ip_hash": string,"p_last_name": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
+                           },
+"submit_player_score":
+{ Args: { "p_checkin_tag": string,"p_device_token_hash": string,"p_expected_session_id": string,"p_ip_hash": string,"p_match_id": string,"p_score_team_a": number,"p_score_team_b": number }; Returns: Json
                            }
           }
           Enums: {

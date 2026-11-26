@@ -20,6 +20,7 @@ import {
 } from "@/server/checkin/playerActions";
 import type { PlayerSeat, PlayerView } from "@/server/checkin/playerProjection";
 import { BrandLine } from "./CheckinParts";
+import { ScoreCard } from "./ScoreCard";
 import {
   BOTTOM_ACTION_BAR_CLASS_NAME,
   FULL_WIDTH_OUTLINE_BUTTON_CLASS_NAME,
@@ -199,6 +200,9 @@ export function PlayerLive({
     to: string;
   } | null>(null);
   const [droppedFriend, setDroppedFriend] = useState<string | null>(null);
+  const [dismissedScoreMatchId, setDismissedScoreMatchId] = useState<
+    string | null
+  >(null);
 
   const refresh = useCallback(async () => {
     const result = await settleWithin(
@@ -482,6 +486,21 @@ export function PlayerLive({
           <p>{copy.endedText}</p>
         </div>
       )}
+
+      {view.lastGame &&
+        view.lastGame.matchId !== dismissedScoreMatchId &&
+        view.status !== "playing" &&
+        view.status !== "left" &&
+        view.status !== "ended" && (
+          <ScoreCard
+            key={view.lastGame.matchId}
+            checkinTag={checkinTag}
+            sessionId={sessionId}
+            game={view.lastGame}
+            onSaved={() => void refresh()}
+            onDismiss={() => setDismissedScoreMatchId(view.lastGame!.matchId)}
+          />
+        )}
 
       {view.friend && view.status !== "playing" && (
         <FriendCard view={view} isBusy={isBusy} act={act} />

@@ -97,6 +97,9 @@ export async function readLiveSession(
         isSimpleSocialV2(state.config)
           ? await phoneParticipantIds(client, row.id)
           : new Set(),
+        isSimpleSocialV2(state.config)
+          ? await sessionScores(client, row.id, state)
+          : new Map(),
       ),
     };
   } catch (error) {
@@ -155,6 +158,37 @@ async function phoneParticipantIds(
     [...claims.data, ...requests.data].flatMap((row) =>
       row.session_participant_id ? [row.session_participant_id] : [],
     ),
+  );
+}
+
+/** Standing scores of the session's games (host RLS: own social only). */
+async function sessionScores(
+  client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  sessionId: string,
+  state: SessionState,
+) {
+  const { data, error } = await client
+    .from("match_scores")
+    .select("match_id, score_team_a, score_team_b, entered_by_participant_id")
+    .eq("session_id", sessionId)
+    .is("voided_at", null);
+  if (error) throw new Error(error.message);
+  return new Map(
+    data.map((row) => {
+      const by = row.entered_by_participant_id
+        ? state.participants[row.entered_by_participant_id]
+        : undefined;
+      return [
+        row.match_id,
+        {
+          scoreTeamA: row.score_team_a,
+          scoreTeamB: row.score_team_b,
+          enteredByName: by
+            ? `${by.participant.firstName} ${by.participant.lastName}`.trim()
+            : null,
+        },
+      ] as const;
+    }),
   );
 }
 

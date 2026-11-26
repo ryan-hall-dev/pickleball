@@ -13,7 +13,11 @@ import {
   simpleSessionTimeIsUp,
   type SessionState,
 } from "@/engine/session";
-import type { LiveSessionView, LiveUndoOption } from "./liveTypes";
+import type {
+  LiveRecentGame,
+  LiveSessionView,
+  LiveUndoOption,
+} from "./liveTypes";
 
 /** When each player now in a called group was put in it (its call, or the change that seated them). */
 function askedAtOf(
@@ -113,6 +117,8 @@ export function liveProjection(
   prepareCourtId?: string,
   /** simple-social-v2: participants checked in with a phone. */
   phoneParticipantIds: ReadonlySet<string> = new Set(),
+  /** simple-social-v2: standing scores by match id. */
+  scores: ReadonlyMap<string, LiveRecentGame["score"]> = new Map(),
 ): LiveSessionView {
   const isV2 = isSimpleSocialV2(state.config);
   const suggestions = simpleRecommend(
@@ -224,5 +230,38 @@ export function liveProjection(
     courts,
     players,
     undoOptions: recentUndoOptions(state, probe),
+    ...(isV2 ? { recentGames: recentGames(state, scores) } : {}),
   };
+}
+
+/** How many finished games the host's score list shows. */
+const RECENT_GAMES_SHOWN = 6;
+
+/** The latest finished games, newest first, with names and any score (h13). */
+export function recentGames(
+  state: SessionState,
+  scores: ReadonlyMap<string, LiveRecentGame["score"]>,
+): LiveRecentGame[] {
+  return Object.values(state.matches)
+    .filter((match) => match.status === "completed" && match.endedAt !== null)
+    .sort((left, right) => right.endedAt! - left.endedAt!)
+    .slice(0, RECENT_GAMES_SHOWN)
+    .map((match) => {
+      const lineup = currentLineup(match);
+      const names = (team: "A" | "B") =>
+        lineup
+          .filter((seat) => seat.team === team)
+          .map((seat) => {
+            const person = state.participants[seat.participantId];
+            return person ? participantName(person.participant) : "";
+          });
+      return {
+        matchId: match.matchId,
+        courtName: state.courts[match.courtId]?.court.name ?? "",
+        endedAt: match.endedAt!,
+        teamA: names("A"),
+        teamB: names("B"),
+        score: scores.get(match.matchId) ?? null,
+      };
+    });
 }

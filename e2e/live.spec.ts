@@ -373,7 +373,7 @@ test("a host safely undoes start/finish, replaces a player and ends an interrupt
     court.getByRole("heading", { name: "Ready to start" }),
   ).toBeVisible();
   await expect(
-    waiting.getByText("Nobody resting.", { exact: true }),
+    waiting.getByText("Nobody paused.", { exact: true }),
   ).toBeVisible();
   await expect(court.getByRole("button", { name: /Undo game/ })).toHaveCount(0);
   const { data: events, error: eventsError } = await adminClient
