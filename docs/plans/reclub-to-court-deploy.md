@@ -1,6 +1,6 @@
 # Reclub to court v1 · deploy steps
 
-Status: **awaiting Ryan's approval. Nothing here has been run.**
+Status: **steps 1-8 done 2026-11-26 with Ryan's approval. Step 9 (real phones) is Ryan's.**
 
 Release: commit `576b78f` (branch `codex/reclub-to-court-v1`), five database migrations (`20261126090000` to `20261126150000`) and the app. No new environment variables or secrets.
 
@@ -37,3 +37,10 @@ If step 5 can't be done cleanly, I stop and tell you before touching the pilot d
 ## Approval
 
 Reply "approve the deploy of 576b78f" to run steps 1 to 8. Pushing the branch stays with you.
+
+## Result (2026-11-26)
+
+- Backup of the pilot database taken before any change (private folder on Ryan's Mac, outside the repository).
+- Rehearsal on a throwaway restore: five migrations applied, row counts and checksums unchanged, 5 old sessions (88 events) replay. The throwaway database was removed.
+- No session was live. Five migrations applied to the pilot (27/27 match); app deployed as `pickleball-pilot-goyi72coc`.
+- Checked without signing in: sign-in page 200, host pages redirect to it, the check-in link opens the existing draft with the new fields.
