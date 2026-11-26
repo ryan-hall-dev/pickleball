@@ -17,6 +17,10 @@ import {
 } from "./PendingCheckinTray";
 import { DECIDED_ROW_VISIBLE_MS } from "./pendingCheckinTrayState";
 
+vi.mock("../hostPolls", async () => ({
+  pollPendingCheckins: (await import("@/server/checkin/hostCheckinActions"))
+    .listPendingCheckins,
+}));
 vi.mock("@/server/checkin/hostCheckinActions", () => ({
   listPendingCheckins: vi.fn(),
   approveCheckin: vi.fn(),

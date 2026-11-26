@@ -75,7 +75,10 @@ export function LiveCourtCard({
   undoOptions,
   courts = [],
   isV2 = false,
+  pendingCommand = null,
 }: {
+  /** The host's tap being saved. */
+  pendingCommand?: LiveCommand | null;
   /** Every court, for Move (simple-social-v2). */
   courts?: LiveCourt[];
   isV2?: boolean;
@@ -169,7 +172,10 @@ export function LiveCourtCard({
               onAction({ kind: "finish", matchId: court.activeMatch!.matchId })
             }
           >
-            {text.gameFinished}
+            {pendingCommand?.kind === "finish" &&
+            pendingCommand.matchId === court.activeMatch.matchId
+              ? text.finishing
+              : text.gameFinished}
           </button>
         </>
       ) : court.called ? null : (
@@ -241,7 +247,10 @@ export function LiveCourtCard({
                     })
                   }
                 >
-                  {text.startGame}
+                  {pendingCommand?.kind === "start" &&
+                  pendingCommand.courtId === court.courtId
+                    ? text.starting
+                    : text.startGame}
                 </button>
               ) : (
                 <button

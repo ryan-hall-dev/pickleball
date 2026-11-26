@@ -380,6 +380,8 @@ export const hostVi: typeof hostEn = {
       endPair: "Huỷ ghép đội",
     },
     court: {
+      finishing: "Đang kết thúc…",
+      starting: "Đang bắt đầu…",
       numbered: (courtNumber: string) => `Sân ${courtNumber}`,
       replacementNeeded: "Cần người thay",
       playerUnavailable: "Người chơi không còn",

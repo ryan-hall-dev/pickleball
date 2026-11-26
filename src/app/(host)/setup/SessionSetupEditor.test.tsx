@@ -27,6 +27,10 @@ import { forgetOwnDraftWrites } from "./ownDraftWrites";
 import { SessionSetupEditor } from "./SessionSetupEditor";
 
 // The check-in tray polls on its own (PendingCheckinTray.test.tsx): none here.
+vi.mock("../hostPolls", async () => ({
+  pollPendingCheckins: (await import("@/server/checkin/hostCheckinActions"))
+    .listPendingCheckins,
+}));
 vi.mock("./ArrivalsBoard", () => ({ ArrivalsBoard: () => null }));
 vi.mock("@/server/checkin/hostCheckinActions", () => ({
   listPendingCheckins: vi.fn(async () => ({ ok: true, requests: [] })),

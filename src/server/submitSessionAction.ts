@@ -68,6 +68,15 @@ export interface SubmitSessionActionOptions {
    * Defaults to createSupabaseAdminClient(); injected by tests.
    */
   serviceRoleClient?: DatabaseClient;
+  /**
+   * The caller's own read for this request: the user id it verified with
+   * `auth.getUser()`, and the log it loaded with `userClient` (so RLS already
+   * applied). Saves reading both twice; the database still checks the seq.
+   */
+  alreadyRead?: {
+    actorId: string;
+    log: NonNullable<Awaited<ReturnType<typeof loadSessionLog>>>;
+  };
   /** Server clock, epoch ms. Injected by tests. */
   now?: () => number;
 }
@@ -286,9 +295,11 @@ export async function submitSessionAction(
     };
   }
   const { sessionId, eventId, expectedLastSeq, request } = input;
-  const actorId = await requireVerifiedUserId(userClient);
+  const actorId =
+    options.alreadyRead?.actorId ?? (await requireVerifiedUserId(userClient));
 
-  const log = await loadSessionLog(userClient, sessionId);
+  const log =
+    options.alreadyRead?.log ?? (await loadSessionLog(userClient, sessionId));
   if (!log) {
     throw new Error(
       `Session ${sessionId} not found (or it isn't your social's, or you are not a host).`,

@@ -17,7 +17,7 @@ import { settleWithin } from "@/lib/settleWithin";
 import { approveCheckin } from "@/server/checkin/hostCheckinActions";
 import type { HostCheckinDecisionResult } from "@/server/checkin/hostCheckinResults";
 import { addLivePlayer } from "@/server/live/liveAddPlayer";
-import { readLiveSession, writeLiveAction } from "@/server/live/liveActions";
+import { writeLiveAction } from "@/server/live/liveActions";
 import type {
   LiveCommand,
   LiveSessionView,
@@ -33,6 +33,7 @@ import { failureText, type ShownFailure } from "./liveFailure";
 import { TimeUpNotice } from "./TimeUpNotice";
 import { ArrivalsBoard } from "../setup/ArrivalsBoard";
 import { LiveCourtCard } from "./LiveCourtCard";
+import { pollLiveSession } from "../hostPolls";
 import { CallOverList } from "./LiveCourtV2";
 import { RecentGames } from "./RecentGames";
 import { LiveWaiting } from "./LiveWaiting";
@@ -64,7 +65,12 @@ export function LiveSession({
   const text = messages.host.live;
   const [result, setResult] = useState(initialResult);
   const [message, setMessage] = useState<ShownFailure | null>(null);
+  const [arrivalsOpen, setArrivalsOpen] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
+  /** The tap being saved, so its button answers at once. */
+  const [pendingCommand, setPendingCommand] = useState<LiveCommand | null>(
+    null,
+  );
   const [failedWrite, setFailedWrite] = useState<LiveWriteInput | null>(null);
   const [prepareCourtId, setPrepareCourtId] = useState<string>();
   // The wall-clock moment the latest server answer arrived, and "now" on this
@@ -90,7 +96,7 @@ export function LiveSession({
     const number = ++readNumber.current;
     const session = latestSession.current;
     pendingReads.current += 1;
-    const readCall = readLiveSession({
+    const readCall = pollLiveSession({
       ...(session ? { sessionId: session.sessionId } : {}),
       prepareCourtId: prepareRef.current,
     });
@@ -168,6 +174,7 @@ export function LiveSession({
       if (working.current) return;
       working.current = true;
       setIsWorking(true);
+      setPendingCommand(input.command);
       setMessage(null);
       const response = await settleWithin(
         writeLiveAction(input),
@@ -191,6 +198,7 @@ export function LiveSession({
       await refresh();
       working.current = false;
       setIsWorking(false);
+      setPendingCommand(null);
     },
     [refresh],
   );
@@ -478,6 +486,7 @@ export function LiveSession({
                       (option) => option.courtId === court.courtId,
                     )}
                     courts={session.courts}
+                    pendingCommand={pendingCommand}
                     isV2={!!session.isV2}
                   />
                 ))}
@@ -517,7 +526,20 @@ export function LiveSession({
                 onWaitingCountChange={setPendingCheckinCount}
               />
               {session.isV2 && (
-                <ArrivalsBoard onArrivedChanged={() => void refresh()} />
+                // Loaded only when opened: it is not needed during turnover.
+                <div className="flex flex-col gap-3">
+                  <button
+                    type="button"
+                    aria-expanded={arrivalsOpen}
+                    className={OUTLINE_BUTTON_CLASS_NAME}
+                    onClick={() => setArrivalsOpen((open) => !open)}
+                  >
+                    {messages.host.arrivals.heading}
+                  </button>
+                  {arrivalsOpen && (
+                    <ArrivalsBoard onArrivedChanged={() => void refresh()} />
+                  )}
+                </div>
               )}
             </div>
           </div>

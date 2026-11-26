@@ -1,5 +1,6 @@
 "use client";
 
+import { pollHostRoster } from "../hostPolls";
 import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { AttentionMessage } from "@/components/AttentionMessage";
@@ -22,7 +23,6 @@ import {
   decideRosterTransfer,
   hostCheckInRosterEntry,
   importRosterPaste,
-  readHostRoster,
   removeRosterEntry,
   setRosterEntryNote,
   setWalkInsOpen,
@@ -80,7 +80,7 @@ export function ArrivalsBoard({
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const result = await readHostRoster().catch((): ReadHostRosterResult => ({
+    const result = await pollHostRoster().catch((): ReadHostRosterResult => ({
       ok: false,
       message: messages.serverMessages.offline,
     }));

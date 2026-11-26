@@ -342,7 +342,7 @@ test("a whole social: arrivals, two courts turning over out of order, and a late
     await expect(
       page
         .getByRole("article", { name: courtLabel, exact: true })
-        .getByRole("button", { name: "Game finished" }),
+        .getByRole("button", { name: /^(Game finished|Finishing…)$/ }),
     ).toHaveCount(0, { timeout: POLL_TIMEOUT_MS });
   };
   await finish("Court 2");

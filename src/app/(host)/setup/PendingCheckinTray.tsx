@@ -1,5 +1,6 @@
 "use client";
 
+import { pollPendingCheckins } from "../hostPolls";
 import Link from "next/link";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { AttentionMessage } from "@/components/AttentionMessage";
@@ -16,7 +17,6 @@ import { SkillChip } from "@/components/SkillChip";
 import { settleWithin } from "@/lib/settleWithin";
 import {
   approveCheckin,
-  listPendingCheckins,
   rejectCheckin,
 } from "@/server/checkin/hostCheckinActions";
 import type {
@@ -246,7 +246,7 @@ function usePendingCheckinsPolling(
       isPollInFlightRef.current = true;
       pollSequenceRef.current += 1;
       const pollSequence = pollSequenceRef.current;
-      const listCall = listPendingCheckins();
+      const listCall = pollPendingCheckins();
       void listCall.then(
         () => {
           isPollInFlightRef.current = false;

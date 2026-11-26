@@ -375,6 +375,8 @@ export const hostEn = {
       endPair: "End pair",
     },
     court: {
+      finishing: "Finishing…",
+      starting: "Starting…",
       /** Generated court names ("Court 3") are shown in the chosen language. */
       numbered: (courtNumber: string) => `Court ${courtNumber}`,
       replacementNeeded: "Replacement needed",

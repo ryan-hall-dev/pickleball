@@ -69,11 +69,27 @@ export async function loadSessionLog(
   /** Only events after this seq (the log is append-only; see nonHostSessionAction). */
   afterSeq = 0,
 ): Promise<LoadedSessionLog | null> {
-  const { data: session, error: sessionError } = await client
-    .from("sessions")
-    .select("id, status")
-    .eq("id", sessionId)
-    .maybeSingle();
+  // The session row and the first page of events are read together.
+  const eventsPage = (offset: number) =>
+    client
+      .from("session_events")
+      .select(
+        "seq, event_id, type, payload, occurred_at, actor_user_id, actor_session_participant_id",
+      )
+      .eq("session_id", sessionId)
+      .gt("seq", afterSeq)
+      .order("seq", { ascending: true })
+      .range(offset, offset + EVENTS_PAGE_SIZE - 1);
+  const [{ data: session, error: sessionError }, firstPage] = await Promise.all(
+    [
+      client
+        .from("sessions")
+        .select("id, status")
+        .eq("id", sessionId)
+        .maybeSingle(),
+      eventsPage(0),
+    ],
+  );
   if (sessionError) {
     throw new Error(
       `Loading session ${sessionId} failed: ${sessionError.message}`,
@@ -83,15 +99,8 @@ export async function loadSessionLog(
 
   const events: SessionEvent[] = [];
   for (let offset = 0; ; offset += EVENTS_PAGE_SIZE) {
-    const { data: rows, error: eventsError } = await client
-      .from("session_events")
-      .select(
-        "seq, event_id, type, payload, occurred_at, actor_user_id, actor_session_participant_id",
-      )
-      .eq("session_id", sessionId)
-      .gt("seq", afterSeq)
-      .order("seq", { ascending: true })
-      .range(offset, offset + EVENTS_PAGE_SIZE - 1);
+    const { data: rows, error: eventsError } =
+      offset === 0 ? firstPage : await eventsPage(offset);
     if (eventsError) {
       throw new Error(
         `Loading the action log of session ${sessionId} failed: ${eventsError.message}`,

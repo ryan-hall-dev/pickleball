@@ -81,6 +81,12 @@ export async function readLiveSession(
       (await autoPrepareCourts(client, row.id, state, now))
     )
       state = (await reloadSessionState(client, row.id)) ?? state;
+    const [phoneIds, scores] = isSimpleSocialV2(state.config)
+      ? await Promise.all([
+          phoneParticipantIds(client, row.id),
+          sessionScores(client, row.id, state),
+        ])
+      : [new Set<string>(), new Map()];
     return {
       ok: true,
       status: "session",
@@ -96,12 +102,8 @@ export async function readLiveSession(
           actorId: authorization.host.userId,
         },
         parsed.data.prepareCourtId,
-        isSimpleSocialV2(state.config)
-          ? await phoneParticipantIds(client, row.id)
-          : new Set(),
-        isSimpleSocialV2(state.config)
-          ? await sessionScores(client, row.id, state)
-          : new Map(),
+        phoneIds,
+        scores,
       ),
     };
   } catch (error) {
@@ -525,7 +527,13 @@ export async function writeLiveAction(
           expectedLastSeq: writeSeq,
           request,
         },
-        { now: () => at },
+        {
+          now: () => at,
+          // Nothing was written since the read above: don't read it again.
+          ...(writeSeq === expectedLastSeq
+            ? { alreadyRead: { actorId: authorization.host.userId, log } }
+            : {}),
+        },
       );
       if (
         !result.ok &&

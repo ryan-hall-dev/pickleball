@@ -22,6 +22,9 @@ import type {
 } from "@/server/live/liveTypes";
 import { LiveSession } from "./LiveSession";
 
+vi.mock("../hostPolls", async () => ({
+  pollLiveSession: (await import("@/server/live/liveActions")).readLiveSession,
+}));
 vi.mock("../setup/ArrivalsBoard", () => ({ ArrivalsBoard: () => null }));
 vi.mock("@/server/live/liveActions", () => ({
   readLiveSession: vi.fn(),
