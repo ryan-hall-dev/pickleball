@@ -447,3 +447,18 @@ describe("roster check-in", () => {
     );
   });
 });
+
+it("moves to Find your name when a list is added after the page opened", () => {
+  const before = initialCheckinState({ ok: true, page });
+  expect(before.screen).toBe("welcome");
+  const listed = {
+    ...page,
+    session: { ...page.session, hasRoster: true },
+  };
+  for (const type of ["page_read", "header_refreshed"] as const) {
+    expect(
+      checkinReducer(before, { type, result: { ok: true, page: listed } })
+        .screen,
+    ).toBe("roster_find");
+  }
+});

@@ -72,6 +72,8 @@ function isCheckedInScreen(screen: CheckinState["screen"]): boolean {
   );
 }
 
+/** The walk-in form with no list yet looks for one this often. */
+const WAITING_FOR_LIST_INTERVAL_MS = 10_000;
 /** A server call with no answer by then shows P13 (Try again). */
 const SERVER_CALL_TIMEOUT_MS = 15_000;
 
@@ -153,7 +155,12 @@ function CheckinFlow({
   );
   usePeriodicPageRead(
     checkinTag,
-    state.screen === "welcome" ? HEADER_REFRESH_INTERVAL_MS : null,
+    state.screen === "welcome"
+      ? state.openPage?.session.hasRoster
+        ? HEADER_REFRESH_INTERVAL_MS
+        : // No list yet: switch to Find your name soon after one is added.
+          WAITING_FOR_LIST_INTERVAL_MS
+      : null,
     (result) => dispatch({ type: "header_refreshed", result }),
   );
   // Checked in before the start: notice when the social goes live.

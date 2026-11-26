@@ -147,7 +147,13 @@ function screenForOpenPage(
   if (page.rosterTransferRequest?.status === "pending")
     return "roster_transfer_waiting";
   if (!page.session.hasRoster) return "welcome";
-  if (!sessionChanged && ROSTER_CHOICE_SCREENS.has(settled.screen))
+  // A list added after the page opened wins over the walk-in form the player
+  // never chose: Find your name comes first.
+  if (
+    !sessionChanged &&
+    settled.openPage?.session.hasRoster &&
+    ROSTER_CHOICE_SCREENS.has(settled.screen)
+  )
     return settled.screen;
   return "roster_find";
 }
@@ -237,7 +243,10 @@ function applyHeaderRefresh(
 ): CheckinState {
   if (!result.ok) return state;
   if (result.page.status !== "open") return applyPageRead(state, result);
-  if (state.openPage?.session.sessionId !== result.page.session.sessionId)
+  if (
+    state.openPage?.session.sessionId !== result.page.session.sessionId ||
+    (result.page.session.hasRoster && !state.openPage.session.hasRoster)
+  )
     return applyPageRead(state, result);
   return {
     ...state,
@@ -414,7 +423,7 @@ export function checkinReducer(
       // A retry is a new request (and counts towards the rate limits).
       return {
         ...state,
-        screen: "welcome",
+        screen: state.openPage?.session.hasRoster ? "roster_find" : "welcome",
         requester: null,
         formValues: EMPTY_CHECKIN_FORM,
         fieldErrors: {},
