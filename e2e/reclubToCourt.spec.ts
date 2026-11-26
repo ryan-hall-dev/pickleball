@@ -304,7 +304,7 @@ test("a whole social: arrivals, two courts turning over out of order, and a late
 
   // 7. Both groups confirm; court A starts from a phone, court B by the host.
   const gameA1 = await confirmGroup(courtAId, "Court 1");
-  const gameB1 = await confirmGroup(courtBId, "Court 2");
+  await confirmGroup(courtBId, "Court 2");
   const starter = gameA1.find((name) => phones.has(name))!;
   await expect(
     phones.get(starter)!.getByRole("heading", { name: "Head to Court 1" }),
@@ -357,16 +357,8 @@ test("a whole social: arrivals, two courts turning over out of order, and a late
   let live = await readState(sessionId);
   expect(live.courts[courtBId].activeMatchId).toBeNull();
   expect(live.courts[courtAId].activeMatchId).not.toBeNull();
-  expect(live.courts[courtAId].nextGroup).toBeFalsy();
 
-  // The host asks court 1's next four early (D12), tied to court 1.
-  await page.reload();
-  const courtOneCard = page.getByRole("article", {
-    name: "Court 1",
-    exact: true,
-  });
-  await courtOneCard.getByRole("button", { name: "Prepare next four" }).click();
-  await courtOneCard.getByRole("button", { name: "Call these four" }).click();
+  // Court 1 gets its own next four by itself, with nothing pressed (D12).
   await expect
     .poll(
       async () => !!(await readState(sessionId)).courts[courtAId].nextGroup,
@@ -398,28 +390,14 @@ test("a whole social: arrivals, two courts turning over out of order, and a late
       },
     )
     .toBe(true);
-  live = await readState(sessionId);
-  const scorer = gameB1.find(
-    (name) =>
-      phones.has(name) &&
-      Object.values(live.participants).some(
-        (p) =>
-          nameById.get(p.participant.participantId) === name &&
-          p.activeMatchId === null,
-      ),
-  )!;
-  const scorerPhone = phones.get(scorer)!;
-  await scorerPhone.reload();
-  await expect(
-    scorerPhone.getByText("Add the score for your last game"),
-  ).toBeVisible({
-    timeout: POLL_TIMEOUT_MS,
-  });
-  const inputs = scorerPhone.getByRole("textbox");
-  await inputs.nth(0).fill("11");
-  await inputs.nth(1).fill("7");
-  await scorerPhone.getByRole("button", { name: "Save score" }).click();
-  await expect(scorerPhone.getByText("Already recorded")).toBeVisible({
+  await page.reload();
+  const recentGames = page.getByRole("region", { name: "Recent games" });
+  await recentGames.getByRole("button", { name: "Add score" }).click();
+  const scores = recentGames.getByRole("textbox");
+  await scores.nth(0).fill("11");
+  await scores.nth(1).fill("7");
+  await recentGames.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(recentGames.getByText("11–7")).toBeVisible({
     timeout: POLL_TIMEOUT_MS,
   });
 

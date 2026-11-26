@@ -160,6 +160,7 @@ export const hostEn = {
     durationMinutes: "Session duration (minutes)",
     courtNamesTitle: "Court names",
     courtName: (number: number) => `Name of court ${number}`,
+    straightAway: "Straight away",
     askNextFourTitle: "Ask the next four",
     askNextFourLabel: "Minutes after a game starts",
     fewerMinutes: "Fewer minutes",
@@ -327,6 +328,7 @@ export const hostEn = {
     },
     v2: {
       recentGames: "Recent games",
+      notLinedUp: "Not lined up yet.",
       gameAt: (court: string, time: string) => `${court} · ${time}`,
       addScore: "Add score",
       correct: "Correct",

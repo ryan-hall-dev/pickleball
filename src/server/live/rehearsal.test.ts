@@ -41,7 +41,7 @@ function simulate(seed: number) {
     config: {
       ...makeConfig({ participants, courts: 5 }),
       policyVersion: "simple-social-v2",
-      upNextAfterMinutes: 6,
+      upNextAfterMinutes: 0,
       plannedDurationMinutes: 180,
     },
     initialAttendeeIds: participants.map((p) => p.participantId),

@@ -324,7 +324,7 @@ describe.skipIf(!localStack)("automatic court preparation", () => {
     expect(await s.calls()).toHaveLength(2);
   });
 
-  it("a finished game prepares the next four for its court without a preparation step", async () => {
+  it("a started game lines up its court's next four, who stay on it when it finishes", async () => {
     const s = await scenario(1, "MMMMMMMM");
     const prepared = (await s.read()).courts[0].called!;
     const matchId = randomUUID();
@@ -336,13 +336,14 @@ describe.skipIf(!localStack)("automatic court preparation", () => {
         matchId,
       }),
     ).toMatchObject({ ok: true });
-    const playing = await s.read();
-    expect(playing.courts[0].called).toBeNull(); // busy court: nothing prepared
+    const next = (await s.read()).courts[0].called!;
+    expect(next.calledEventId).not.toBe(prepared.calledEventId);
     expect(await s.write({ kind: "finish", matchId })).toMatchObject({
       ok: true,
     });
-    const next = (await s.read()).courts[0].called!;
-    expect(next.calledEventId).not.toBe(prepared.calledEventId);
+    expect((await s.read()).courts[0].called!.calledEventId).toBe(
+      next.calledEventId,
+    );
     const played = new Set([...prepared.teamA, ...prepared.teamB]);
     expect(
       [...next.teamA, ...next.teamB].some(

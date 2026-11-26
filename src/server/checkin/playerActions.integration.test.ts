@@ -291,7 +291,7 @@ describe.skipIf(!localStack)(
       expect(calls).toHaveLength(1);
       expect(calls[0].actorId).toBe(SYSTEM_ACTOR_ID);
       expect(log[0].payload).toMatchObject({
-        config: { policyVersion: "simple-social-v2", upNextAfterMinutes: 6 },
+        config: { policyVersion: "simple-social-v2", upNextAfterMinutes: 0 },
       });
     });
 

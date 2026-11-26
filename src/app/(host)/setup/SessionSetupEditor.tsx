@@ -872,7 +872,7 @@ function SessionSetupForm({
                   className={`${ICON_BUTTON_CLASS_NAME} ${step === 1 ? "order-3" : "order-1"}`}
                   disabled={
                     step === -1
-                      ? form.upNextAfterMinutes <= 1
+                      ? form.upNextAfterMinutes <= 0
                       : form.upNextAfterMinutes >= MAX_UP_NEXT_AFTER_MINUTES
                   }
                   onClick={() =>
@@ -886,7 +886,9 @@ function SessionSetupForm({
                 </button>
               ))}
               <span className="order-2 min-w-6 text-center text-lg font-bold tabular-nums">
-                {form.upNextAfterMinutes}
+                {form.upNextAfterMinutes === 0
+                  ? text.straightAway
+                  : form.upNextAfterMinutes}
               </span>
             </div>
           </div>

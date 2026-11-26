@@ -18,6 +18,7 @@ import type {
   LiveSessionView,
   LiveUndoOption,
 } from "./liveTypes";
+import { canUndoAfterReleases } from "./undoWithReleases";
 
 /** When each player now in a called group was put in it (its call, or the change that seated them). */
 function askedAtOf(
@@ -95,7 +96,7 @@ function recentUndoOptions(
       continue;
     const targetSeq =
       match.status === "active" ? match.startedBySeq : match.endedBySeq;
-    if (targetSeq !== null && compensate(state, targetSeq, probe).ok) {
+    if (targetSeq !== null && canUndoAfterReleases(state, targetSeq, probe)) {
       options.push({
         courtId,
         matchId,

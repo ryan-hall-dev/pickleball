@@ -258,7 +258,7 @@ describe.skipIf(!localStack)("hidden simple session start", () => {
     if (!result.ok) throw new Error(result.error.message);
     expect(result.state.config).toMatchObject({
       policyVersion: "simple-social-v2",
-      upNextAfterMinutes: 6,
+      upNextAfterMinutes: 0,
       plannedDurationMinutes: 75,
       courts: [{ courtId, name: "Court 1", format: "doubles" }],
     });

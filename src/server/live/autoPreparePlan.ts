@@ -39,6 +39,12 @@ export function heldCourtIds(state: SessionState): Set<string> {
         matchCourt.set(event.payload.matchId, event.payload.courtId);
         held.delete(event.payload.courtId);
         break;
+      // An undo releases newer groups to get them out of its way, not because
+      // the host wants those courts left empty.
+      case "MatchStartReverted":
+      case "MatchCompletionReverted":
+        held.clear();
+        break;
       case "MatchCompleted":
       case "MatchAbandoned": {
         const courtId = matchCourt.get(event.payload.matchId);

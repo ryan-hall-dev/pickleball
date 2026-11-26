@@ -116,7 +116,7 @@ export interface SessionConfig {
   policyVersion?: "simple-social-v1" | "simple-social-v2";
   /**
    * simple-social-v2: minutes after a game starts when its court's next four
-   * are asked to get ready (whole minutes, 1-30).
+   * are asked to get ready (whole minutes, 0-30; 0 is straight away).
    */
   upNextAfterMinutes?: number;
   /** Courts enabled at start. More can be added mid-session with `CourtAdded`. */

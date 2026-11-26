@@ -206,7 +206,7 @@ export const saveSimpleSessionDraftInputSchema = z.object({
     .optional(),
   /** Minutes after a game starts before its court's next four are asked. */
   upNextAfterMinutes: wholeMinutesSchema({
-    min: 1,
+    min: 0,
     max: MAX_UP_NEXT_AFTER_MINUTES,
   }).optional(),
 });
@@ -324,7 +324,7 @@ const sessionDraftConfigSchema = z.object({
   appliedSavedSetupId: z.uuid().nullable().default(null),
   // Drafts saved before this setting have none: the default.
   upNextAfterMinutes: wholeMinutesSchema({
-    min: 1,
+    min: 0,
     max: MAX_UP_NEXT_AFTER_MINUTES,
   }).optional(),
 });

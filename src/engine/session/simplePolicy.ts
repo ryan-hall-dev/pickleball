@@ -9,8 +9,11 @@ import { sessionError, type SessionError } from "./errors";
 import type { CourtId, Participant, SessionConfig } from "./types";
 
 export const SIMPLE_SOCIAL_REST_MS = 600_000;
-/** simple-social-v2 default: ask the next four this long after a game starts. */
-export const DEFAULT_UP_NEXT_AFTER_MINUTES = 6;
+/**
+ * simple-social-v2 default: ask the next four this long after a game starts.
+ * 0 is as soon as it starts (Ryan, 2026-11-26; was 6).
+ */
+export const DEFAULT_UP_NEXT_AFTER_MINUTES = 0;
 export const MAX_UP_NEXT_AFTER_MINUTES = 30;
 
 /** Either simple-social version: called groups, the doubles rule, wait-first. */

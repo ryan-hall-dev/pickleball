@@ -269,7 +269,7 @@ export function LiveCourtCard({
               >
                 {text.changePlayers}
               </button>
-              {court.called && (
+              {court.called && !isV2 && (
                 <button
                   type="button"
                   className={OUTLINE_BUTTON_CLASS_NAME}
@@ -308,6 +308,15 @@ export function LiveCourtCard({
               />
             )}
           </>
+        ) : isV2 ? (
+          // The app lines this court up by itself; nothing to press.
+          <p
+            className={`mt-2 text-sm text-muted compact:mt-0 compact:text-xs ${compactLayout === "free" ? COMPACT_FREE_CAPTION_CLASS_NAME : ""}`}
+          >
+            {court.activeMatch || court.closesAfterGame
+              ? messages.host.live.v2.notLinedUp
+              : text.waitingForFour}
+          </p>
         ) : (
           <>
             <p

@@ -177,6 +177,8 @@ describe.skipIf(!localStack)("simple live host controls", () => {
         planned_end: plannedEnd,
         config_snapshot: {
           ...DEFAULT_SESSION_DRAFT_CONFIG,
+          // These host-command scenarios call groups by hand.
+          upNextAfterMinutes: 30,
           courts: [{ courtId, name: "Court 1", format: "doubles" }],
         } as unknown as Json,
       })
@@ -673,9 +675,13 @@ describe.skipIf(!localStack)("simple live host controls", () => {
         afterMetrics.find((player) => player.participantId === id),
       ).toMatchObject({
         status: "waiting",
-        currentWaitMs: 0,
         gamesCompleted: beforeGames.get(id),
       });
+      // A new wait: only the moment the app took to line up again.
+      expect(
+        afterMetrics.find((player) => player.participantId === id)!
+          .currentWaitMs,
+      ).toBeLessThan(5_000);
     }
     const row = await admin
       .from("matches")

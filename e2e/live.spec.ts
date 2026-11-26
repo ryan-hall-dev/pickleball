@@ -302,12 +302,8 @@ test("a host safely undoes start/finish, replaces a player and ends an interrupt
   await court.getByRole("button", { name: "Start game" }).click();
   await court.getByRole("button", { name: "Game finished" }).click();
   await expectRestButtonCount(page, restButtons, 5);
-  // With five players the next group reserves some of the four who just
-  // finished, so Undo needs that group released first (the engine says so).
-  await expect(court.getByText("Court options", { exact: true })).toHaveCount(
-    0,
-  );
-  await court.getByRole("button", { name: "Release group" }).click();
+  // With five players the next group already holds some of the four who just
+  // finished; Undo releases it by itself.
   await court.getByText("Court options", { exact: true }).click();
   await court.getByRole("button", { name: "Undo game finish" }).click();
   await expectRestButtonCount(page, restButtons, 1);

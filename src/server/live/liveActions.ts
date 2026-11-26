@@ -22,6 +22,7 @@ import {
 import { autoPrepareCourts, reloadSessionState } from "./autoPrepare";
 import { hostTapStillApplies } from "./hostTapStillApplies";
 import { liveProjection } from "./liveProjection";
+import { groupsBlockingUndo } from "./undoWithReleases";
 import {
   liveWriteSchema,
   type LiveWriteInput,
@@ -485,12 +486,43 @@ export async function writeLiveAction(
       )
         ? replayed.state.lastSeq
         : parsed.data.expectedLastSeq;
+      // Undo first releases any newer Up next group in its way (v2).
+      let writeSeq = expectedLastSeq;
+      if (
+        !landed &&
+        command.kind === "undo" &&
+        writeSeq === replayed.state.lastSeq
+      ) {
+        for (const calledEventId of groupsBlockingUndo(
+          replayed.state,
+          command.targetSeq,
+        )) {
+          const released = await submitSessionAction(
+            client,
+            {
+              sessionId: parsed.data.sessionId,
+              eventId: followUpEventId(parsed.data.eventId, calledEventId),
+              expectedLastSeq: writeSeq,
+              request: {
+                kind: "action",
+                action: {
+                  type: "NextGroupReleased",
+                  payload: { calledEventId },
+                },
+              },
+            },
+            { now: () => at },
+          );
+          if (!released.ok) break;
+          writeSeq = released.seq;
+        }
+      }
       const result = await submitSessionAction(
         client,
         {
           sessionId: parsed.data.sessionId,
           eventId: parsed.data.eventId,
-          expectedLastSeq,
+          expectedLastSeq: writeSeq,
           request,
         },
         { now: () => at },

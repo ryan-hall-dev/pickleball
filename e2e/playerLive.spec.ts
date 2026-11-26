@@ -91,7 +91,7 @@ test("players confirm on their phones, head to court and start their own game", 
     .eq("status", "live")
     .single();
   expect(started!.config_snapshot).toMatchObject({
-    upNextAfterMinutes: 7,
+    upNextAfterMinutes: 1,
     courts: [{ name: "Court 7" }],
   });
 

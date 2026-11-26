@@ -94,13 +94,13 @@ function validateConfig(
     config.upNextAfterMinutes !== undefined &&
     !(
       Number.isInteger(config.upNextAfterMinutes) &&
-      config.upNextAfterMinutes >= 1 &&
+      config.upNextAfterMinutes >= 0 &&
       config.upNextAfterMinutes <= MAX_UP_NEXT_AFTER_MINUTES
     )
   )
     return sessionError(
       "INVALID_CONFIG",
-      `Ask the next four after 1 to ${MAX_UP_NEXT_AFTER_MINUTES} whole minutes.`,
+      `Ask the next four after 0 to ${MAX_UP_NEXT_AFTER_MINUTES} whole minutes.`,
     );
   if (!isSimpleSocialV2(config) && config.upNextAfterMinutes !== undefined)
     return sessionError(

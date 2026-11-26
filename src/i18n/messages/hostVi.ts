@@ -160,6 +160,7 @@ export const hostVi: typeof hostEn = {
     durationMinutes: "Thời lượng (phút)",
     courtNamesTitle: "Tên sân",
     courtName: (number: number) => `Tên sân thứ ${number}`,
+    straightAway: "Ngay lập tức",
     askNextFourTitle: "Báo bốn người tiếp theo",
     askNextFourLabel: "Số phút sau khi trận bắt đầu",
     fewerMinutes: "Giảm số phút",
@@ -330,6 +331,7 @@ export const hostVi: typeof hostEn = {
         `Còn đang chơi: ${courtNames}. Ứng dụng không tự kết thúc trận. Bấm Trận đã xong ở từng sân khi trận kết thúc (hoặc dùng Tùy chọn sân), rồi nút Kết thúc buổi chơi sẽ mở.`,
     },
     v2: {
+      notLinedUp: "Chưa xếp được nhóm.",
       recentGames: "Trận gần đây",
       gameAt: (court: string, time: string) => `${court} · ${time}`,
       addScore: "Nhập tỉ số",

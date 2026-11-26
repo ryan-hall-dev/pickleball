@@ -62,7 +62,7 @@ const group = (session: TestSession, court: number) =>
 describe("simple-social-v2", () => {
   it("validates the Up next timer, and only v2 has one", () => {
     const { config } = v2Session();
-    for (const upNextAfterMinutes of [0, 31, 2.5]) {
+    for (const upNextAfterMinutes of [-1, 31, 2.5]) {
       expect(
         code(
           new TestSession().tryApply("SessionStarted", {
