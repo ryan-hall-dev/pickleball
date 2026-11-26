@@ -24,7 +24,10 @@ import {
 import { CheckMarkIcon } from "./CheckinIcons";
 import { BrandLine, InfoNotice, SkillLevelOptions } from "./CheckinParts";
 import { LiveSessionCard } from "./LiveSessionCard";
-import { BOTTOM_ACTION_BAR_CLASS_NAME } from "./checkinStyles";
+import {
+  BOTTOM_ACTION_BAR_CLASS_NAME,
+  FULL_WIDTH_OUTLINE_BUTTON_CLASS_NAME,
+} from "./checkinStyles";
 
 const FORM_ID = "checkin-participant-form";
 const FIELD_IDS = {
@@ -51,7 +54,10 @@ export function ParticipantCheckinForm({
   serverFieldErrors,
   isBusy,
   onCheckIn,
+  onFindYourName = null,
 }: {
+  /** With a roster, the walk-in form offers a way back to Find your name. */
+  onFindYourName?: (() => void) | null;
   page: OpenCheckinPage;
   /** Kept by the page, so a failed submit's Try again returns to them. */
   values: CheckinFormValues;
@@ -210,6 +216,16 @@ export function ParticipantCheckinForm({
           <CheckMarkIcon sizePx={20} />
           {copy.checkIn}
         </button>
+        {onFindYourName && (
+          <button
+            type="button"
+            onClick={onFindYourName}
+            disabled={isBusy}
+            className={FULL_WIDTH_OUTLINE_BUTTON_CLASS_NAME}
+          >
+            {copy.roster.findHeading}
+          </button>
+        )}
       </div>
     </>
   );

@@ -6,11 +6,12 @@ import { useMessages } from "@/i18n/LocaleProvider";
 export function HostLoading({
   page,
 }: {
-  page: "setup" | "live" | "hosts" | "stickerAndQr";
+  page: "setup" | "arrivals" | "live" | "hosts" | "stickerAndQr";
 }) {
   const host = useMessages().host;
   const text = {
     setup: host.setup.loading,
+    arrivals: host.arrivals.loading,
     live: host.live.loading,
     hosts: host.hosts.loading,
     stickerAndQr: host.stickerAndQr.loading,

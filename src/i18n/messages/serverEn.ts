@@ -31,6 +31,18 @@ export const serverMessagesEn = {
     coHostDraft: (draftName: string) =>
       `A co-host already started “${draftName}”. You're editing it together.`,
   },
+  roster: {
+    listChanged:
+      "The list was changed by another host. Check the names again before adding.",
+    nothingToAdd: "Everyone in this paste is already on the list.",
+    noNames: "No names found. Copy the list in Reclub and paste it here.",
+    alreadyCheckedIn: "Someone has already checked in with this name.",
+    phoneHasOtherName:
+      "That phone has checked in with another name since asking. Ask them which name is theirs.",
+    sessionClosed: "This social is no longer open.",
+    sessionChanged: "The session changed. Reload and try again.",
+    couldNotSave: "Couldn't save. Check your connection and try again.",
+  },
   start: {
     reloadSetupAndRetry: "Reload the setup and try again.",
     sessionNotAvailable: "This session is not available. Reload the setup.",

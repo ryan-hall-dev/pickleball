@@ -21,6 +21,8 @@ const page: OpenCheckinPage = {
   status: "open",
   socialName: "Riverside",
   currentRequest: null,
+  rosterClaim: null,
+  rosterTransferRequest: null,
   now: "2026-11-15T09:00:00Z",
   session: {
     sessionId: "a0000000-0000-4000-8000-000000000001",
@@ -33,6 +35,8 @@ const page: OpenCheckinPage = {
     plannedEnd: "2026-11-15T12:00:00Z",
     courtsCount: 2,
     checkedInCount: 0,
+    hasRoster: false,
+    walkInsOpen: true,
   },
 };
 function Form({

@@ -20,8 +20,25 @@ const EVENTS_PAGE_SIZE = 1000;
 
 type SessionEventRow = Pick<
   Database["public"]["Tables"]["session_events"]["Row"],
-  "seq" | "event_id" | "type" | "payload" | "occurred_at" | "actor_user_id"
+  | "seq"
+  | "event_id"
+  | "type"
+  | "payload"
+  | "occurred_at"
+  | "actor_user_id"
+  | "actor_session_participant_id"
 >;
+
+/** A player's own action (a roster check-in) names them, never a host. */
+export const PLAYER_ACTOR_PREFIX = "player:";
+
+function actorIdFromRow(row: SessionEventRow): string {
+  if (row.actor_user_id) return row.actor_user_id;
+  if (row.actor_session_participant_id) {
+    return `${PLAYER_ACTOR_PREFIX}${row.actor_session_participant_id}`;
+  }
+  throw new Error(`Event ${row.event_id} has no actor.`);
+}
 
 function sessionEventFromRow(row: SessionEventRow): SessionEvent {
   // Typed assignment: fails to compile if the database enum and the engine's
@@ -33,7 +50,7 @@ function sessionEventFromRow(row: SessionEventRow): SessionEvent {
     seq: row.seq,
     eventId: row.event_id,
     at: Date.parse(row.occurred_at),
-    actorId: row.actor_user_id,
+    actorId: actorIdFromRow(row),
     type,
     payload: row.payload,
   } as SessionEvent;
@@ -65,7 +82,9 @@ export async function loadSessionLog(
   for (let offset = 0; ; offset += EVENTS_PAGE_SIZE) {
     const { data: rows, error: eventsError } = await client
       .from("session_events")
-      .select("seq, event_id, type, payload, occurred_at, actor_user_id")
+      .select(
+        "seq, event_id, type, payload, occurred_at, actor_user_id, actor_session_participant_id",
+      )
       .eq("session_id", sessionId)
       .order("seq", { ascending: true })
       .range(offset, offset + EVENTS_PAGE_SIZE - 1);

@@ -30,6 +30,32 @@ export const checkinSubmitInputSchema = participantCheckinInputSchema.extend({
   sessionId: z.uuid(),
 });
 
+/** Claiming a roster name: level and gender; a guest also gives their name. */
+export const rosterClaimInputSchema = z.object({
+  sessionId: z.uuid(),
+  rosterEntryId: z.uuid(),
+  skillLevel: skillLevelSchema,
+  gender: genderSchema,
+  guestName: z
+    .object({
+      firstName: personNameSchema(en.validation.firstNameRequired),
+      lastName: personNameSchema(en.validation.lastNameRequired),
+    })
+    .nullable(),
+});
+
+export type RosterClaimInput = z.input<typeof rosterClaimInputSchema>;
+
+export const rosterSearchInputSchema = z.object({
+  sessionId: z.uuid(),
+  query: z.string().max(100),
+});
+
+export const rosterEntryInputSchema = z.object({
+  sessionId: z.uuid(),
+  rosterEntryId: z.uuid(),
+});
+
 export type CheckinSubmitInput = z.input<typeof participantCheckinInputSchema>;
 export type ParticipantCheckinInput = z.output<
   typeof participantCheckinInputSchema

@@ -22,12 +22,16 @@ const openPageRpc = {
     planned_end: "2026-11-07T20:00:00+00:00",
     courts_count: 4,
     checked_in_count: 26,
+    has_roster: true,
+    walk_ins_open: false,
   },
   current_request: {
     id: REQUEST_ID,
     status: "approved",
     first_name: "Grace",
   },
+  roster_claim: null,
+  roster_transfer_request: null,
   now: "2026-11-07T17:54:12.345678+00:00",
 };
 
@@ -47,12 +51,16 @@ describe("checkinPageFromRpc", () => {
         plannedEnd: "2026-11-07T20:00:00+00:00",
         courtsCount: 4,
         checkedInCount: 26,
+        hasRoster: true,
+        walkInsOpen: false,
       },
       currentRequest: {
         checkinRequestId: REQUEST_ID,
         status: "approved",
         firstName: "Grace",
       },
+      rosterClaim: null,
+      rosterTransferRequest: null,
       now: "2026-11-07T17:54:12.345678+00:00",
     });
   });

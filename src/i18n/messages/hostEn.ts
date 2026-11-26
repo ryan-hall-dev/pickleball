@@ -13,6 +13,7 @@ export const hostEn = {
     reload: "Reload",
   },
   titles: {
+    arrivals: "Arrivals",
     signIn: "Sign in",
     setup: "Session setup",
     live: "Live courts",
@@ -23,6 +24,7 @@ export const hostEn = {
   header: {
     navLabel: "Host",
     nav: {
+      arrivals: "Arrivals",
       setup: "Session setup",
       live: "Live courts",
       hosts: "Hosts",
@@ -32,6 +34,71 @@ export const hostEn = {
     signOut: "Sign out",
     /** The ☰ button on phones. */
     menu: "Menu",
+  },
+  arrivals: {
+    loading: "Loading arrivals…",
+    heading: "Arrivals",
+    noSession: "No social is open. Set one up first.",
+    openSetup: "Open session setup",
+    arrivedCount: (arrived: number, total: number) =>
+      `${arrived} of ${total} arrived`,
+    needsYou: (count: number) => `Needs you (${count})`,
+    nothingNeedsYou:
+      "Nothing needs you. Listed players check in on their phones.",
+    nameRequest: (name: string) => `“That's my name”: ${name}`,
+    nameRequestDetail: (claimedAt: string, askedAt: string) =>
+      `Claimed on another phone at ${claimedAt}. A new phone asked at ${askedAt}.`,
+    nameRequestNoPhone: (claimedAt: string, askedAt: string) =>
+      `Checked in by a host at ${claimedAt}. A phone asked at ${askedAt}.`,
+    moveToNewPhone: "Move to new phone",
+    keepAsItIs: "Keep as it is",
+    walkInsHint:
+      "Walk-ins (not on the list) are approved under Check-ins on Session setup and Live courts.",
+    notArrived: (count: number) => `Not arrived (${count})`,
+    everyoneArrived: "Everyone on the list has arrived.",
+    arrived: (count: number) => `Arrived (${count})`,
+    checkIn: "Check in",
+    walkIns: "Walk-ins",
+    walkInsAreOpen: "Walk-ins are open",
+    walkInsAreClosed: "Walk-ins are closed",
+    closeWalkIns: "Close walk-ins",
+    openWalkIns: "Open walk-ins",
+    checkInTitle: (name: string) => `Check in ${name}`,
+    checkInIntro:
+      "For someone with no phone. Call them over in person when it's their turn.",
+    guestNameHint: "Enter the guest's own name.",
+    noPhone: "No phone",
+    checkedInAt: (time: string) => `Checked in ${time}`,
+    sameNameTwice: "Same name twice",
+    note: (note: string) => `Note: ${note}`,
+    addNote: "Add note",
+    editNote: "Edit note",
+    saveNote: "Save note",
+    noteLabel: (name: string) => `Note for ${name}`,
+    reclub: {
+      heading: "Players from Reclub",
+      intro:
+        "Copy the list in Reclub and paste it here. Only Confirmed names are read; the waitlist is left out.",
+      pasteAgainIntro:
+        "Paste the list again for late sign-ups. New names are added; nobody already checked in is changed.",
+      pasteLabel: "Reclub list",
+      checkNames: "Check names",
+      namesFound: (count: number) => `${count} new names found`,
+      guest: "Guest",
+      waitlistLeftOut: (count: number) => `Waitlist names left out: ${count}.`,
+      skippedLines: (count: number) =>
+        `Lines too long to be a name, left out: ${count}.`,
+      add: (count: number) => `Add ${count} players`,
+      added: (count: number) => `Added ${count} players.`,
+      nothingNew: "Everyone in this paste is already on the list.",
+      noNames: "No names found. Copy the list in Reclub and paste it here.",
+      missingHeading: "No longer on Reclub",
+      missingCheckedIn: "No longer on Reclub. Already checked in.",
+      missingNotArrived: "No longer on Reclub. Not arrived.",
+      kept: "Kept",
+      remove: "Remove",
+      cancel: "Cancel",
+    },
   },
   notAHost: {
     title: "You're not a host here",

@@ -14,6 +14,7 @@ export const hostVi: typeof hostEn = {
     reload: "Tải lại",
   },
   titles: {
+    arrivals: "Người đến",
     signIn: "Đăng nhập",
     setup: "Chuẩn bị buổi chơi",
     live: "Sân đang chơi",
@@ -24,6 +25,7 @@ export const hostVi: typeof hostEn = {
   header: {
     navLabel: "Người tổ chức",
     nav: {
+      arrivals: "Người đến",
       setup: "Chuẩn bị buổi chơi",
       live: "Sân đang chơi",
       hosts: "Người tổ chức",
@@ -33,6 +35,73 @@ export const hostVi: typeof hostEn = {
     signOut: "Đăng xuất",
     /** The ☰ button on phones. */
     menu: "Menu",
+  },
+  arrivals: {
+    loading: "Đang tải danh sách đến…",
+    heading: "Người đến",
+    noSession: "Chưa có buổi chơi nào mở. Hãy tạo buổi chơi trước.",
+    openSetup: "Mở thiết lập buổi chơi",
+    arrivedCount: (arrived: number, total: number) =>
+      `${arrived}/${total} người đã đến`,
+    needsYou: (count: number) => `Cần bạn xử lý (${count})`,
+    nothingNeedsYou:
+      "Không có gì cần xử lý. Người trong danh sách tự điểm danh trên điện thoại.",
+    nameRequest: (name: string) => `“Đó là tên tôi”: ${name}`,
+    nameRequestDetail: (claimedAt: string, askedAt: string) =>
+      `Đã được nhận trên điện thoại khác lúc ${claimedAt}. Một điện thoại mới yêu cầu lúc ${askedAt}.`,
+    nameRequestNoPhone: (claimedAt: string, askedAt: string) =>
+      `Người tổ chức đã điểm danh lúc ${claimedAt}. Một điện thoại yêu cầu lúc ${askedAt}.`,
+    moveToNewPhone: "Chuyển sang điện thoại mới",
+    keepAsItIs: "Giữ nguyên",
+    walkInsHint:
+      "Người ngoài danh sách được duyệt ở mục Điểm danh trong Thiết lập buổi chơi và Sân đang chơi.",
+    notArrived: (count: number) => `Chưa đến (${count})`,
+    everyoneArrived: "Mọi người trong danh sách đã đến.",
+    arrived: (count: number) => `Đã đến (${count})`,
+    checkIn: "Điểm danh",
+    walkIns: "Người ngoài danh sách",
+    walkInsAreOpen: "Đang nhận người ngoài danh sách",
+    walkInsAreClosed: "Đã ngừng nhận người ngoài danh sách",
+    closeWalkIns: "Ngừng nhận",
+    openWalkIns: "Mở lại",
+    checkInTitle: (name: string) => `Điểm danh ${name}`,
+    checkInIntro:
+      "Dành cho người không có điện thoại. Gọi họ trực tiếp khi đến lượt.",
+    guestNameHint: "Nhập tên của khách.",
+    noPhone: "Không có điện thoại",
+    checkedInAt: (time: string) => `Đã điểm danh lúc ${time}`,
+    sameNameTwice: "Trùng tên",
+    note: (note: string) => `Ghi chú: ${note}`,
+    addNote: "Thêm ghi chú",
+    editNote: "Sửa ghi chú",
+    saveNote: "Lưu ghi chú",
+    noteLabel: (name: string) => `Ghi chú cho ${name}`,
+    reclub: {
+      heading: "Người chơi từ Reclub",
+      intro:
+        "Sao chép danh sách trong Reclub rồi dán vào đây. Chỉ đọc các tên Đã xác nhận; danh sách chờ được bỏ qua.",
+      pasteAgainIntro:
+        "Dán lại danh sách cho người đăng ký muộn. Tên mới được thêm; người đã điểm danh không bị thay đổi.",
+      pasteLabel: "Danh sách Reclub",
+      checkNames: "Kiểm tra tên",
+      namesFound: (count: number) => `Tìm thấy ${count} tên mới`,
+      guest: "Khách",
+      waitlistLeftOut: (count: number) =>
+        `Đã bỏ qua ${count} tên trong danh sách chờ.`,
+      skippedLines: (count: number) =>
+        `Đã bỏ qua ${count} dòng quá dài để là một cái tên.`,
+      add: (count: number) => `Thêm ${count} người chơi`,
+      added: (count: number) => `Đã thêm ${count} người chơi.`,
+      nothingNew: "Mọi người trong danh sách dán đã có sẵn.",
+      noNames:
+        "Không tìm thấy tên nào. Hãy sao chép danh sách trong Reclub rồi dán vào đây.",
+      missingHeading: "Không còn trên Reclub",
+      missingCheckedIn: "Không còn trên Reclub. Đã điểm danh.",
+      missingNotArrived: "Không còn trên Reclub. Chưa đến.",
+      kept: "Giữ lại",
+      remove: "Xoá",
+      cancel: "Huỷ",
+    },
   },
   notAHost: {
     title: "Bạn không phải người tổ chức ở đây",

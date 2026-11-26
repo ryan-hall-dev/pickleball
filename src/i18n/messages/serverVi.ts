@@ -28,6 +28,19 @@ export const serverMessagesVi: typeof serverMessagesEn = {
     coHostDraft: (draftName: string) =>
       `Một người tổ chức khác đã tạo “${draftName}”. Hai bạn đang cùng chỉnh sửa.`,
   },
+  roster: {
+    listChanged:
+      "Danh sách vừa được người tổ chức khác thay đổi. Hãy kiểm tra lại các tên trước khi thêm.",
+    nothingToAdd: "Mọi người trong danh sách dán đã có sẵn.",
+    noNames:
+      "Không tìm thấy tên nào. Hãy sao chép danh sách trong Reclub rồi dán vào đây.",
+    alreadyCheckedIn: "Đã có người điểm danh với tên này.",
+    phoneHasOtherName:
+      "Điện thoại đó đã điểm danh bằng một tên khác. Hãy hỏi họ tên nào là của họ.",
+    sessionClosed: "Buổi chơi này không còn mở.",
+    sessionChanged: "Buổi chơi đã thay đổi. Hãy tải lại và thử lại.",
+    couldNotSave: "Không lưu được. Hãy kiểm tra kết nối và thử lại.",
+  },
   start: {
     reloadSetupAndRetry: "Hãy tải lại trang chuẩn bị rồi thử lại.",
     sessionNotAvailable: "Buổi chơi này không còn. Hãy tải lại trang chuẩn bị.",

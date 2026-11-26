@@ -13,6 +13,8 @@ const page: OpenCheckinPage = {
   status: "open",
   socialName: "Social",
   currentRequest: null,
+  rosterClaim: null,
+  rosterTransferRequest: null,
   now: "2026-11-15T15:00:00Z",
   session: {
     sessionId: "a0000000-0000-4000-8000-000000000001",
@@ -25,6 +27,8 @@ const page: OpenCheckinPage = {
     plannedEnd: "2026-11-14T11:15:00Z",
     courtsCount: 2,
     checkedInCount: 8,
+    hasRoster: false,
+    walkInsOpen: true,
   },
 };
 describe("LiveSessionCard", () => {

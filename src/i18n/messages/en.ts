@@ -129,6 +129,44 @@ export const en = {
       noDoubleSend:
         "If you'd already pressed Check in, trying again won't send a second request.",
     },
+    roster: {
+      findHeading: "Find your name",
+      findIntro: "Type at least 2 letters of the name you use on Reclub.",
+      searchLabel: "Your name",
+      typeMore: "Type at least 2 letters.",
+      searching: "Searching…",
+      noMatches:
+        "No names match. Check the spelling, or tap My name isn't here.",
+      resultsLabel: "Matching names",
+      inUse: "In use",
+      hostNote: (note: string) => `Host note: ${note}`,
+      guestOf: (playerName: string) => `Guest of ${playerName}`,
+      notHere: "My name isn't here",
+      goneNotice:
+        "That name is no longer on the list. Find your name again, or speak to the host.",
+      keptNotice:
+        "The host kept that name on the other phone. Choose your name again, or speak to the host.",
+      detailsHeading: (name: string) => `Hi, ${name}`,
+      notYou: "Not you? Go back and choose your name.",
+      guestIntro: "Tell us your own name.",
+      imHere: "I'm here",
+      chooseAnother: "Choose another name",
+      inUseHeading: "This name is in use",
+      inUseText: (name: string) => `${name} is being used on another phone.`,
+      thatsMyName: "That's my name",
+      hostAskedNote: "The host is asked to move it to this phone.",
+      transferWaitingTitle: "Waiting for the host",
+      transferWaitingText: (name: string) =>
+        `You asked for ${name}. The host will check and move it to this phone.`,
+      checkedInTitle: (firstName: string) => `You're in, ${firstName}`,
+      checkedInText: (sessionName: string) =>
+        `You're checked in to ${sessionName}.`,
+      keepOpen:
+        "Keep this page open. The host calls you to a court when it's your turn.",
+      walkInsClosedTitle: "Walk-ins are closed",
+      walkInsClosedText:
+        "Only names on today's list can check in now. Please speak to the host.",
+    },
     tryAgain: "Try again",
   },
   host: hostEn,

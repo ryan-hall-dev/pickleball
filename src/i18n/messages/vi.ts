@@ -128,6 +128,47 @@ export const vi: Messages = {
       noDoubleSend:
         "Nếu bạn đã bấm Điểm danh, thử lại sẽ không gửi thêm yêu cầu thứ hai.",
     },
+    roster: {
+      findHeading: "Tìm tên của bạn",
+      findIntro: "Gõ ít nhất 2 chữ cái của tên bạn dùng trên Reclub.",
+      searchLabel: "Tên của bạn",
+      typeMore: "Gõ ít nhất 2 chữ cái.",
+      searching: "Đang tìm…",
+      noMatches:
+        "Không tìm thấy tên nào. Hãy kiểm tra chính tả, hoặc bấm Không thấy tên tôi.",
+      resultsLabel: "Các tên phù hợp",
+      inUse: "Đã dùng",
+      hostNote: (note: string) => `Ghi chú của người tổ chức: ${note}`,
+      guestOf: (playerName: string) => `Khách của ${playerName}`,
+      notHere: "Không thấy tên tôi",
+      goneNotice:
+        "Tên đó không còn trong danh sách. Hãy tìm lại tên của bạn, hoặc nói với người tổ chức.",
+      keptNotice:
+        "Người tổ chức giữ tên đó trên điện thoại kia. Hãy chọn lại tên của bạn, hoặc nói với người tổ chức.",
+      detailsHeading: (name: string) => `Chào ${name}`,
+      notYou: "Không phải bạn? Quay lại và chọn tên của bạn.",
+      guestIntro: "Cho chúng tôi biết tên của bạn.",
+      imHere: "Tôi đã đến",
+      chooseAnother: "Chọn tên khác",
+      inUseHeading: "Tên này đang được dùng",
+      inUseText: (name: string) =>
+        `${name} đang được dùng trên một điện thoại khác.`,
+      thatsMyName: "Đó là tên tôi",
+      hostAskedNote:
+        "Người tổ chức sẽ được nhờ chuyển tên sang điện thoại này.",
+      transferWaitingTitle: "Đang chờ người tổ chức",
+      transferWaitingText: (name: string) =>
+        `Bạn đã yêu cầu tên ${name}. Người tổ chức sẽ kiểm tra và chuyển tên sang điện thoại này.`,
+      checkedInTitle: (firstName: string) =>
+        `Bạn đã vào danh sách, ${firstName}`,
+      checkedInText: (sessionName: string) =>
+        `Bạn đã điểm danh vào ${sessionName}.`,
+      keepOpen:
+        "Hãy giữ trang này mở. Người tổ chức sẽ gọi bạn vào sân khi đến lượt.",
+      walkInsClosedTitle: "Đã ngừng nhận người chơi ngoài danh sách",
+      walkInsClosedText:
+        "Hiện chỉ những tên trong danh sách hôm nay mới điểm danh được. Vui lòng nói với người tổ chức.",
+    },
     tryAgain: "Thử lại",
   },
   host: hostVi,

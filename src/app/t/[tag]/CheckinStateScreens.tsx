@@ -35,7 +35,7 @@ const ICON_TONE_CLASS_NAMES = {
     "border-2 border-orange-edge bg-orange-surface-strong text-orange-ink",
 } as const;
 
-function StateScreen({
+export function StateScreen({
   brandName,
   iconTone,
   icon,
@@ -89,7 +89,7 @@ function StateScreen({
   );
 }
 
-function StateText({ children }: { children: ReactNode }) {
+export function StateText({ children }: { children: ReactNode }) {
   return <p className="text-base text-text-soft">{children}</p>;
 }
 

@@ -22,9 +22,13 @@ const page: OpenCheckinPage = {
     plannedEnd: "2026-11-15T12:00:00Z",
     courtsCount: 2,
     checkedInCount: 0,
+    hasRoster: false,
+    walkInsOpen: true,
   },
   now: "2026-11-15T09:00:00Z",
   currentRequest: null,
+  rosterClaim: null,
+  rosterTransferRequest: null,
 };
 function read(
   currentRequest: CurrentCheckinRequest | null = null,
@@ -321,4 +325,125 @@ it("SESSION_CHANGED clears all four submitted fields before any refreshed sessio
     gender: null,
   });
   expect(next.requester).toBeNull();
+});
+
+describe("roster check-in", () => {
+  const rosterPage = {
+    ...page,
+    session: { ...page.session, hasRoster: true },
+  };
+  const minh = {
+    rosterEntryId: "11111111-1111-4111-8111-111111111111",
+    label: {
+      displayName: "Minh Nguyen",
+      guestOfName: null,
+      twinNumber: 1,
+      twinCount: 2,
+      guestNumber: null,
+      guestCount: null,
+    },
+    hostNote: null,
+    isInUse: false,
+  };
+  const start = () => initialCheckinState({ ok: true, page: rosterPage });
+
+  it("starts at Find your name, and goes to details or in-use for the chosen name", () => {
+    const state = start();
+    expect(state.screen).toBe("roster_find");
+    expect(
+      checkinReducer(state, { type: "roster_name_chosen", result: minh })
+        .screen,
+    ).toBe("roster_details");
+    expect(
+      checkinReducer(state, {
+        type: "roster_name_chosen",
+        result: { ...minh, isInUse: true },
+      }).screen,
+    ).toBe("roster_in_use");
+  });
+
+  it("stays on the player's own choice when the page is read again", () => {
+    const details = checkinReducer(start(), {
+      type: "roster_name_chosen",
+      result: minh,
+    });
+    expect(
+      checkinReducer(details, {
+        type: "page_read",
+        result: { ok: true, page: rosterPage },
+      }).screen,
+    ).toBe("roster_details");
+  });
+
+  it("shows checked in once the page has this phone's name", () => {
+    const state = checkinReducer(start(), {
+      type: "page_read",
+      result: {
+        ok: true,
+        page: {
+          ...rosterPage,
+          rosterClaim: {
+            rosterEntryId: minh.rosterEntryId,
+            firstName: "Minh",
+            lastName: "Nguyen",
+          },
+        },
+      },
+    });
+    expect(state.screen).toBe("roster_checked_in");
+  });
+
+  it("sends a taken name to in-use, and a request to waiting for the host", () => {
+    const details = checkinReducer(start(), {
+      type: "roster_name_chosen",
+      result: minh,
+    });
+    const inUse = checkinReducer(details, {
+      type: "roster_claim_finished",
+      result: { ok: true, outcome: "in_use" },
+    });
+    expect(inUse.screen).toBe("roster_in_use");
+    expect(
+      checkinReducer(inUse, {
+        type: "roster_transfer_finished",
+        result: { ok: true, outcome: "requested" },
+      }).screen,
+    ).toBe("roster_transfer_waiting");
+  });
+
+  it("returns to Find your name with a note when the host keeps the name elsewhere", () => {
+    const waiting = { ...start(), screen: "roster_transfer_waiting" as const };
+    const kept = checkinReducer(waiting, {
+      type: "page_read",
+      result: {
+        ok: true,
+        page: {
+          ...rosterPage,
+          rosterTransferRequest: {
+            transferRequestId: "22222222-2222-4222-8222-222222222222",
+            status: "kept",
+            rosterEntryId: minh.rosterEntryId,
+            label: minh.label,
+          },
+        },
+      },
+    });
+    expect(kept).toMatchObject({ screen: "roster_find", rosterNotice: "kept" });
+  });
+
+  it("offers the walk-in form, or says walk-ins are closed", () => {
+    expect(checkinReducer(start(), { type: "walk_in_chosen" }).screen).toBe(
+      "welcome",
+    );
+    const closed = initialCheckinState({
+      ok: true,
+      page: {
+        ...rosterPage,
+        session: { ...rosterPage.session, walkInsOpen: false },
+      },
+    });
+    expect(checkinReducer(closed, { type: "walk_in_chosen" }).screen).toBe(
+      "walk_ins_closed",
+    );
+  });
 });

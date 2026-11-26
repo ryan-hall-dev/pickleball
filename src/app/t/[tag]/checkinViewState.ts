@@ -1,7 +1,10 @@
 import type {
+  ClaimRosterResult,
   CurrentCheckinRequest,
   OpenCheckinPage,
   ReadCheckinPageResult,
+  RequestRosterTransferResult,
+  RosterSearchResult,
   SubmitCheckinResult,
 } from "@/server/checkin/checkinResults";
 import type {
@@ -9,7 +12,15 @@ import type {
   CheckinFormValues,
 } from "@/server/checkin/checkinRules";
 export type CheckinScreen =
+  /** The walk-in form (or, with no roster, everyone's form). */
   | "welcome"
+  /** Roster: find your name, then level and gender, then you're in. */
+  | "roster_find"
+  | "roster_details"
+  | "roster_in_use"
+  | "roster_transfer_waiting"
+  | "roster_checked_in"
+  | "walk_ins_closed"
   | "waiting"
   | "approved"
   | "rejected"
@@ -40,7 +51,18 @@ export interface CheckinState {
   fieldErrors: CheckinFormFieldErrors;
   /** A submit or a re-read is in flight. */
   isBusy: boolean;
+  /** The roster name the player chose. */
+  rosterSelection: RosterSearchResult | null;
+  /** Why the player is back at Find your name. */
+  rosterNotice: "kept" | "gone" | null;
 }
+
+/** Screens the player moved to themselves; a page read doesn't leave them. */
+const ROSTER_CHOICE_SCREENS: ReadonlySet<CheckinScreen> = new Set([
+  "welcome",
+  "roster_details",
+  "roster_in_use",
+]);
 
 export type CheckinAction =
   | { type: "page_read"; result: ReadCheckinPageResult }
@@ -55,7 +77,13 @@ export type CheckinAction =
       submittedName: { firstName: string; lastName: string };
       result: SubmitCheckinResult;
     }
-  | { type: "try_again_after_rejection" };
+  | { type: "try_again_after_rejection" }
+  | { type: "roster_name_chosen"; result: RosterSearchResult }
+  | { type: "roster_find_again" }
+  | { type: "walk_in_chosen" }
+  | { type: "roster_call_started" }
+  | { type: "roster_claim_finished"; result: ClaimRosterResult }
+  | { type: "roster_transfer_finished"; result: RequestRosterTransferResult };
 
 const EMPTY_CHECKIN_FORM: CheckinFormValues = {
   firstName: "",
@@ -72,6 +100,8 @@ const EMPTY_STATE: CheckinState = {
   formValues: EMPTY_CHECKIN_FORM,
   fieldErrors: {},
   isBusy: false,
+  rosterSelection: null,
+  rosterNotice: null,
 };
 
 /** The first state, from the server-rendered page read. */
@@ -99,6 +129,27 @@ function screenForCurrentRequest(
     case undefined:
       return "welcome";
   }
+}
+
+/**
+ * This phone's roster name, then its walk-in request, then a "That's my name"
+ * waiting on the host decide the screen. Otherwise a session with a roster
+ * starts at Find your name (or stays where the player went from there).
+ */
+function screenForOpenPage(
+  page: OpenCheckinPage,
+  settled: CheckinState,
+  sessionChanged: boolean,
+): CheckinScreen {
+  if (page.rosterClaim) return "roster_checked_in";
+  const requestScreen = screenForCurrentRequest(page.currentRequest);
+  if (requestScreen !== "welcome") return requestScreen;
+  if (page.rosterTransferRequest?.status === "pending")
+    return "roster_transfer_waiting";
+  if (!page.session.hasRoster) return "welcome";
+  if (!sessionChanged && ROSTER_CHOICE_SCREENS.has(settled.screen))
+    return settled.screen;
+  return "roster_find";
 }
 
 function requesterForPage(
@@ -151,13 +202,21 @@ function pageReadState(
         requester: null,
       };
     case "open": {
-      const screen = screenForCurrentRequest(page.currentRequest);
       const sessionChanged =
         settled.openPage !== null &&
         settled.openPage.session.sessionId !== page.session.sessionId;
+      const screen = screenForOpenPage(page, settled, sessionChanged);
       return {
         ...settled,
         screen,
+        rosterSelection: sessionChanged ? null : settled.rosterSelection,
+        rosterNotice:
+          page.rosterTransferRequest?.status === "kept" &&
+          settled.screen === "roster_transfer_waiting"
+            ? "kept"
+            : sessionChanged
+              ? null
+              : settled.rosterNotice,
         socialName: page.socialName,
         openPage: page,
         requester: requesterForPage(
@@ -241,6 +300,64 @@ function applySubmitFinished(
   }
 }
 
+function applyRosterClaimFinished(
+  state: CheckinState,
+  result: ClaimRosterResult,
+): CheckinState {
+  const settled = { ...state, isBusy: false };
+  if (!result.ok) return rosterFailureState(settled, result.failure);
+  // Claimed (or already this phone's, or this phone is in another way): the
+  // caller re-reads the page, which shows where this phone stands.
+  if (result.outcome === "in_use")
+    return { ...settled, screen: "roster_in_use" };
+  return { ...settled, isBusy: true };
+}
+
+function applyRosterTransferFinished(
+  state: CheckinState,
+  result: RequestRosterTransferResult,
+): CheckinState {
+  const settled = { ...state, isBusy: false };
+  if (!result.ok) return rosterFailureState(settled, result.failure);
+  switch (result.outcome) {
+    case "requested":
+      return { ...settled, screen: "roster_transfer_waiting" };
+    case "not_in_use":
+      // Freed meanwhile: the player can simply claim it.
+      return { ...settled, screen: "roster_details" };
+    case "already_yours":
+    case "phone_has_other_name":
+      return { ...settled, isBusy: true };
+  }
+}
+
+function rosterFailureState(
+  settled: CheckinState,
+  failure: Exclude<ClaimRosterResult, { ok: true }>["failure"],
+): CheckinState {
+  switch (failure) {
+    case "roster_entry_gone":
+      return {
+        ...settled,
+        screen: "roster_find",
+        rosterSelection: null,
+        rosterNotice: "gone",
+      };
+    case "session_changed":
+      return {
+        ...settled,
+        screen: "unavailable",
+        rosterSelection: null,
+        rosterNotice: null,
+      };
+    case "invalid_input":
+      // The browser checks the same rules first: only an outdated page gets here.
+      return { ...settled, screen: "unavailable" };
+    default:
+      return { ...settled, screen: failure };
+  }
+}
+
 export function checkinReducer(
   state: CheckinState,
   action: CheckinAction,
@@ -266,6 +383,33 @@ export function checkinReducer(
       return { ...state, isBusy: true };
     case "submit_finished":
       return applySubmitFinished(state, action.submittedName, action.result);
+    case "roster_name_chosen":
+      return {
+        ...state,
+        screen: action.result.isInUse ? "roster_in_use" : "roster_details",
+        rosterSelection: action.result,
+        rosterNotice: null,
+      };
+    case "roster_find_again":
+      return {
+        ...state,
+        screen: "roster_find",
+        rosterSelection: null,
+        rosterNotice: null,
+      };
+    case "walk_in_chosen":
+      return {
+        ...state,
+        screen: state.openPage?.session.walkInsOpen
+          ? "welcome"
+          : "walk_ins_closed",
+      };
+    case "roster_call_started":
+      return { ...state, isBusy: true };
+    case "roster_claim_finished":
+      return applyRosterClaimFinished(state, action.result);
+    case "roster_transfer_finished":
+      return applyRosterTransferFinished(state, action.result);
     case "try_again_after_rejection":
       // A retry is a new request (and counts towards the rate limits).
       return {

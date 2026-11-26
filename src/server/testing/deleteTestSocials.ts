@@ -27,7 +27,12 @@ async function deleteTestSessions(
   }
   const sessionIds = sessions.map((session) => session.id);
   if (sessionIds.length === 0) return false;
-  for (const table of ["checkin_requests", "checkin_attempts"] as const) {
+  for (const table of [
+    "roster_transfer_requests",
+    "session_roster_entries",
+    "checkin_requests",
+    "checkin_attempts",
+  ] as const) {
     const { error: deleteError } = await adminClient
       .from(table)
       .delete()

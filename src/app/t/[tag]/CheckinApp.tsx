@@ -10,15 +10,24 @@ import {
   useSyncExternalStore,
 } from "react";
 import {
+  claimRosterEntry,
   ensureCheckinDevice,
   readCheckinPage,
+  requestRosterTransfer,
+  searchRoster,
   submitCheckin,
 } from "@/server/checkin/checkinActions";
 import type {
+  ClaimRosterResult,
   ReadCheckinPageResult,
+  RequestRosterTransferResult,
+  SearchRosterResult,
   SubmitCheckinResult,
 } from "@/server/checkin/checkinResults";
-import { type CheckinSubmitInput } from "@/server/checkin/checkinRules";
+import {
+  type CheckinSubmitInput,
+  type RosterClaimInput,
+} from "@/server/checkin/checkinRules";
 import { useMessages } from "@/i18n/LocaleProvider";
 import {
   AlreadyCheckedInScreen,
@@ -37,6 +46,14 @@ import {
   type CheckinState,
 } from "./checkinViewState";
 import { ParticipantCheckinForm } from "./ParticipantCheckinForm";
+import {
+  RosterCheckedInScreen,
+  RosterDetailsScreen,
+  RosterFindScreen,
+  RosterInUseScreen,
+  RosterTransferWaitingScreen,
+  WalkInsClosedScreen,
+} from "./RosterCheckin";
 import { settleWithin } from "@/lib/settleWithin";
 
 /** How often the waiting screen asks whether a host has decided (plan: 5 s polling). */
@@ -54,6 +71,7 @@ const UNAVAILABLE_SUBMIT: SubmitCheckinResult = {
   ok: false,
   failure: "unavailable",
 };
+const UNAVAILABLE_ROSTER_CALL = { ok: false, failure: "unavailable" } as const;
 function readCheckinPageWithin(checkinTag: string) {
   return settleWithin(
     readCheckinPage(checkinTag),
@@ -116,7 +134,9 @@ function CheckinFlow({
   );
   usePeriodicPageRead(
     checkinTag,
-    state.screen === "waiting" ? WAITING_POLL_INTERVAL_MS : null,
+    state.screen === "waiting" || state.screen === "roster_transfer_waiting"
+      ? WAITING_POLL_INTERVAL_MS
+      : null,
     (result) => dispatch({ type: "page_read", result }),
   );
   usePeriodicPageRead(
@@ -163,14 +183,74 @@ function CheckinFlow({
     [checkinTag, state.openPage?.session.sessionId],
   );
 
+  const sessionId = state.openPage?.session.sessionId;
+  /** After a roster call: the page read shows where this phone now stands. */
+  const rereadAfterRosterCall = useCallback(
+    (result: ClaimRosterResult | RequestRosterTransferResult) => {
+      if (!result.ok && result.failure === "session_changed") {
+        dispatch({ type: "session_changed" });
+      }
+      const needsRead =
+        (!result.ok && result.failure === "session_changed") ||
+        (result.ok &&
+          result.outcome !== "in_use" &&
+          result.outcome !== "requested" &&
+          result.outcome !== "not_in_use");
+      if (needsRead) {
+        void readCheckinPageWithin(checkinTag).then((freshPage) =>
+          dispatch({ type: "page_read", result: freshPage }),
+        );
+      }
+    },
+    [checkinTag],
+  );
+
+  const rosterActions: RosterActions = {
+    search: (query) =>
+      settleWithin(
+        searchRoster(checkinTag, { sessionId, query }),
+        SERVER_CALL_TIMEOUT_MS,
+        UNAVAILABLE_ROSTER_CALL as SearchRosterResult,
+      ),
+    claim: (input) => {
+      dispatch({ type: "roster_call_started" });
+      void settleWithin(
+        claimRosterEntry(checkinTag, { ...input, sessionId }),
+        SERVER_CALL_TIMEOUT_MS,
+        UNAVAILABLE_ROSTER_CALL as ClaimRosterResult,
+      ).then((result) => {
+        dispatch({ type: "roster_claim_finished", result });
+        rereadAfterRosterCall(result);
+      });
+    },
+    requestTransfer: (rosterEntryId) => {
+      dispatch({ type: "roster_call_started" });
+      void settleWithin(
+        requestRosterTransfer(checkinTag, { sessionId, rosterEntryId }),
+        SERVER_CALL_TIMEOUT_MS,
+        UNAVAILABLE_ROSTER_CALL as RequestRosterTransferResult,
+      ).then((result) => {
+        dispatch({ type: "roster_transfer_finished", result });
+        rereadAfterRosterCall(result);
+      });
+    },
+  };
+
   return (
     <CheckinScreenView
       state={{ ...state, isBusy: state.isBusy || !isDeviceReady }}
       dispatch={dispatch}
       onRefresh={refreshPage}
       onSubmit={submit}
+      roster={rosterActions}
     />
   );
+}
+
+interface RosterActions {
+  search: (query: string) => Promise<SearchRosterResult>;
+  claim: (input: Omit<RosterClaimInput, "sessionId">) => void;
+  requestTransfer: (rosterEntryId: string) => void;
 }
 
 /**
@@ -257,11 +337,13 @@ function CheckinScreenView({
   dispatch,
   onRefresh,
   onSubmit,
+  roster,
 }: {
   state: CheckinState;
   dispatch: Dispatch<CheckinAction>;
   onRefresh: () => void;
   onSubmit: (input: CheckinSubmitInput) => void;
+  roster: RosterActions;
 }) {
   const messages = useMessages();
   const { screen, openPage, requester } = state;
@@ -307,10 +389,67 @@ function CheckinScreenView({
     throw new Error(`The ${screen} screen needs an open check-in page.`);
   }
 
+  const findYourName = () => dispatch({ type: "roster_find_again" });
+  const selection = state.rosterSelection;
   switch (screen) {
+    case "roster_find":
+      return (
+        <RosterFindScreen
+          page={openPage}
+          notice={state.rosterNotice}
+          search={roster.search}
+          onNameChosen={(result) =>
+            dispatch({ type: "roster_name_chosen", result })
+          }
+          onNotHere={() => dispatch({ type: "walk_in_chosen" })}
+          onSearchFailed={(result) =>
+            dispatch({ type: "roster_claim_finished", result })
+          }
+        />
+      );
+    case "roster_details":
+      if (!selection) return null;
+      return (
+        <RosterDetailsScreen
+          key={selection.rosterEntryId}
+          page={openPage}
+          selection={selection}
+          isBusy={state.isBusy}
+          onClaim={roster.claim}
+          onBack={findYourName}
+        />
+      );
+    case "roster_in_use":
+      if (!selection) return null;
+      return (
+        <RosterInUseScreen
+          page={openPage}
+          selection={selection}
+          isBusy={state.isBusy}
+          onThatsMyName={() => roster.requestTransfer(selection.rosterEntryId)}
+          onChooseAnother={findYourName}
+        />
+      );
+    case "roster_transfer_waiting":
+      return (
+        <RosterTransferWaitingScreen
+          page={openPage}
+          onChooseAnother={findYourName}
+        />
+      );
+    case "roster_checked_in":
+      return <RosterCheckedInScreen page={openPage} />;
+    case "walk_ins_closed":
+      return (
+        <WalkInsClosedScreen
+          page={openPage}
+          onFindYourName={openPage.session.hasRoster ? findYourName : null}
+        />
+      );
     case "welcome":
       return (
         <ParticipantCheckinForm
+          onFindYourName={openPage.session.hasRoster ? findYourName : null}
           page={openPage}
           values={state.formValues}
           onValuesChange={(values) =>

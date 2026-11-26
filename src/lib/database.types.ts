@@ -143,6 +143,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"roster_transfer_requests": {
+                  Row: {
+                    "created_at": string,"decided_at": string | null,"decided_by": string | null,"device_token_hash": string,"id": string,"roster_entry_id": string,"session_id": string,"social_id": string,"status": Database["public"]['Enums']["roster_transfer_status"]
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"device_token_hash": string,"id"?: string,"roster_entry_id": string,"session_id": string,"social_id": string,"status"?: Database["public"]['Enums']["roster_transfer_status"]
+                  }
+                  Update: {
+                    "created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"device_token_hash"?: string,"id"?: string,"roster_entry_id"?: string,"session_id"?: string,"social_id"?: string,"status"?: Database["public"]['Enums']["roster_transfer_status"]
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "roster_transfer_requests_roster_entry_id_fkey"
+      columns: ["roster_entry_id"]
+isOneToOne: false
+      referencedRelation: "session_roster_entries"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "roster_transfer_requests_session_social_fkey"
+      columns: ["session_id","social_id"]
+isOneToOne: false
+      referencedRelation: "sessions"
+      referencedColumns: ["id","social_id"]
+    }
+                  ]
                 },"saved_setups": {
                   Row: {
                     "config": NonNullable<Json>,"created_at": string,"host_id": string | null,"id": string,"last_used_at": string,"name": string,"social_id": string,"updated_at": string
@@ -171,14 +197,14 @@ isOneToOne: false
                   ]
                 },"session_events": {
                   Row: {
-                    "actor_user_id": string,"event_id": string,"occurred_at": string,"payload": NonNullable<Json>,"recorded_at": string,"seq": number,"session_id": string,"type": Database["public"]['Enums']["session_event_type"]
+                    "actor_session_participant_id": string | null,"actor_user_id": string | null,"event_id": string,"occurred_at": string,"payload": NonNullable<Json>,"recorded_at": string,"seq": number,"session_id": string,"type": Database["public"]['Enums']["session_event_type"]
                   }
                   ComputedFields: never
                   Insert: {
-                    "actor_user_id": string,"event_id": string,"occurred_at": string,"payload": NonNullable<Json>,"recorded_at"?: string,"seq": number,"session_id": string,"type": Database["public"]['Enums']["session_event_type"]
+                    "actor_session_participant_id"?: string | null,"actor_user_id"?: string | null,"event_id": string,"occurred_at": string,"payload": NonNullable<Json>,"recorded_at"?: string,"seq": number,"session_id": string,"type": Database["public"]['Enums']["session_event_type"]
                   }
                   Update: {
-                    "actor_user_id"?: string,"event_id"?: string,"occurred_at"?: string,"payload"?: NonNullable<Json>,"recorded_at"?: string,"seq"?: number,"session_id"?: string,"type"?: Database["public"]['Enums']["session_event_type"]
+                    "actor_session_participant_id"?: string | null,"actor_user_id"?: string | null,"event_id"?: string,"occurred_at"?: string,"payload"?: NonNullable<Json>,"recorded_at"?: string,"seq"?: number,"session_id"?: string,"type"?: Database["public"]['Enums']["session_event_type"]
                   }
                   Relationships: [
                     {
@@ -209,16 +235,48 @@ isOneToOne: false
       referencedColumns: ["id","social_id"]
     }
                   ]
-                },"sessions": {
+                },"session_roster_entries": {
                   Row: {
-                    "checkin_open": boolean,"config_snapshot": Json | null,"created_at": string,"draft_revision": number,"ended_at": string | null,"final_stats": Json | null,"host_id": string | null,"host_name": string,"id": string,"last_seq": number,"location": string | null,"name": string,"planned_end": string,"planned_start": string,"social_id": string,"started_at": string | null,"status": Database["public"]['Enums']["session_status"],"updated_at": string
+                    "claimed_at": string | null,"claimed_device_token_hash": string | null,"created_at": string,"display_name": string | null,"guest_of_entry_id": string | null,"host_note": string | null,"id": string,"position": number,"session_id": string,"session_participant_id": string | null,"social_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "checkin_open"?: boolean,"config_snapshot"?: Json | null,"created_at"?: string,"draft_revision"?: number,"ended_at"?: string | null,"final_stats"?: Json | null,"host_id"?: string | null,"host_name": string,"id"?: string,"last_seq"?: number,"location"?: string | null,"name": string,"planned_end": string,"planned_start": string,"social_id": string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["session_status"],"updated_at"?: string
+                    "claimed_at"?: string | null,"claimed_device_token_hash"?: string | null,"created_at"?: string,"display_name"?: string | null,"guest_of_entry_id"?: string | null,"host_note"?: string | null,"id": string,"position": number,"session_id": string,"session_participant_id"?: string | null,"social_id": string
                   }
                   Update: {
-                    "checkin_open"?: boolean,"config_snapshot"?: Json | null,"created_at"?: string,"draft_revision"?: number,"ended_at"?: string | null,"final_stats"?: Json | null,"host_id"?: string | null,"host_name"?: string,"id"?: string,"last_seq"?: number,"location"?: string | null,"name"?: string,"planned_end"?: string,"planned_start"?: string,"social_id"?: string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["session_status"],"updated_at"?: string
+                    "claimed_at"?: string | null,"claimed_device_token_hash"?: string | null,"created_at"?: string,"display_name"?: string | null,"guest_of_entry_id"?: string | null,"host_note"?: string | null,"id"?: string,"position"?: number,"session_id"?: string,"session_participant_id"?: string | null,"social_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "session_roster_entries_guest_of_entry_id_fkey"
+      columns: ["guest_of_entry_id"]
+isOneToOne: false
+      referencedRelation: "session_roster_entries"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "session_roster_entries_session_participant_id_fkey"
+      columns: ["session_participant_id"]
+isOneToOne: true
+      referencedRelation: "session_participants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "session_roster_entries_session_social_fkey"
+      columns: ["session_id","social_id"]
+isOneToOne: false
+      referencedRelation: "sessions"
+      referencedColumns: ["id","social_id"]
+    }
+                  ]
+                },"sessions": {
+                  Row: {
+                    "checkin_open": boolean,"config_snapshot": Json | null,"created_at": string,"draft_revision": number,"ended_at": string | null,"final_stats": Json | null,"host_id": string | null,"host_name": string,"id": string,"last_seq": number,"location": string | null,"name": string,"planned_end": string,"planned_start": string,"social_id": string,"started_at": string | null,"status": Database["public"]['Enums']["session_status"],"updated_at": string,"walk_ins_open": boolean
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "checkin_open"?: boolean,"config_snapshot"?: Json | null,"created_at"?: string,"draft_revision"?: number,"ended_at"?: string | null,"final_stats"?: Json | null,"host_id"?: string | null,"host_name": string,"id"?: string,"last_seq"?: number,"location"?: string | null,"name": string,"planned_end": string,"planned_start": string,"social_id": string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["session_status"],"updated_at"?: string,"walk_ins_open"?: boolean
+                  }
+                  Update: {
+                    "checkin_open"?: boolean,"config_snapshot"?: Json | null,"created_at"?: string,"draft_revision"?: number,"ended_at"?: string | null,"final_stats"?: Json | null,"host_id"?: string | null,"host_name"?: string,"id"?: string,"last_seq"?: number,"location"?: string | null,"name"?: string,"planned_end"?: string,"planned_start"?: string,"social_id"?: string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["session_status"],"updated_at"?: string,"walk_ins_open"?: boolean
                   }
                   Relationships: [
                     {
@@ -273,8 +331,14 @@ isOneToOne: false
 "cancel_draft_session":
 { Args: { "p_actor_user_id": string,"p_session_id": string }; Returns: Json
                            },
+"claim_roster_entry":
+{ Args: { "p_checkin_tag": string,"p_device_token_hash": string,"p_expected_session_id": string,"p_first_name"?: string,"p_gender": string,"p_ip_hash": string,"p_last_name"?: string,"p_roster_entry_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
+                           },
 "create_social_with_manager":
 { Args: { "p_manager_display_name": string,"p_manager_user_id": string,"p_name": string }; Returns: string
+                           },
+"decide_roster_transfer":
+{ Args: { "p_actor_user_id": string,"p_should_move": boolean,"p_transfer_request_id": string }; Returns: Json
                            },
 "end_session":
 { Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_last_seq": number,"p_final_stats"?: Json,"p_occurred_at": string,"p_session_id": string }; Returns: Json
@@ -282,10 +346,19 @@ isOneToOne: false
 "get_checkin_page":
 { Args: { "p_checkin_tag": string,"p_device_token_hash": string }; Returns: Json
                            },
+"host_check_in_roster_entry":
+{ Args: { "p_actor_user_id": string,"p_event_id"?: string,"p_expected_last_seq"?: number,"p_first_name"?: string,"p_gender": string,"p_last_name"?: string,"p_occurred_at"?: string,"p_roster_entry_id": string,"p_session_id": string,"p_session_participant_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
+                           },
+"import_roster_entries":
+{ Args: { "p_actor_user_id": string,"p_entries": Json,"p_expected_entry_count": number,"p_session_id": string }; Returns: Json
+                           },
 "list_checkin_requests_for_open_session":
 { Args: { "p_actor_user_id": string }; Returns: {
               "created_at": string,"first_name": string,"gender": string,"id": string,"is_name_already_in_session": boolean,"last_name": string,"skill_level": Database["public"]['Enums']["skill_level"]
             }[]
+                           },
+"list_roster_for_open_session":
+{ Args: { "p_actor_user_id": string }; Returns: Json
                            },
 "record_login_attempt":
 { Args: { "p_email_hash": string,"p_ip_hash": string,"p_kind": string }; Returns: boolean
@@ -299,14 +372,29 @@ isOneToOne: false
 "remove_draft_participant":
 { Args: { "p_actor_user_id": string,"p_session_participant_id": string }; Returns: Json
                            },
+"remove_roster_entry":
+{ Args: { "p_actor_user_id": string,"p_roster_entry_id": string,"p_session_id": string }; Returns: Json
+                           },
+"request_roster_transfer":
+{ Args: { "p_checkin_tag": string,"p_device_token_hash": string,"p_expected_session_id": string,"p_ip_hash": string,"p_roster_entry_id": string }; Returns: Json
+                           },
 "save_session_draft":
 { Args: { "p_actor_user_id": string,"p_config_patch": Json,"p_expected_draft_revision": number,"p_host_name": string,"p_location": string,"p_name": string,"p_planned_end": string,"p_planned_start": string,"p_session_id": string }; Returns: Json
                            },
 "save_setup":
 { Args: { "p_actor_user_id": string,"p_config": Json,"p_name": string }; Returns: string
                            },
+"search_roster_entries":
+{ Args: { "p_checkin_tag": string,"p_device_token_hash": string,"p_expected_session_id": string,"p_ip_hash": string,"p_name_query": string }; Returns: Json
+                           },
 "set_draft_participant_details":
 { Args: { "p_actor_user_id": string,"p_expected_draft_revision": number,"p_gender": string,"p_participant_id": string,"p_session_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json
+                           },
+"set_roster_entry_note":
+{ Args: { "p_actor_user_id": string,"p_host_note": string,"p_roster_entry_id": string,"p_session_id": string }; Returns: Json
+                           },
+"set_walk_ins_open":
+{ Args: { "p_actor_user_id": string,"p_session_id": string,"p_walk_ins_open": boolean }; Returns: Json
                            },
 "start_session":
 { Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_draft_revision"?: number,"p_occurred_at": string,"p_payload": Json,"p_session_id": string }; Returns: Json
@@ -316,7 +404,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "checkin_attempt_kind": "search"|"submit","checkin_request_status": "pending"|"approved"|"rejected"|"withdrawn","court_format": "doubles"|"singles","host_role": "manager"|"host","match_row_status": "completed"|"abandoned"|"reverted","session_event_type": "SessionStarted"|"PlayerJoined"|"PlayerJoinReverted"|"PlayerLeft"|"PlayerLeaveReverted"|"PlayerSkipped"|"PlayerUnskipped"|"PlayerLocked"|"PlayerUnlocked"|"CourtAdded"|"CourtAddReverted"|"CourtClosed"|"CourtReopened"|"MatchStarted"|"MatchStartReverted"|"MatchCompleted"|"MatchCompletionReverted"|"PlayerReplaced"|"PlayerReplacementReverted"|"PlayerRemovedMidMatch"|"PlayerRemovalReverted"|"MatchAbandoned"|"MatchAbandonReverted"|"QueueReordered"|"SuggestionsShuffled"|"Paused"|"Resumed"|"SessionEnded"|"NextGroupCalled"|"NextGroupChanged"|"NextGroupReleased","session_status": "draft"|"live"|"ended"|"cancelled","skill_level": "beginner"|"intermediate"|"advanced"
+            "checkin_attempt_kind": "search"|"submit"|"claim","checkin_request_status": "pending"|"approved"|"rejected"|"withdrawn","court_format": "doubles"|"singles","host_role": "manager"|"host","match_row_status": "completed"|"abandoned"|"reverted","roster_transfer_status": "pending"|"moved"|"kept"|"withdrawn","session_event_type": "SessionStarted"|"PlayerJoined"|"PlayerJoinReverted"|"PlayerLeft"|"PlayerLeaveReverted"|"PlayerSkipped"|"PlayerUnskipped"|"PlayerLocked"|"PlayerUnlocked"|"CourtAdded"|"CourtAddReverted"|"CourtClosed"|"CourtReopened"|"MatchStarted"|"MatchStartReverted"|"MatchCompleted"|"MatchCompletionReverted"|"PlayerReplaced"|"PlayerReplacementReverted"|"PlayerRemovedMidMatch"|"PlayerRemovalReverted"|"MatchAbandoned"|"MatchAbandonReverted"|"QueueReordered"|"SuggestionsShuffled"|"Paused"|"Resumed"|"SessionEnded"|"NextGroupCalled"|"NextGroupChanged"|"NextGroupReleased","session_status": "draft"|"live"|"ended"|"cancelled","skill_level": "beginner"|"intermediate"|"advanced"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -436,7 +524,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "checkin_attempt_kind": ["search", "submit"],"checkin_request_status": ["pending", "approved", "rejected", "withdrawn"],"court_format": ["doubles", "singles"],"host_role": ["manager", "host"],"match_row_status": ["completed", "abandoned", "reverted"],"session_event_type": ["SessionStarted", "PlayerJoined", "PlayerJoinReverted", "PlayerLeft", "PlayerLeaveReverted", "PlayerSkipped", "PlayerUnskipped", "PlayerLocked", "PlayerUnlocked", "CourtAdded", "CourtAddReverted", "CourtClosed", "CourtReopened", "MatchStarted", "MatchStartReverted", "MatchCompleted", "MatchCompletionReverted", "PlayerReplaced", "PlayerReplacementReverted", "PlayerRemovedMidMatch", "PlayerRemovalReverted", "MatchAbandoned", "MatchAbandonReverted", "QueueReordered", "SuggestionsShuffled", "Paused", "Resumed", "SessionEnded", "NextGroupCalled", "NextGroupChanged", "NextGroupReleased"],"session_status": ["draft", "live", "ended", "cancelled"],"skill_level": ["beginner", "intermediate", "advanced"]
+            "checkin_attempt_kind": ["search", "submit", "claim"],"checkin_request_status": ["pending", "approved", "rejected", "withdrawn"],"court_format": ["doubles", "singles"],"host_role": ["manager", "host"],"match_row_status": ["completed", "abandoned", "reverted"],"roster_transfer_status": ["pending", "moved", "kept", "withdrawn"],"session_event_type": ["SessionStarted", "PlayerJoined", "PlayerJoinReverted", "PlayerLeft", "PlayerLeaveReverted", "PlayerSkipped", "PlayerUnskipped", "PlayerLocked", "PlayerUnlocked", "CourtAdded", "CourtAddReverted", "CourtClosed", "CourtReopened", "MatchStarted", "MatchStartReverted", "MatchCompleted", "MatchCompletionReverted", "PlayerReplaced", "PlayerReplacementReverted", "PlayerRemovedMidMatch", "PlayerRemovalReverted", "MatchAbandoned", "MatchAbandonReverted", "QueueReordered", "SuggestionsShuffled", "Paused", "Resumed", "SessionEnded", "NextGroupCalled", "NextGroupChanged", "NextGroupReleased"],"session_status": ["draft", "live", "ended", "cancelled"],"skill_level": ["beginner", "intermediate", "advanced"]
           }
         }
 } as const

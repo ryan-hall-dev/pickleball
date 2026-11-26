@@ -80,7 +80,11 @@ select set_eq(
     'approve_checkin', 'reject_checkin', 'submit_checkin',
     'get_checkin_page',
     'list_checkin_requests_for_open_session', 'reissue_checkin_tag',
-    'record_login_attempt', 'create_social_with_manager'
+    'record_login_attempt', 'create_social_with_manager',
+    'import_roster_entries', 'remove_roster_entry', 'set_roster_entry_note',
+    'set_walk_ins_open', 'list_roster_for_open_session', 'decide_roster_transfer',
+    'host_check_in_roster_entry', 'search_roster_entries', 'claim_roster_entry',
+    'request_roster_transfer'
   ],
   'service_role executes exactly the public functions'
 );

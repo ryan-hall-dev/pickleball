@@ -189,7 +189,7 @@ update public.sessions set checkin_open = true where id = 'd1200000-0000-4000-80
 set local role service_role;
 select set_eq(
   $$select jsonb_object_keys(public.get_checkin_page('tagm5social000001', pg_temp.device(1)))$$,
-  array['status', 'social_name', 'session', 'current_request', 'now'],
+  array['status', 'social_name', 'session', 'current_request', 'roster_claim', 'roster_transfer_request', 'now'],
   'an open page has exactly the documented keys (no recognised member)'
 );
 select is(
@@ -199,7 +199,8 @@ select is(
     'name', 'M5 draft', 'status', 'draft',
     'planned_start', '2026-11-11 18:00+00'::timestamptz, 'planned_end', '2026-11-11 20:00+00'::timestamptz,
     'duration_minutes', 120, 'started_at', null, 'ends_at', null,
-    'courts_count', 2, 'checked_in_count', 4
+    'courts_count', 2, 'checked_in_count', 4,
+    'has_roster', false, 'walk_ins_open', true
   ),
   'the header carries the session name, status, planned times, selected courts and attendance count'
 );
@@ -223,12 +224,12 @@ select is(
 );
 select is(
   public.get_checkin_page('tagm5social000001', null) - 'now' - 'session',
-  '{"status":"open","social_name":"M5 Social","current_request":null}'::jsonb,
+  '{"status":"open","social_name":"M5 Social","current_request":null,"roster_claim":null,"roster_transfer_request":null}'::jsonb,
   'no device hash: no request'
 );
 select is(
   public.get_checkin_page('tagm5other0000001', pg_temp.device(1)) - 'now' - 'session',
-  '{"status":"open","social_name":"Other Social","current_request":null}'::jsonb,
+  '{"status":"open","social_name":"Other Social","current_request":null,"roster_claim":null,"roster_transfer_request":null}'::jsonb,
   'another social''s page knows nothing of this phone''s request'
 );
 select is(
@@ -238,7 +239,8 @@ select is(
     'name', 'Other live', 'status', 'live',
     'planned_start', '2026-11-11 18:00+00'::timestamptz, 'planned_end', '2026-11-11 20:00+00'::timestamptz,
     'duration_minutes', 120, 'started_at', now(), 'ends_at', now() + interval '120 minutes',
-    'courts_count', 1, 'checked_in_count', 0
+    'courts_count', 1, 'checked_in_count', 0,
+    'has_roster', false, 'walk_ins_open', true
   ),
   'a live session shows status live and the courts enabled at the start'
 );
