@@ -1,9 +1,23 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { replay, type SessionState } from "@/engine/session";
-import { loadSessionLog, type DatabaseClient } from "@/server/sessionLog";
+import {
+  applyEvent,
+  isSimpleSocialV2,
+  replay,
+  type SessionEvent,
+  type SessionState,
+} from "@/engine/session";
+import { submitNonHostSessionAction } from "@/server/nonHostSessionAction";
+import {
+  loadSessionLog,
+  SYSTEM_ACTOR_ID,
+  type DatabaseClient,
+} from "@/server/sessionLog";
 import { submitSessionAction } from "@/server/submitSessionAction";
-import { planAutoPreparation } from "./autoPreparePlan";
+import { nextAutomaticAction, planAutoPreparation } from "./autoPreparePlan";
+
+/** At most this many automatic actions per read (a full refill and every court). */
+const MAX_AUTOMATIC_ACTIONS_PER_READ = 12;
 
 /**
  * A repeatable event id for "prepare this court at this point in the log".
@@ -38,6 +52,8 @@ export async function autoPrepareCourts(
   state: SessionState,
   now: number,
 ): Promise<boolean> {
+  if (isSimpleSocialV2(state.config))
+    return runAutomaticActions(sessionId, state, now);
   const plan = planAutoPreparation(state, now);
   let expectedLastSeq = state.lastSeq;
   let changed = false;
@@ -99,4 +115,67 @@ export async function reloadSessionState(
   if (!log) return null;
   const replayed = replay(log.events);
   return replayed.ok ? replayed.state : null;
+}
+
+/**
+ * simple-social-v2: does what the app should do by itself, one action at a
+ * time, recorded as the system's own (never a borrowed host or player).
+ * Any reader may trigger it: a host's live screen or a player's page. Event
+ * ids are repeatable, so several readers at once never duplicate an action;
+ * a stale sequence or a refusal stops this round and the next read plans
+ * again. Returns true when the log changed. Never throws.
+ */
+export async function runAutomaticActions(
+  sessionId: string,
+  state: SessionState,
+  now: number,
+): Promise<boolean> {
+  let current = state;
+  let changed = false;
+  for (let step = 0; step < MAX_AUTOMATIC_ACTIONS_PER_READ; step += 1) {
+    const next = nextAutomaticAction(current, now);
+    if (!next) break;
+    const eventId = autoPrepareEventId(sessionId, current.lastSeq, next.key);
+    try {
+      const result = await submitNonHostSessionAction(
+        {
+          sessionId,
+          eventId,
+          expectedLastSeq: current.lastSeq,
+          action: next.action,
+        },
+        { kind: "system" },
+        {
+          now: () => now,
+          loaded: { events: [], state: current },
+        },
+      );
+      if (!result.ok) {
+        if (result.reason === "INVALID_ACTION")
+          console.error("An automatic action was refused", {
+            sessionId,
+            code: result.error.code,
+          });
+        break;
+      }
+      const at = Math.max(now, current.lastAt ?? 0);
+      const applied = applyEvent(current, {
+        seq: result.seq,
+        eventId,
+        at,
+        actorId: SYSTEM_ACTOR_ID,
+        ...next.action,
+      } as SessionEvent);
+      changed = true;
+      if (!applied.ok || result.wasDuplicate) break;
+      current = applied.state;
+    } catch (error) {
+      console.error("Automatic actions failed", {
+        sessionId,
+        cause: error instanceof Error ? error.message : String(error),
+      });
+      break;
+    }
+  }
+  return changed;
 }

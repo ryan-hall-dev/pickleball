@@ -1,7 +1,11 @@
 "use server";
 
 import { z } from "zod";
-import type { Participant, SessionEventPayloads } from "@/engine/session";
+import {
+  DEFAULT_UP_NEXT_AFTER_MINUTES,
+  type Participant,
+  type SessionEventPayloads,
+} from "@/engine/session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { authorizeCurrentHost } from "@/server/auth/currentHost";
 import { HOST_ACCESS_DENIAL_MESSAGES } from "@/server/auth/hostAccess";
@@ -76,7 +80,10 @@ export async function startSimpleSession(
       }
       payload =
         landed.payload as unknown as SessionEventPayloads["SessionStarted"];
-      if (payload.config.policyVersion !== "simple-social-v1") {
+      if (
+        payload.config.policyVersion !== "simple-social-v1" &&
+        payload.config.policyVersion !== "simple-social-v2"
+      ) {
         return {
           ok: false,
           message: en.serverMessages.start.actionIdUsed,
@@ -141,7 +148,10 @@ export async function startSimpleSession(
       }
       payload = {
         config: {
-          policyVersion: "simple-social-v1",
+          // New sessions use v2: Up next confirmations and the timer
+          // (docs/plans/reclub-to-court-v1.md). v1 sessions replay as before.
+          policyVersion: "simple-social-v2",
+          upNextAfterMinutes: DEFAULT_UP_NEXT_AFTER_MINUTES,
           courts: config.courts,
           targetMatchMinutes: config.targetMatchMinutes,
           changeoverMinutes: config.changeoverMinutes,

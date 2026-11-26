@@ -7,6 +7,7 @@ import {
   compensationTargetSeq,
   findHistoryEntry,
   isReversibleEventType,
+  isSimpleSocial,
   matchRecords,
   replay,
   sessionError,
@@ -184,7 +185,7 @@ async function persistEvent(
         p_event_id: event.eventId,
         p_occurred_at: occurredAt,
         p_payload: payload,
-        ...(event.payload.config.policyVersion === "simple-social-v1"
+        ...(isSimpleSocial(event.payload.config)
           ? { p_expected_draft_revision: expectedDraftRevision }
           : {}),
       });

@@ -36,7 +36,14 @@ export { measureMs } from "./intervals";
 export * from "./metrics";
 export {
   SIMPLE_SOCIAL_REST_MS,
+  DEFAULT_UP_NEXT_AFTER_MINUTES,
+  MAX_UP_NEXT_AFTER_MINUTES,
+  calledSeats,
+  dueCourtIds,
   isSimpleSocial,
+  isSimpleSocialV2,
+  isUpNextReadyToPlay,
+  upNextAfterMs,
   simpleSessionDeadline,
   simpleSessionTimeIsUp,
   reservedCourtId,

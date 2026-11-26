@@ -72,7 +72,7 @@ export const serverMessagesVi: typeof serverMessagesEn = {
     notSimpleSession:
       "Buổi chơi này không dùng được cách quản lý sân đơn giản.",
     onlyStartOrFinishUndo:
-      "Ở đây chỉ hoàn tác được việc bắt đầu hoặc kết thúc trận.",
+      "Ở đây chỉ hoàn tác được việc bắt đầu hoặc kết thúc trận, hoặc việc đóng sân.",
     actionIdUsed: "Thao tác này đã được dùng. Hãy cập nhật rồi thử lại.",
     groupOrPlayerChanged:
       "Nhóm hoặc người chơi đã thay đổi. Hãy cập nhật trước khi thử lại.",

@@ -69,7 +69,8 @@ export const serverMessagesEn = {
     checkAction: "Check the action and retry.",
     sessionNotAvailable: "This session is not available.",
     notSimpleSession: "This session cannot use the simple live controls.",
-    onlyStartOrFinishUndo: "Only a game start or finish can be undone here.",
+    onlyStartOrFinishUndo:
+      "Only a game start or finish, or closing a court, can be undone here.",
     actionIdUsed: "That action ID was already used. Refresh and try again.",
     groupOrPlayerChanged:
       "The group or player changed. Refresh before trying again.",

@@ -1,5 +1,14 @@
-import { simpleRecommend } from "@/engine/schedule/simpleRecommend";
-import { isCourtClosed, type SessionState } from "@/engine/session";
+import {
+  simpleRecommend,
+  simpleRefill,
+} from "@/engine/schedule/simpleRecommend";
+import {
+  dueCourtIds,
+  isCourtClosed,
+  isSimpleSocialV2,
+  type SessionState,
+} from "@/engine/session";
+import type { NewSessionAction } from "@/server/submitSessionAction";
 
 export interface AutoPreparedGroup {
   courtId: string;
@@ -71,4 +80,69 @@ export function planAutoPreparation(
     teamA: suggestion.teamA,
     teamB: suggestion.teamB,
   }));
+}
+
+/** One thing the app does by itself, with a key that makes its event id repeatable. */
+export interface AutomaticAction {
+  key: string;
+  action: NewSessionAction;
+}
+
+/**
+ * simple-social-v2: the next thing the app should do by itself, or null.
+ * In order: close a court whose last game has ended after "Close after this
+ * game"; refill an Up next seat someone gave up (D9); ask the next four for a
+ * free court, then for games past the timer, oldest first (D12). A court a
+ * host released stays unprepared until a game starts or ends there. The
+ * caller applies the action and asks again, so one player is never offered
+ * to two groups.
+ */
+export function nextAutomaticAction(
+  state: SessionState,
+  now: number,
+): AutomaticAction | null {
+  if (!isSimpleSocialV2(state.config) || state.phase !== "live") return null;
+  for (const court of Object.values(state.courts)) {
+    if (
+      court.closeScheduledBySeq &&
+      court.activeMatchId === null &&
+      !isCourtClosed(court)
+    )
+      return {
+        key: `close|${court.court.courtId}|${court.closeScheduledBySeq}`,
+        action: {
+          type: "CourtClosed",
+          payload: { courtId: court.court.courtId },
+        },
+      };
+  }
+  const [refill] = simpleRefill(state, now);
+  if (refill)
+    return {
+      key: `refill|${refill.calledEventId}`,
+      action: {
+        type: "NextGroupChanged",
+        payload: {
+          calledEventId: refill.calledEventId,
+          teamA: refill.teamA,
+          teamB: refill.teamB,
+        },
+      },
+    };
+  const held = heldCourtIds(state);
+  const due = dueCourtIds(state, now).filter((courtId) => !held.has(courtId));
+  const [group] = due.length ? simpleRecommend(state, now, due) : [];
+  if (group)
+    return {
+      key: group.courtId,
+      action: {
+        type: "NextGroupCalled",
+        payload: {
+          courtId: group.courtId,
+          teamA: group.teamA,
+          teamB: group.teamB,
+        },
+      },
+    };
+  return null;
 }

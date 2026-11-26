@@ -424,7 +424,21 @@ describe.skipIf(!localStack)("simple live host controls", () => {
         decided_by: null,
       });
       const refreshed = await view(false);
-      expect(refreshed.lastSeq).toBe(before.lastSeq + 1);
+      // The co-host's rest landed; in simple-social-v2 the app may then
+      // refill that player's Up next seat by itself (D9), and nothing else.
+      const sinceRace = (await loadSessionLog(host, sessionId))!.events.filter(
+        (event) => event.seq > before.lastSeq,
+      );
+      expect(sinceRace[0].type).toBe("PlayerSkipped");
+      expect(
+        sinceRace
+          .slice(1)
+          .every(
+            (event) =>
+              event.type === "NextGroupChanged" && event.actorId === "system",
+          ),
+      ).toBe(true);
+      expect(refreshed.lastSeq).toBe(before.lastSeq + sinceRace.length);
       expect(refreshed.players).toHaveLength(before.players.length);
       const unchangedAttendees = await readAttendees();
       expect(unchangedAttendees.error).toBeNull();
@@ -432,7 +446,7 @@ describe.skipIf(!localStack)("simple live host controls", () => {
         [...participantIds].sort(),
       );
       const racedLog = (await loadSessionLog(host, sessionId))!.events;
-      expect(racedLog.at(-1)).toMatchObject({
+      expect(sinceRace[0]).toMatchObject({
         eventId: competingEventId,
         actorId: cohost.id,
         type: "PlayerSkipped",
@@ -897,7 +911,8 @@ describe.skipIf(!localStack)("simple live host controls", () => {
       (candidate) => candidate.participantId === player,
     )!;
     expect(restPlayer.status).toBe("skipped");
-    expect(restPlayer.returnsAt! - resting.now).toBeGreaterThan(590000);
+    // simple-social-v2: a break lasts until Ready, with no return time (D10).
+    expect(restPlayer.returnsAt ?? null).toBeNull();
     expect(
       await write({
         kind: "ready",

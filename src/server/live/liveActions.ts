@@ -6,6 +6,7 @@ import {
   findHistoryEntry,
   compensationTargetSeq,
   isSimpleSocial,
+  isSimpleSocialV2,
   replay,
   SIMPLE_SOCIAL_REST_MS,
   type SessionState,
@@ -104,6 +105,14 @@ export async function readLiveSession(
   }
 }
 
+/** Host undos on the live screen: a start, a finish, or a court closing. */
+const UNDO_TYPES = {
+  MatchStarted: "MatchStartReverted",
+  MatchCompleted: "MatchCompletionReverted",
+  CourtClosed: "CourtReopened",
+  CourtCloseScheduled: "CourtCloseCancelled",
+} as const;
+
 function commandAction(
   command: LiveCommand,
   state: SessionState,
@@ -169,13 +178,47 @@ function commandAction(
     case "undo":
       return null;
     case "rest":
+      // v2: an open break until Ready; v1: the ten-minute rest.
+      return isSimpleSocialV2(state.config)
+        ? {
+            type: "PlayerSkipped",
+            payload: { participantId: command.participantId, reason: "break" },
+          }
+        : {
+            type: "PlayerSkipped",
+            payload: {
+              participantId: command.participantId,
+              returnsAt: at + SIMPLE_SOCIAL_REST_MS,
+            },
+          };
+    case "pauseNoReply":
       return {
         type: "PlayerSkipped",
+        payload: { participantId: command.participantId, reason: "noReply" },
+      };
+    case "confirm":
+      return {
+        type: "NextGroupSeatConfirmed",
         payload: {
+          calledEventId: command.calledEventId,
           participantId: command.participantId,
-          returnsAt: at + SIMPLE_SOCIAL_REST_MS,
         },
       };
+    case "move":
+      return {
+        type: "NextGroupMoved",
+        payload: {
+          calledEventId: command.calledEventId,
+          toCourtId: command.toCourtId,
+        },
+      };
+    case "closeAfterGame":
+      return {
+        type: "CourtCloseScheduled",
+        payload: { courtId: command.courtId },
+      };
+    case "closeNow":
+      return { type: "CourtClosed", payload: { courtId: command.courtId } };
     case "ready": {
       const skip = state.participants[command.participantId]?.skips.at(-1);
       if (!skip || skip.skippedBySeq !== command.targetSeq) return null;
@@ -238,21 +281,14 @@ export async function writeLiveAction(
     let request: SubmitSessionActionInput["request"];
     if (command.kind === "undo") {
       const target = findHistoryEntry(replayed.state, command.targetSeq);
-      if (
-        !target ||
-        (target.event.type !== "MatchStarted" &&
-          target.event.type !== "MatchCompleted")
-      ) {
+      if (!target || !(target.event.type in UNDO_TYPES)) {
         return {
           ok: false,
           message: en.serverMessages.live.onlyStartOrFinishUndo,
           outcome: "rejected",
         };
       }
-      const undoType =
-        target.event.type === "MatchStarted"
-          ? "MatchStartReverted"
-          : "MatchCompletionReverted";
+      const undoType = UNDO_TYPES[target.event.type as keyof typeof UNDO_TYPES];
       if (
         landed &&
         (landed.type !== undoType ||
@@ -278,6 +314,11 @@ export async function writeLiveAction(
         ready: "PlayerUnskipped",
         leave: "PlayerLeft",
         end: "SessionEnded",
+        confirm: "NextGroupSeatConfirmed",
+        pauseNoReply: "PlayerSkipped",
+        move: "NextGroupMoved",
+        closeAfterGame: "CourtCloseScheduled",
+        closeNow: "CourtClosed",
       } as const;
       if (landed && landed.type !== eventTypes[command.kind]) {
         return {

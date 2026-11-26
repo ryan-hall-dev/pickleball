@@ -51,6 +51,30 @@ vi.mock("@/server/submitSessionAction", async (importOriginal) => {
   };
 });
 
+// simple-social-v2 prepares through the system write path: same hooks.
+vi.mock("@/server/nonHostSessionAction", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/server/nonHostSessionAction")>();
+  return {
+    ...actual,
+    submitNonHostSessionAction: async (
+      ...args: Parameters<typeof actual.submitNonHostSessionAction>
+    ) => {
+      if (beforeSubmit) {
+        const run = beforeSubmit;
+        beforeSubmit = null;
+        await run();
+      }
+      const result = await actual.submitNonHostSessionAction(...args);
+      if (loseAnswerOnce) {
+        loseAnswerOnce = false;
+        throw new Error("connection lost after the write landed");
+      }
+      return result;
+    },
+  };
+});
+
 function findLocalStack() {
   try {
     const output = execFileSync(

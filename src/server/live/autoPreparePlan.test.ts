@@ -9,7 +9,11 @@ import {
   makeParticipants,
   MINUTE_MS,
 } from "@/engine/session/testing/fixtures";
-import { heldCourtIds, planAutoPreparation } from "./autoPreparePlan";
+import {
+  heldCourtIds,
+  nextAutomaticAction,
+  planAutoPreparation,
+} from "./autoPreparePlan";
 
 function sessionFor(genders: string, courts: number) {
   const participants = makeParticipants(genders.length).map(
@@ -212,5 +216,77 @@ describe("planAutoPreparation: released courts stay released", () => {
     expect(plan(session).map((group) => group.courtId)).toEqual([
       first.courtId,
     ]);
+  });
+});
+
+describe("simple-social-v2: what the app does by itself", () => {
+  function v2(genders: string, courts: number) {
+    const session = sessionFor(genders, courts);
+    session.config.policyVersion = "simple-social-v2";
+    session.config.upNextAfterMinutes = 6;
+    return session;
+  }
+  const next = (session: TestSession) =>
+    nextAutomaticAction(session.state, session.now);
+  const ids = (count: number) =>
+    Array.from({ length: count }, (_, index) =>
+      fixtureParticipantId(index + 1),
+    );
+
+  it("asks the next four for a free court, then for a game past the timer", () => {
+    const session = v2("M".repeat(12), 2);
+    const [a, b, c, d] = ids(4);
+    session.apply("MatchStarted", {
+      matchId: fixtureUuid("m", 1),
+      courtId: fixtureCourtId(1),
+      teamA: [a, b],
+      teamB: [c, d],
+    });
+    expect(next(session)?.action).toMatchObject({
+      type: "NextGroupCalled",
+      payload: { courtId: fixtureCourtId(2) },
+    });
+    const first = next(session)!.action;
+    session.apply("NextGroupCalled", first.payload as never);
+    expect(next(session)).toBeNull();
+    session.advanceMinutes(6);
+    expect(next(session)?.action).toMatchObject({
+      type: "NextGroupCalled",
+      payload: { courtId: fixtureCourtId(1) },
+    });
+  });
+
+  it("refills an emptied seat before asking for new groups, and closes a closing court once free", () => {
+    const session = v2("M".repeat(12), 2);
+    const [a, b, c, d] = ids(4);
+    const called = session.apply("NextGroupCalled", {
+      courtId: fixtureCourtId(1),
+      teamA: [a, b],
+      teamB: [c, d],
+    });
+    session.apply("PlayerSkipped", { participantId: b, reason: "break" });
+    expect(next(session)).toMatchObject({
+      key: `refill|${called.eventId}`,
+      action: { type: "NextGroupChanged" },
+    });
+    const match = fixtureUuid("m", 9);
+    const [, , , , , f, g, h, i] = ids(9);
+    session.apply("MatchStarted", {
+      matchId: match,
+      courtId: fixtureCourtId(2),
+      teamA: [f, g],
+      teamB: [h, i],
+    });
+    session.apply("CourtCloseScheduled", { courtId: fixtureCourtId(2) });
+    session.apply("MatchCompleted", { matchId: match });
+    expect(next(session)?.action).toEqual({
+      type: "CourtClosed",
+      payload: { courtId: fixtureCourtId(2) },
+    });
+  });
+
+  it("does nothing for a v1 session", () => {
+    const session = sessionFor("M".repeat(8), 1);
+    expect(next(session)).toBeNull();
   });
 });

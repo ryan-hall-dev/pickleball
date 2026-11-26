@@ -31,13 +31,16 @@ type SessionEventRow = Pick<
 
 /** A player's own action (a roster check-in) names them, never a host. */
 export const PLAYER_ACTOR_PREFIX = "player:";
+/** What the app did by itself (prepared a court, refilled a seat, closed a court). */
+export const SYSTEM_ACTOR_ID = "system";
 
 function actorIdFromRow(row: SessionEventRow): string {
   if (row.actor_user_id) return row.actor_user_id;
   if (row.actor_session_participant_id) {
     return `${PLAYER_ACTOR_PREFIX}${row.actor_session_participant_id}`;
   }
-  throw new Error(`Event ${row.event_id} has no actor.`);
+  // The database allows no person only for the app's own preparation.
+  return SYSTEM_ACTOR_ID;
 }
 
 function sessionEventFromRow(row: SessionEventRow): SessionEvent {

@@ -322,6 +322,9 @@ isOneToOne: false
 "append_session_event":
 { Args: { "p_actor_user_id": string,"p_event_id": string,"p_expected_last_seq": number,"p_match_row"?: Json,"p_occurred_at": string,"p_payload": Json,"p_session_id": string,"p_type": Database["public"]['Enums']["session_event_type"] }; Returns: Json
                            },
+"append_session_event_without_host":
+{ Args: { "p_actor_session_participant_id"?: string,"p_event_id": string,"p_expected_last_seq": number,"p_occurred_at": string,"p_payload": Json,"p_session_id": string,"p_type": Database["public"]['Enums']["session_event_type"] }; Returns: Json
+                           },
 "apply_saved_setup":
 { Args: { "p_actor_user_id": string,"p_config_patch": Json,"p_duration_minutes": number,"p_expected_draft_revision": number,"p_location": string,"p_session_id": string,"p_setup_id": string }; Returns: Json
                            },
@@ -345,6 +348,9 @@ isOneToOne: false
                            },
 "get_checkin_page":
 { Args: { "p_checkin_tag": string,"p_device_token_hash": string }; Returns: Json
+                           },
+"get_checkin_participant":
+{ Args: { "p_checkin_tag": string,"p_device_token_hash": string,"p_expected_session_id": string }; Returns: string
                            },
 "host_check_in_roster_entry":
 { Args: { "p_actor_user_id": string,"p_event_id"?: string,"p_expected_last_seq"?: number,"p_first_name"?: string,"p_gender": string,"p_last_name"?: string,"p_occurred_at"?: string,"p_roster_entry_id": string,"p_session_id": string,"p_session_participant_id": string,"p_skill_level": Database["public"]['Enums']["skill_level"] }; Returns: Json

@@ -171,8 +171,10 @@ test("a host runs a game, returns its four players to waiting and rests one", as
     "NextGroupCalled",
     "PlayerSkipped",
     "PlayerUnskipped",
+    // simple-social-v2: the app refills the rested player's Up next seat.
+    "NextGroupChanged",
   ]);
-  expect(events?.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  expect(events?.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   const { data: matches, error: matchesError } = await adminClient
     .from("matches")
     .select("status, team_a, team_b, ended_at")
@@ -237,7 +239,7 @@ test("a host runs a game, returns its four players to waiting and rests one", as
     .eq("session_id", draft.id)
     .order("seq");
   if (endedEventsError) throw endedEventsError;
-  expect(endedEvents).toHaveLength(8);
+  expect(endedEvents).toHaveLength(9);
   expect(endedEvents?.at(-1)?.type).toBe("SessionEnded");
 });
 
@@ -636,9 +638,11 @@ test("a stale live approval shows a conflict, stays pending and approves exactly
       "SessionStarted",
       "NextGroupCalled",
       "PlayerSkipped",
+      // simple-social-v2: the app refills the rested player's Up next seat.
+      "NextGroupChanged",
       "PlayerJoined",
     ]);
-    expect(events?.map((event) => event.seq)).toEqual([1, 2, 3, 4]);
+    expect(events?.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5]);
     const { data: approved, error: approvedError } = await adminClient
       .from("checkin_requests")
       .select("status")

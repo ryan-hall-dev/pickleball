@@ -85,6 +85,20 @@ export const liveCommandSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("leave"), participantId: z.uuid() }),
   z.object({ kind: z.literal("end") }),
+  // simple-social-v2 (docs/plans/reclub-to-court-v1.md, h7-h10):
+  z.object({
+    kind: z.literal("confirm"),
+    calledEventId: z.uuid(),
+    participantId: z.uuid(),
+  }),
+  z.object({ kind: z.literal("pauseNoReply"), participantId: z.uuid() }),
+  z.object({
+    kind: z.literal("move"),
+    calledEventId: z.uuid(),
+    toCourtId: z.uuid(),
+  }),
+  z.object({ kind: z.literal("closeAfterGame"), courtId: z.uuid() }),
+  z.object({ kind: z.literal("closeNow"), courtId: z.uuid() }),
 ]);
 export type LiveCommand = z.infer<typeof liveCommandSchema>;
 export const liveWriteSchema = z.object({
