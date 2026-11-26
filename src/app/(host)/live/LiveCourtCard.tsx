@@ -289,6 +289,7 @@ export function LiveCourtCard({
               <GroupEditor
                 key={`${court.called?.calledEventId ?? "suggested"}:${[...group.teamA, ...group.teamB].join()}`}
                 court={court}
+                courts={courts}
                 players={players}
                 teams={group}
                 disabled={disabled}
@@ -438,12 +439,15 @@ export function seatsCanBeValid(seats: ReadonlyArray<Gender | null>): boolean {
 
 function GroupEditor({
   court,
+  courts,
   players,
   teams,
   disabled,
   onSave,
 }: {
   court: LiveCourt;
+  /** Every court, to say where someone is playing. */
+  courts: LiveCourt[];
   players: LivePlayer[];
   teams: LiveTeams;
   disabled: boolean;
@@ -491,6 +495,38 @@ function GroupEditor({
     : choices;
   const shown =
     showAll || query ? matching : matching.slice(0, PICKER_VISIBLE_WHEN_FOLDED);
+  // Searching for someone who can't take this seat says why, rather than
+  // looking as if they don't exist.
+  const unavailable =
+    seat === null || !query
+      ? []
+      : players.filter(
+          (player) =>
+            player.name.toLowerCase().includes(query) &&
+            !choices.includes(player),
+        );
+  function whyNot(player: LivePlayer): string {
+    const id = player.participantId;
+    if (ids.includes(id)) return text.alreadyInGroup;
+    if (player.status === "away") return text.hasLeft;
+    if (player.status === "playing") {
+      const playingOn = courts.find((other) =>
+        [
+          ...(other.activeMatch?.teamA ?? []),
+          ...(other.activeMatch?.teamB ?? []),
+        ].includes(id),
+      );
+      return text.playingOn(
+        playingOn ? courtName(playingOn.name, messages) : "",
+      );
+    }
+    if (player.status === "skipped") return text.onBreak;
+    if (player.calledCourtId && player.calledCourtId !== court.courtId)
+      return text.upNextOn(courtName(player.calledCourtName ?? "", messages));
+    return player.gender === null
+      ? text.genderMissing
+      : text.wouldNotBeValid(messages.genders[player.gender]);
+  }
   return (
     <div className="mt-4 border-t border-blue-edge pt-3">
       <p className="text-sm text-blue-soft">{text.hint}</p>
@@ -534,6 +570,23 @@ function GroupEditor({
               placeholder={text.typeAName}
             />
           </label>
+          {unavailable.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-2">
+              {unavailable.map((player) => (
+                <li
+                  key={player.participantId}
+                  className="rounded-xl border border-dashed border-outline px-3 py-2"
+                >
+                  <span className="block font-semibold break-words text-muted">
+                    {player.name}
+                  </span>
+                  <span className="block text-xs text-muted">
+                    {whyNot(player)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
           {matching.length ? (
             <ul className="mt-3 flex flex-col gap-2">
               {shown.map((player) => (
@@ -567,9 +620,11 @@ function GroupEditor({
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-muted">
-              {query ? text.noMatchingName : text.noneAvailable}
-            </p>
+            unavailable.length === 0 && (
+              <p className="mt-3 text-sm text-muted">
+                {query ? text.noMatchingName : text.noneAvailable}
+              </p>
+            )
           )}
           {!query && matching.length > PICKER_VISIBLE_WHEN_FOLDED && (
             <button

@@ -409,6 +409,14 @@ export const hostVi: typeof hostEn = {
       prepareNextFour: "Xếp bốn người tiếp theo",
     },
     picker: {
+      alreadyInGroup: "Đã có trong nhóm này",
+      hasLeft: "Đã về",
+      playingOn: (court: string) => `Đang chơi ở ${court}`,
+      onBreak: "Đang nghỉ",
+      upNextOn: (court: string) => `Chơi tiếp theo ở ${court}`,
+      genderMissing: "Chưa ghi giới tính",
+      wouldNotBeValid: (gender: string) =>
+        `${gender}: không vào được vị trí này (đánh đôi cần 4 nam, 4 nữ hoặc đôi nam nữ)`,
       hint: "Chạm vào một người để thay. Đôi nam nữ cần một nam và một nữ mỗi đội.",
       team: (team: string) => `Đội ${team}`,
       seat: (team: string, player: number) => `Đội ${team} · Người ${player}`,

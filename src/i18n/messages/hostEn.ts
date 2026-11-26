@@ -405,6 +405,14 @@ export const hostEn = {
       prepareNextFour: "Prepare next four",
     },
     picker: {
+      alreadyInGroup: "Already in this group",
+      hasLeft: "Has left",
+      playingOn: (court: string) => `Playing on ${court}`,
+      onBreak: "On a break",
+      upNextOn: (court: string) => `Up next on ${court}`,
+      genderMissing: "Gender not recorded",
+      wouldNotBeValid: (gender: string) =>
+        `${gender}: can't take this spot (doubles needs 4 men, 4 women or mixed pairs)`,
       hint: "Tap a player to replace them. Mixed teams need one man and one woman on each team.",
       team: (team: string) => `Team ${team}`,
       seat: (team: string, player: number) => `Team ${team} · Player ${player}`,

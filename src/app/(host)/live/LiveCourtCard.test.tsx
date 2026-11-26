@@ -299,3 +299,61 @@ it("speaks Vietnamese, keeping player names as entered", () => {
   ).toBeVisible();
   expect(screen.getByText("Ana")).toBeVisible();
 });
+
+it("says why a searched player can't take the seat", () => {
+  const person = (
+    participantId: string,
+    name: string,
+    gender: "male" | "female",
+  ) =>
+    ({
+      participantId,
+      name,
+      gender,
+      status: "waiting",
+      skill: "intermediate",
+      currentWaitMs: 0,
+      returnsAt: null,
+      skipSeq: null,
+      calledCourtId: null,
+      calledCourtName: null,
+    }) as const;
+  const players = [
+    person("a", "Adam", "male"),
+    person("b", "Bella", "female"),
+    person("c", "Carl", "male"),
+    person("d", "Dina", "female"),
+    person("k", "Kevin Vu", "male"),
+  ];
+  render(
+    <LiveCourtCard
+      court={{
+        courtId: "c1",
+        name: "Court 1",
+        activeMatch: null,
+        suggestion: null,
+        called: {
+          calledEventId: "g",
+          teamA: ["a", "b"],
+          teamB: ["c", "d"],
+        },
+      }}
+      players={[...players]}
+      now={0}
+      timeIsUp={false}
+      disabled={false}
+      selected={false}
+      onPrepare={() => {}}
+      onAction={() => {}}
+      undoOptions={[]}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Change players" }));
+  // A woman's spot: a man would make three men and one woman.
+  fireEvent.click(screen.getByRole("button", { name: /Bella/ }));
+  fireEvent.change(screen.getByRole("searchbox"), {
+    target: { value: "kevin" },
+  });
+  expect(screen.getByText("Kevin Vu")).toBeVisible();
+  expect(screen.getByText(/Male: can't take this spot/)).toBeVisible();
+});
