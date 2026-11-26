@@ -7,6 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { authorizeCurrentHost } from "@/server/auth/currentHost";
 import { checkinDatabaseTimeoutSignal } from "@/server/checkin/checkinPage";
 import { loadSessionLog } from "@/server/sessionLog";
+import { onlyNonHostsActedSince } from "./hostTapStillApplies";
 import {
   liveAddPlayerSchema,
   type LiveAddPlayerInput,
@@ -93,7 +94,7 @@ export async function addLivePlayer(
         };
       participantId = earlier.participantId;
     } else {
-      if (replayed.state.lastSeq !== details.expectedLastSeq)
+      if (!onlyNonHostsActedSince(log.events, details.expectedLastSeq))
         return { ok: false, message: STALE_MESSAGE, outcome: "conflict" };
       const checked = applyEvent(replayed.state, {
         type: "PlayerJoined",
@@ -131,7 +132,11 @@ export async function addLivePlayer(
         // People are told apart by UUID; the event id stops a double add.
         p_allows_same_name: true,
         p_event_id: details.eventId,
-        p_expected_last_seq: details.expectedLastSeq,
+        // The latest seq when only players or the app acted meanwhile.
+        p_expected_last_seq:
+          !landed && onlyNonHostsActedSince(log.events, details.expectedLastSeq)
+            ? replayed.state.lastSeq
+            : details.expectedLastSeq,
         p_occurred_at: new Date(at).toISOString(),
       })
       .abortSignal(checkinDatabaseTimeoutSignal());

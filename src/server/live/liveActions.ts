@@ -20,6 +20,7 @@ import {
   type SubmitSessionActionInput,
 } from "@/server/submitSessionAction";
 import { autoPrepareCourts, reloadSessionState } from "./autoPrepare";
+import { hostTapStillApplies } from "./hostTapStillApplies";
 import { liveProjection } from "./liveProjection";
 import {
   liveWriteSchema,
@@ -159,6 +160,48 @@ async function phoneParticipantIds(
       row.session_participant_id ? [row.session_participant_id] : [],
     ),
   );
+}
+
+const MAX_WRITE_ATTEMPTS = 3;
+
+/**
+ * The close that follows "Stop game and close", with a repeatable id so a
+ * retry never closes twice. Reports failure rather than leaving the court
+ * open silently.
+ */
+async function closeAfterStop(
+  client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  sessionId: string,
+  eventId: string,
+  courtId: string,
+): Promise<LiveWriteResult> {
+  for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt += 1) {
+    const log = await loadSessionLog(client, sessionId);
+    if (!log) break;
+    const closed = await submitSessionAction(client, {
+      sessionId,
+      eventId: followUpEventId(eventId, "close"),
+      expectedLastSeq: log.events.at(-1)?.seq ?? 0,
+      request: {
+        kind: "action",
+        action: { type: "CourtClosed", payload: { courtId } },
+      },
+    });
+    if (closed.ok)
+      return { ok: true, seq: closed.seq, wasDuplicate: closed.wasDuplicate };
+    if (closed.reason === "INVALID_ACTION")
+      return {
+        ok: false,
+        message: closed.error.message,
+        outcome: "rejected",
+        engineErrorCode: closed.error.code,
+      };
+  }
+  return {
+    ok: false,
+    message: en.serverMessages.live.updatedByAnotherHost,
+    outcome: "conflict",
+  };
 }
 
 /** Standing scores of the session's games (host RLS: own social only). */
@@ -344,137 +387,144 @@ export async function writeLiveAction(
     };
   try {
     const client = await createSupabaseServerClient();
-    const log = await loadSessionLog(client, parsed.data.sessionId);
-    if (!log)
-      return {
-        ok: false,
-        message: en.serverMessages.live.sessionNotAvailable,
-        outcome: "rejected",
-      };
-    const replayed = replay(log.events);
-    if (!replayed.ok || !isSimpleSocial(replayed.state.config))
-      return {
-        ok: false,
-        message: en.serverMessages.live.notSimpleSession,
-        outcome: "rejected",
-      };
-    const at = Math.max(Date.now(), replayed.state.lastAt ?? 0);
-    // A consumed call/rest may no longer exist after success. Recover its original
-    // event for the same intent before deriving the action, then let submit check retries.
-    const landed = log.events.find(
-      (event) => event.eventId === parsed.data.eventId,
-    );
-    const command = parsed.data.command;
-    let request: SubmitSessionActionInput["request"];
-    if (command.kind === "undo") {
-      const target = findHistoryEntry(replayed.state, command.targetSeq);
-      if (!target || !(target.event.type in UNDO_TYPES)) {
+    // A write can land between reading the log and writing: read again and
+    // decide again, a few times.
+    for (let attempt = 1; ; attempt += 1) {
+      const log = await loadSessionLog(client, parsed.data.sessionId);
+      if (!log)
         return {
           ok: false,
-          message: en.serverMessages.live.onlyStartOrFinishUndo,
+          message: en.serverMessages.live.sessionNotAvailable,
           outcome: "rejected",
         };
-      }
-      const undoType = UNDO_TYPES[target.event.type as keyof typeof UNDO_TYPES];
-      if (
-        landed &&
-        (landed.type !== undoType ||
-          compensationTargetSeq(landed) !== command.targetSeq)
-      ) {
+      const replayed = replay(log.events);
+      if (!replayed.ok || !isSimpleSocial(replayed.state.config))
         return {
           ok: false,
-          message: en.serverMessages.live.actionIdUsed,
+          message: en.serverMessages.live.notSimpleSession,
           outcome: "rejected",
         };
+      const at = Math.max(Date.now(), replayed.state.lastAt ?? 0);
+      // A consumed call/rest may no longer exist after success. Recover its original
+      // event for the same intent before deriving the action, then let submit check retries.
+      const landed = log.events.find(
+        (event) => event.eventId === parsed.data.eventId,
+      );
+      const command = parsed.data.command;
+      let request: SubmitSessionActionInput["request"];
+      if (command.kind === "undo") {
+        const target = findHistoryEntry(replayed.state, command.targetSeq);
+        if (!target || !(target.event.type in UNDO_TYPES)) {
+          return {
+            ok: false,
+            message: en.serverMessages.live.onlyStartOrFinishUndo,
+            outcome: "rejected",
+          };
+        }
+        const undoType =
+          UNDO_TYPES[target.event.type as keyof typeof UNDO_TYPES];
+        if (
+          landed &&
+          (landed.type !== undoType ||
+            compensationTargetSeq(landed) !== command.targetSeq)
+        ) {
+          return {
+            ok: false,
+            message: en.serverMessages.live.actionIdUsed,
+            outcome: "rejected",
+          };
+        }
+        request = { kind: "undo", targetSeq: command.targetSeq };
+      } else {
+        const eventTypes = {
+          call: "NextGroupCalled",
+          change: "NextGroupChanged",
+          release: "NextGroupReleased",
+          start: "MatchStarted",
+          finish: "MatchCompleted",
+          replace: "PlayerReplaced",
+          interrupt: "MatchAbandoned",
+          rest: "PlayerSkipped",
+          ready: "PlayerUnskipped",
+          leave: "PlayerLeft",
+          end: "SessionEnded",
+          confirm: "NextGroupSeatConfirmed",
+          pauseNoReply: "PlayerSkipped",
+          move: "NextGroupMoved",
+          closeAfterGame: "CourtCloseScheduled",
+          closeNow: "CourtClosed",
+          endPair: "FriendPairEnded",
+          stopAndClose: "MatchAbandoned",
+        } as const;
+        if (landed && landed.type !== eventTypes[command.kind]) {
+          return {
+            ok: false,
+            message: en.serverMessages.live.actionIdUsed,
+            outcome: "rejected",
+          };
+        }
+        const action = landed
+          ? ({ type: landed.type, payload: landed.payload } as NewSessionAction)
+          : commandAction(command, replayed.state, at);
+        if (!action) {
+          return {
+            ok: false,
+            message: en.serverMessages.live.groupOrPlayerChanged,
+            outcome: "conflict",
+          };
+        }
+        request = { kind: "action", action };
       }
-      request = { kind: "undo", targetSeq: command.targetSeq };
-    } else {
-      const eventTypes = {
-        call: "NextGroupCalled",
-        change: "NextGroupChanged",
-        release: "NextGroupReleased",
-        start: "MatchStarted",
-        finish: "MatchCompleted",
-        replace: "PlayerReplaced",
-        interrupt: "MatchAbandoned",
-        rest: "PlayerSkipped",
-        ready: "PlayerUnskipped",
-        leave: "PlayerLeft",
-        end: "SessionEnded",
-        confirm: "NextGroupSeatConfirmed",
-        pauseNoReply: "PlayerSkipped",
-        move: "NextGroupMoved",
-        closeAfterGame: "CourtCloseScheduled",
-        closeNow: "CourtClosed",
-        endPair: "FriendPairEnded",
-        stopAndClose: "MatchAbandoned",
-      } as const;
-      if (landed && landed.type !== eventTypes[command.kind]) {
-        return {
-          ok: false,
-          message: en.serverMessages.live.actionIdUsed,
-          outcome: "rejected",
-        };
-      }
-      const action = landed
-        ? ({ type: landed.type, payload: landed.payload } as NewSessionAction)
-        : commandAction(command, replayed.state, at);
-      if (!action) {
-        return {
-          ok: false,
-          message: en.serverMessages.live.groupOrPlayerChanged,
-          outcome: "conflict",
-        };
-      }
-      request = { kind: "action", action };
-    }
-    const result = await submitSessionAction(
-      client,
-      {
-        sessionId: parsed.data.sessionId,
-        eventId: parsed.data.eventId,
-        expectedLastSeq: parsed.data.expectedLastSeq,
-        request,
-      },
-      { now: () => at },
-    );
-    if (result.ok && command.kind === "stopAndClose") {
-      // The close after a stopped game, with a repeatable id so a retry of
-      // the same tap never closes twice.
-      const closed = await submitSessionAction(
+      // Players' replies and the app's own actions don't make the host's tap
+      // stale while what they tapped is unchanged.
+      const expectedLastSeq = hostTapStillApplies(
+        log.events,
+        replayed.state,
+        command,
+        parsed.data.expectedLastSeq,
+      )
+        ? replayed.state.lastSeq
+        : parsed.data.expectedLastSeq;
+      const result = await submitSessionAction(
         client,
         {
           sessionId: parsed.data.sessionId,
-          eventId: followUpEventId(parsed.data.eventId, "close"),
-          expectedLastSeq: result.seq,
-          request: {
-            kind: "action",
-            action: {
-              type: "CourtClosed",
-              payload: { courtId: command.courtId },
-            },
-          },
+          eventId: parsed.data.eventId,
+          expectedLastSeq,
+          request,
         },
-        { now: () => Math.max(Date.now(), at) },
+        { now: () => at },
       );
-      if (closed.ok)
-        return { ok: true, seq: closed.seq, wasDuplicate: closed.wasDuplicate };
+      if (
+        !result.ok &&
+        result.reason === "UPDATED_BY_ANOTHER_HOST" &&
+        expectedLastSeq !== parsed.data.expectedLastSeq &&
+        attempt < MAX_WRITE_ATTEMPTS
+      )
+        continue;
+      if (result.ok && command.kind === "stopAndClose")
+        return await closeAfterStop(
+          client,
+          parsed.data.sessionId,
+          parsed.data.eventId,
+          command.courtId,
+        );
+      if (result.ok)
+        return { ok: true, seq: result.seq, wasDuplicate: result.wasDuplicate };
+      return result.reason === "UPDATED_BY_ANOTHER_HOST"
+        ? {
+            ok: false,
+            message: en.serverMessages.live.updatedByAnotherHost,
+            outcome: "conflict",
+          }
+        : // INVALID_ACTION: the engine refused it for good; nothing to retry.
+          {
+            ok: false,
+            message: result.error.message,
+            outcome: "rejected",
+            engineErrorCode: result.error.code,
+          };
     }
-    if (result.ok)
-      return { ok: true, seq: result.seq, wasDuplicate: result.wasDuplicate };
-    return result.reason === "UPDATED_BY_ANOTHER_HOST"
-      ? {
-          ok: false,
-          message: en.serverMessages.live.updatedByAnotherHost,
-          outcome: "conflict",
-        }
-      : // INVALID_ACTION: the engine refused it for good; nothing to retry.
-        {
-          ok: false,
-          message: result.error.message,
-          outcome: "rejected",
-          engineErrorCode: result.error.code,
-        };
   } catch (error) {
     console.error("Writing live action failed", {
       actorUserId: authorization.host.userId,

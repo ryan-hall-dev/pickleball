@@ -1,3 +1,4 @@
+import { PLAYER_ACTOR_PREFIX, SYSTEM_ACTOR_ID } from "./actorIds";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SessionEvent, SessionEventType } from "@/engine/session";
@@ -29,10 +30,7 @@ type SessionEventRow = Pick<
   | "actor_session_participant_id"
 >;
 
-/** A player's own action (a roster check-in) names them, never a host. */
-export const PLAYER_ACTOR_PREFIX = "player:";
-/** What the app did by itself (prepared a court, refilled a seat, closed a court). */
-export const SYSTEM_ACTOR_ID = "system";
+export { PLAYER_ACTOR_PREFIX, SYSTEM_ACTOR_ID };
 
 function actorIdFromRow(row: SessionEventRow): string {
   if (row.actor_user_id) return row.actor_user_id;

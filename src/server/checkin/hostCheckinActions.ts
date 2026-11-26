@@ -4,6 +4,7 @@ import { genderSchema } from "@/server/participantRules";
 import { applyEvent, replay } from "@/engine/session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { loadSessionLog } from "@/server/sessionLog";
+import { onlyNonHostsActedSince } from "@/server/live/hostTapStillApplies";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -167,6 +168,7 @@ export async function approveCheckin(
           `Reading check-in session failed: ${sessionError.message}`,
         );
       let occurredAt: string | undefined;
+      let expectedLastSeq = parsedLive.data?.expectedLastSeq;
       if (session.status === "live" && request.status === "pending") {
         if (!parsedLive.data) return { kind: "failed" };
         const log = await loadSessionLog(
@@ -178,8 +180,12 @@ export async function approveCheckin(
         if (!replayed.ok) return { kind: "failed" };
         // Stale screen: nothing is written. The request is still pending, so
         // no earlier try of this approval landed either.
-        if (replayed.state.lastSeq !== parsedLive.data.expectedLastSeq)
+        // Players' replies and the app's own actions don't count.
+        if (
+          !onlyNonHostsActedSince(log.events, parsedLive.data.expectedLastSeq)
+        )
           return { kind: "session_changed" };
+        expectedLastSeq = replayed.state.lastSeq;
         const gender = request.gender ?? parsedGender.data;
         const checkedGender = genderSchema.safeParse(gender);
         if (!checkedGender.success) return { kind: "failed" };
@@ -212,7 +218,7 @@ export async function approveCheckin(
           ...(parsedLive.data
             ? {
                 p_event_id: parsedLive.data.eventId,
-                p_expected_last_seq: parsedLive.data.expectedLastSeq,
+                p_expected_last_seq: expectedLastSeq,
                 p_occurred_at: occurredAt,
               }
             : {}),
