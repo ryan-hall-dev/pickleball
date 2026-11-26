@@ -11,8 +11,13 @@ import {
 import { useRouter } from "next/navigation";
 import { AttentionMessage } from "@/components/AttentionMessage";
 import {
+  DEFAULT_UP_NEXT_AFTER_MINUTES,
+  MAX_UP_NEXT_AFTER_MINUTES,
+} from "@/engine/session/simplePolicy";
+import {
   ATTENTION_OUTLINE_BUTTON_CLASS_NAME,
   CARD_CLASS_NAME,
+  ICON_BUTTON_CLASS_NAME,
   LINK_BUTTON_CLASS_NAME,
   OUTLINE_BUTTON_CLASS_NAME,
   PRIMARY_BUTTON_CLASS_NAME,
@@ -47,6 +52,8 @@ import { EMPTY_PARTICIPANT_FORM, type ParticipantForm } from "./whosPlaying";
 import { WhosPlayingCard } from "./WhosPlayingCard";
 import { en } from "@/i18n/messages/en";
 
+/** Court name fields shown (more courts keep their numbered names). */
+const MAX_NAMED_COURTS = 40;
 /** Edits settle for this long before they are saved. */
 const AUTOSAVE_DELAY_MS = 700;
 /** How long a new editor waits for this tab's earlier writes before asking for a reload. */
@@ -537,7 +544,13 @@ function SessionSetupForm({
     durationMinutes: String(
       (Date.parse(draft.plannedEnd) - Date.parse(draft.plannedStart)) / 60_000,
     ),
+    courtNames: draft.config.courts.map((court) => court.name),
+    upNextAfterMinutes:
+      draft.config.upNextAfterMinutes ?? DEFAULT_UP_NEXT_AFTER_MINUTES,
   }));
+  const shownCourtCount = /^\d+$/.test(form.courtCount.trim())
+    ? Math.min(Number(form.courtCount), MAX_NAMED_COURTS)
+    : 0;
   const [participantForm, setParticipantForm] = useState<ParticipantForm>(
     EMPTY_PARTICIPANT_FORM,
   );
@@ -560,13 +573,18 @@ function SessionSetupForm({
       durationMinutes: /^\d+$/.test(form.durationMinutes.trim())
         ? Number(form.durationMinutes)
         : NaN,
+      courtNames: Array.from(
+        { length: shownCourtCount },
+        (_, index) => form.courtNames[index] ?? `Court ${index + 1}`,
+      ),
+      upNextAfterMinutes: form.upNextAfterMinutes,
     });
     const fieldErrors: Record<string, string> = {};
     if (!parsed.success)
       for (const issue of parsed.error.issues)
         fieldErrors[String(issue.path[0])] ??= issue.message;
     return { saveInput: parsed.success ? parsed.data : null, fieldErrors };
-  }, [draft.sessionId, form]);
+  }, [draft.sessionId, form, shownCourtCount]);
   const {
     status: autosaveStatus,
     retry,
@@ -790,7 +808,87 @@ function SessionSetupForm({
               </label>
             ))}
           </div>
+          {shownCourtCount > 0 && (
+            <fieldset className="flex flex-col gap-2">
+              <legend className="font-bold">{text.courtNamesTitle}</legend>
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {Array.from({ length: shownCourtCount }, (_, index) => (
+                  <input
+                    key={index}
+                    type="text"
+                    aria-label={text.courtName(index + 1)}
+                    maxLength={80}
+                    value={form.courtNames[index] ?? `Court ${index + 1}`}
+                    onChange={(event) =>
+                      setForm((current) => {
+                        const courtNames = Array.from(
+                          {
+                            length: Math.max(
+                              current.courtNames.length,
+                              index + 1,
+                            ),
+                          },
+                          (_, position) =>
+                            current.courtNames[position] ??
+                            `Court ${position + 1}`,
+                        );
+                        courtNames[index] = event.target.value;
+                        return { ...current, courtNames };
+                      })
+                    }
+                    aria-invalid={Boolean(validation.fieldErrors.courtNames)}
+                    className="h-12 min-w-0 rounded-[14px] border border-inner-border bg-inner px-3.5 text-base text-text"
+                  />
+                ))}
+              </div>
+              {validation.fieldErrors.courtNames && (
+                <span className="text-xs text-orange-text">
+                  {translateMessage(
+                    validation.fieldErrors.courtNames,
+                    messages,
+                  )}
+                </span>
+              )}
+            </fieldset>
+          )}
           <p className="text-sm text-muted">{text.courtsNumbered}</p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h3 className="font-bold">{text.askNextFourTitle}</h3>
+              <p className="text-sm text-muted">{text.askNextFourLabel}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {(
+                [
+                  [-1, "−", text.fewerMinutes],
+                  [1, "+", text.moreMinutes],
+                ] as const
+              ).map(([step, symbol, label]) => (
+                <button
+                  key={step}
+                  type="button"
+                  aria-label={label}
+                  className={`${ICON_BUTTON_CLASS_NAME} ${step === 1 ? "order-3" : "order-1"}`}
+                  disabled={
+                    step === -1
+                      ? form.upNextAfterMinutes <= 1
+                      : form.upNextAfterMinutes >= MAX_UP_NEXT_AFTER_MINUTES
+                  }
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      upNextAfterMinutes: current.upNextAfterMinutes + step,
+                    }))
+                  }
+                >
+                  {symbol}
+                </button>
+              ))}
+              <span className="order-2 min-w-6 text-center text-lg font-bold tabular-nums">
+                {form.upNextAfterMinutes}
+              </span>
+            </div>
+          </div>
           <div className="rounded-2xl border border-inner-border bg-inner p-4">
             <h3 className="font-bold">{text.doublesTitle}</h3>
             <p className="mt-1 text-sm text-muted">{text.doublesText}</p>

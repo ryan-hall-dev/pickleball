@@ -284,6 +284,16 @@ test("a whole social: arrivals, two courts turning over out of order, and a late
       await phone.reload();
       await phone.getByRole("button", { name: "I'm ready" }).click();
     }
+    // Let the phones' replies be saved first: a host tap made from an older
+    // screen is refused as out of date.
+    await expect
+      .poll(
+        async () =>
+          (await readState(sessionId)).courts[courtId].nextGroup?.confirmedIds
+            ?.length,
+        { timeout: POLL_TIMEOUT_MS },
+      )
+      .toBe(names.filter((n) => phones.has(n)).length);
     for (const name of names.filter((n) => !phones.has(n))) {
       await page.reload();
       const card = page.getByRole("article", { name: courtLabel, exact: true });

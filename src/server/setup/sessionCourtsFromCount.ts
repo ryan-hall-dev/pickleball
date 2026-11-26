@@ -9,6 +9,8 @@ export function sessionCourtsFromCount(
   existing: readonly CourtConfig[],
   count: number,
   createId: () => string,
+  /** The host's court names, in order; missing ones are numbered. */
+  names: readonly string[] = [],
 ): CourtConfig[] {
   if (!Number.isInteger(count) || count < 1 || count > MAX_SESSION_COURTS) {
     throw new Error(
@@ -28,6 +30,7 @@ export function sessionCourtsFromCount(
       throw new Error("Court IDs must be unique.");
     }
     courtIds.add(normalizedCourtId);
-    return { courtId, name: `Court ${index + 1}`, format: "doubles" };
+    const name = names[index] ?? `Court ${index + 1}`;
+    return { courtId, name, format: "doubles" };
   });
 }

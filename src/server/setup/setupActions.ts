@@ -426,6 +426,7 @@ export async function saveSimpleSessionDraft(
       parseSessionDraftConfig(draft.config_snapshot).courts,
       parsed.data.courtCount,
       randomUUID,
+      parsed.data.courtNames,
     );
     const plannedEnd = new Date(
       Date.parse(draft.planned_start) +
@@ -441,7 +442,13 @@ export async function saveSimpleSessionDraft(
       p_host_name: draft.host_name,
       p_planned_start: draft.planned_start,
       p_planned_end: plannedEnd,
-      p_config_patch: { courts, matchFormat: "doubles" } as unknown as Json,
+      p_config_patch: {
+        courts,
+        matchFormat: "doubles",
+        ...(parsed.data.upNextAfterMinutes === undefined
+          ? {}
+          : { upNextAfterMinutes: parsed.data.upNextAfterMinutes }),
+      } as unknown as Json,
     });
     if (error?.message === DRAFT_NOT_OPEN_ERROR) {
       return { ok: false, message: DRAFT_NOT_OPEN };

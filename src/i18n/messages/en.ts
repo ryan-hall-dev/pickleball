@@ -45,6 +45,8 @@ export const en = {
     validEmail: "Enter a valid email address.",
     displayNameRequired: "Enter a display name.",
     socialNameRequired: "Enter the social's name.",
+    courtNameRequired: "Enter a name for every court.",
+    courtNamesUnique: "Give each court a different name.",
     checkHighlightedFields: "Check the highlighted fields.",
   },
   time: {

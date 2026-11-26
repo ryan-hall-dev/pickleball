@@ -151,7 +151,8 @@ export async function startSimpleSession(
           // New sessions use v2: Up next confirmations and the timer
           // (docs/plans/reclub-to-court-v1.md). v1 sessions replay as before.
           policyVersion: "simple-social-v2",
-          upNextAfterMinutes: DEFAULT_UP_NEXT_AFTER_MINUTES,
+          upNextAfterMinutes:
+            config.upNextAfterMinutes ?? DEFAULT_UP_NEXT_AFTER_MINUTES,
           courts: config.courts,
           targetMatchMinutes: config.targetMatchMinutes,
           changeoverMinutes: config.changeoverMinutes,

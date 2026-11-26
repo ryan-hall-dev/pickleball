@@ -760,6 +760,8 @@ it("saves only the short Setup fields and removes retired controls", async () =>
           name: "Saturday social",
           courtCount: 3,
           durationMinutes: 90,
+          courtNames: expect.any(Array),
+          upNextAfterMinutes: 6,
         },
         0,
       ),

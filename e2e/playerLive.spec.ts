@@ -54,6 +54,9 @@ test("players confirm on their phones, head to court and start their own game", 
   await page.getByLabel("Session name").fill("Player live journey");
   await page.getByLabel("Court count").fill("1");
   await page.getByLabel("Session duration (minutes)").fill("90");
+  // The venue's own label, and the host's "ask the next four" minutes (h4).
+  await page.getByLabel("Name of court 1").fill("Court 7");
+  await page.getByRole("button", { name: "More minutes" }).click();
   await expect(page.getByRole("main").getByRole("status")).toHaveText("Saved");
   const { data: social, error } = await adminClient
     .from("socials")
@@ -81,11 +84,21 @@ test("players confirm on their phones, head to court and start their own game", 
     .getByRole("button", { name: "Confirm start" })
     .click();
   await expect(page).toHaveURL(/\/live$/);
+  const { data: started } = await adminClient
+    .from("sessions")
+    .select("config_snapshot")
+    .eq("social_id", socialId)
+    .eq("status", "live")
+    .single();
+  expect(started!.config_snapshot).toMatchObject({
+    upNextAfterMinutes: 7,
+    courts: [{ name: "Court 7" }],
+  });
 
   for (const phone of phones) {
     await phone.reload();
     await expect(
-      phone.getByRole("heading", { name: "You're up next on Court 1" }),
+      phone.getByRole("heading", { name: "You're up next on Court 7" }),
     ).toBeVisible({ timeout: POLL_TIMEOUT_MS });
   }
   await phones[0].screenshot({
@@ -107,7 +120,7 @@ test("players confirm on their phones, head to court and start their own game", 
   for (const phone of phones.slice(2))
     await phone.getByRole("button", { name: "I'm ready" }).click();
   await expect(
-    phones[0].getByRole("heading", { name: "Head to Court 1" }),
+    phones[0].getByRole("heading", { name: "Head to Court 7" }),
   ).toBeVisible({ timeout: POLL_TIMEOUT_MS });
   await phones[0].screenshot({
     path: testInfo.outputPath("p9-head-to-court.png"),
@@ -115,7 +128,7 @@ test("players confirm on their phones, head to court and start their own game", 
   });
   await phones[1].reload();
   await expect(
-    phones[1].getByRole("heading", { name: "Head to Court 1" }),
+    phones[1].getByRole("heading", { name: "Head to Court 7" }),
   ).toBeVisible({ timeout: POLL_TIMEOUT_MS });
   await phones[1].getByRole("button", { name: "Game started" }).click();
   await expect(phones[1].getByText(/^Playing · \d+ min$/)).toBeVisible();

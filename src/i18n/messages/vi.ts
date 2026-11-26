@@ -44,6 +44,8 @@ export const vi: Messages = {
     validEmail: "Nhập địa chỉ email hợp lệ.",
     displayNameRequired: "Nhập tên hiển thị.",
     socialNameRequired: "Nhập tên nhóm.",
+    courtNameRequired: "Nhập tên cho từng sân.",
+    courtNamesUnique: "Mỗi sân cần một tên khác nhau.",
     checkHighlightedFields: "Hãy kiểm tra các ô được đánh dấu.",
   },
   time: {

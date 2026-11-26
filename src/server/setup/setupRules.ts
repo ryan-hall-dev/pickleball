@@ -1,3 +1,4 @@
+import { MAX_UP_NEXT_AFTER_MINUTES } from "@/engine/session/simplePolicy";
 import { z } from "zod";
 import {
   RECOMMENDED_ROTATION_PREFERENCES,
@@ -193,6 +194,21 @@ export const saveSimpleSessionDraftInputSchema = z.object({
     min: 1,
     max: MAX_SESSION_DURATION_MINUTES,
   }),
+  /** The venue's own court labels, one per court. */
+  courtNames: z
+    .array(shortLabelSchema(en.validation.courtNameRequired))
+    .max(1000)
+    .refine(
+      (names) =>
+        new Set(names.map((name) => name.toLowerCase())).size === names.length,
+      { error: en.validation.courtNamesUnique },
+    )
+    .optional(),
+  /** Minutes after a game starts before its court's next four are asked. */
+  upNextAfterMinutes: wholeMinutesSchema({
+    min: 1,
+    max: MAX_UP_NEXT_AFTER_MINUTES,
+  }).optional(),
 });
 
 export type SaveSimpleSessionDraftInput = z.input<
@@ -274,6 +290,7 @@ export interface SessionDraftConfig {
   rotation: RotationPreferences;
   /** The saved setup last applied to this draft (hides the reuse banner), or null. */
   appliedSavedSetupId: string | null;
+  upNextAfterMinutes?: number;
 }
 
 export const DEFAULT_SESSION_DRAFT_CONFIG: Readonly<SessionDraftConfig> = {
@@ -305,6 +322,11 @@ const sessionDraftConfigSchema = z.object({
   // Drafts saved before the Rotation card (M4.4) have none: the recommended one.
   rotation: rotationPreferencesSchema.default(recommendedRotationPreferences),
   appliedSavedSetupId: z.uuid().nullable().default(null),
+  // Drafts saved before this setting have none: the default.
+  upNextAfterMinutes: wholeMinutesSchema({
+    min: 1,
+    max: MAX_UP_NEXT_AFTER_MINUTES,
+  }).optional(),
 });
 
 /**

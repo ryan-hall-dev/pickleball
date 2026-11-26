@@ -9,6 +9,7 @@ import {
   SECONDARY_BUTTON_CLASS_NAME,
   TEXT_INPUT_CLASS_NAME,
 } from "@/components/controlStyles";
+import { courtName } from "@/i18n/courtName";
 import { useMessages } from "@/i18n/LocaleProvider";
 import { settleWithin } from "@/lib/settleWithin";
 import type { PlayerIntent } from "@/server/checkin/playerActionPlan";
@@ -366,7 +367,9 @@ export function PlayerLive({
           <Pill tone={courtChange ? "orange" : "blue"}>
             {courtChange ? copy.courtChangedPill : copy.upNextPill}
           </Pill>
-          <Big>{copy.upNextTitle(view.group.courtName)}</Big>
+          <Big>
+            {copy.upNextTitle(courtName(view.group.courtName, messages))}
+          </Big>
           <TeamsLine view={view} />
           <p className="text-sm text-text-soft">{copy.mayChange}</p>
           <button
@@ -389,12 +392,16 @@ export function PlayerLive({
             <>
               <Pill tone="orange">{copy.changePill}</Pill>
               <Big>{copy.pleaseWait}</Big>
-              <p>{copy.changeText(view.group.courtName)}</p>
+              <p>
+                {copy.changeText(courtName(view.group.courtName, messages))}
+              </p>
             </>
           ) : (
             <>
               <Pill tone="lime">{copy.confirmedPill}</Pill>
-              <Big>{copy.waitFor(view.group.courtName)}</Big>
+              <Big>
+                {copy.waitFor(courtName(view.group.courtName, messages))}
+              </Big>
               <p>{copy.gameStillOn}</p>
             </>
           )}
@@ -410,11 +417,16 @@ export function PlayerLive({
           </Pill>
           <Big>
             {courtChange
-              ? copy.nowCourt(view.group.courtName)
-              : copy.headTo(view.group.courtName)}
+              ? copy.nowCourt(courtName(view.group.courtName, messages))
+              : copy.headTo(courtName(view.group.courtName, messages))}
           </Big>
           {courtChange && (
-            <p>{copy.movedText(courtChange.from, courtChange.to)}</p>
+            <p>
+              {copy.movedText(
+                courtName(courtChange.from, messages),
+                courtName(courtChange.to, messages),
+              )}
+            </p>
           )}
           <TeamsLine view={view} />
           <p>{copy.startWhenAll}</p>
@@ -437,7 +449,7 @@ export function PlayerLive({
               minutesOf(view.now - (view.gameStartedAt ?? view.now)),
             )}
           </Pill>
-          <Big>{view.group.courtName}</Big>
+          <Big>{courtName(view.group.courtName, messages)}</Big>
           <TeamsLine view={view} />
           <p className="text-sm">{copy.tellHost}</p>
         </div>

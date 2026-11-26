@@ -124,3 +124,14 @@ describe("sessionCourtsFromCount", () => {
     ).toEqual([{ courtId: courtId(1), name: "Court 1", format: "doubles" }]);
   });
 });
+
+it("uses the host's court names and numbers the rest", () => {
+  let next = 0;
+  const createId = () =>
+    `00000000-0000-4000-8000-${String((next += 1)).padStart(12, "0")}`;
+  expect(
+    sessionCourtsFromCount([], 3, createId, ["Court 7", "Show"]).map(
+      (court) => court.name,
+    ),
+  ).toEqual(["Court 7", "Show", "Court 3"]);
+});

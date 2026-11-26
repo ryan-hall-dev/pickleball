@@ -20,4 +20,4 @@ Status: draft | planned | in-progress | blocked | done
 
 | Light mode | [plans/light-mode.md](plans/light-mode.md) | built 2026-11-21, screenshot review passed (14/14); deployed 2026-11-21 (`f2201f2`) | feature/light-mode |
 
-| Reclub roster to court to score · v1 | [plans/reclub-to-court-v1.md](plans/reclub-to-court-v1.md) | in-progress; Phases 1-4 built and simulated 2026-11-26; real-phone rehearsal and court labels / timer setting outstanding; not deployed | codex/reclub-to-court-v1 |
+| Reclub roster to court to score · v1 | [plans/reclub-to-court-v1.md](plans/reclub-to-court-v1.md) | in-progress; Phases 1-4 built and simulated 2026-11-26; court labels and timer setting added; real-phone rehearsal outstanding; not deployed | codex/reclub-to-court-v1 |

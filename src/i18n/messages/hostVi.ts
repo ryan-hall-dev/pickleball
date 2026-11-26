@@ -163,8 +163,14 @@ export const hostVi: typeof hostEn = {
     sessionName: "Tên buổi chơi",
     courtCount: "Số sân",
     durationMinutes: "Thời lượng (phút)",
+    courtNamesTitle: "Tên sân",
+    courtName: (number: number) => `Tên sân thứ ${number}`,
+    askNextFourTitle: "Báo bốn người tiếp theo",
+    askNextFourLabel: "Số phút sau khi trận bắt đầu",
+    fewerMinutes: "Giảm số phút",
+    moreMinutes: "Tăng số phút",
     courtsNumbered:
-      "Sân được đánh số tự động. Thời lượng bắt đầu tính khi bạn bắt đầu buổi chơi.",
+      "Dùng tên sân của địa điểm. Thời lượng tính từ khi bạn bắt đầu buổi chơi.",
     doublesTitle: "Đánh đôi, mọi trận",
     doublesText:
       "Bốn nam, bốn nữ, hoặc đôi nam nữ với một nam và một nữ mỗi đội.",

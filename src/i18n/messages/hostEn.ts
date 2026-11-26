@@ -163,8 +163,14 @@ export const hostEn = {
     sessionName: "Session name",
     courtCount: "Court count",
     durationMinutes: "Session duration (minutes)",
+    courtNamesTitle: "Court names",
+    courtName: (number: number) => `Name of court ${number}`,
+    askNextFourTitle: "Ask the next four",
+    askNextFourLabel: "Minutes after a game starts",
+    fewerMinutes: "Fewer minutes",
+    moreMinutes: "More minutes",
     courtsNumbered:
-      "Courts are numbered automatically. The duration begins when you start the session.",
+      "Use your venue's court names. The duration begins when you start the session.",
     doublesTitle: "Doubles, every game",
     doublesText:
       "Four men, four women, or mixed with one man and one woman on each team.",
